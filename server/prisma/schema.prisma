@@ -1,0 +1,527 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -------------------------------------------------------------
+// 1. TENANCY & AUTHENTICATION
+// -------------------------------------------------------------
+
+enum TenantStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+  REJECTED
+  DECOMMISSIONED
+}
+
+model Tenant {
+  id              String          @id @default(uuid())
+  name            String
+  subdomain       String          @unique
+  domain          String?
+  plan            String          @default("Professional")
+  status          TenantStatus    @default(ACTIVE)
+  region          String          @default("North America (East)")
+  contactEmail    String?
+  rejectionReason String?         @map("rejection_reason")
+  clinicCategoryId String?        @map("clinic_category_id")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  clinicCategory  ClinicCategory? @relation(fields: [clinicCategoryId], references: [id], onDelete: SetNull)
+  users           User[]
+  roles           Role[]
+  departments     Department[]
+  patients        Patient[]
+  appointments    Appointment[]
+  invoices        Invoice[]
+  inventory       InventoryItem[]
+  auditLogs       AuditLog[]
+  roleTemplates   RoleTemplate[]
+  tenantModules   TenantModule[]
+
+  @@index([clinicCategoryId])
+  @@map("tenants")
+}
+
+enum UserStatus {
+  ACTIVE
+  INVITED
+  SUSPENDED
+}
+
+enum UserType {
+  SUPERADMIN
+  ADMIN
+  STAFF
+}
+
+model User {
+  id            String     @id @default(uuid())
+  tenantId      String?    @map("tenant_id")
+  email         String     @unique
+  passwordHash  String     @map("password_hash")
+  fullName      String     @map("full_name")
+  phone         String?
+  avatar        String?
+  status        UserStatus @default(ACTIVE)
+  userType      UserType   @default(STAFF) @map("user_type")
+  twoFactorEnabled Boolean @default(false) @map("two_factor_enabled")
+  lastLoginAt   DateTime?  @map("last_login_at")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+
+  tenant        Tenant?    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  refreshTokens RefreshToken[]
+  userRoles     UserRole[]
+  staffProfile  StaffProfile?
+  auditLogs     AuditLog[]
+
+  @@index([tenantId])
+  @@index([email])
+  @@map("users")
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  tokenHash   String    @unique @map("token_hash")
+  expiresAt   DateTime  @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  userAgent   String?   @map("user_agent")
+  ip          String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+// -------------------------------------------------------------
+// 2. DYNAMIC RBAC ENGINE (Data-Driven, Zero Hardcoded Roles/Perms)
+// -------------------------------------------------------------
+
+model Module {
+  id          String       @id @default(uuid())
+  key         String       @unique // e.g. 'patients', 'appointments', 'billing'
+  name        String
+  description String?
+  createdAt   DateTime     @default(now()) @map("created_at")
+
+  permissions     Permission[]
+  categoryModules ClinicCategoryModule[]
+  tenantModules   TenantModule[]
+
+  @@map("modules")
+}
+
+model PermissionAction {
+  id          String       @id @default(uuid())
+  key         String       @unique // e.g. 'view', 'create', 'edit', 'delete', 'export', 'approve'
+  name        String
+
+  permissions Permission[]
+
+  @@map("permission_actions")
+}
+
+model Permission {
+  id          String            @id @default(uuid())
+  moduleId    String            @map("module_id")
+  actionId    String            @map("action_id")
+  key         String            @unique // e.g. 'patients.view', 'appointments.create'
+  description String?
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  module      Module            @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  action      PermissionAction  @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  rolePerms   RolePermission[]
+
+  @@unique([moduleId, actionId])
+  @@index([key])
+  @@map("permissions")
+}
+
+model Role {
+  id           String           @id @default(uuid())
+  tenantId     String?          @map("tenant_id")
+  name         String
+  description  String?
+  isSystemRole Boolean          @default(false) @map("is_system_role")
+  createdBy    String?          @map("created_by")
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+
+  tenant       Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rolePerms    RolePermission[]
+  userRoles    UserRole[]
+
+  @@index([tenantId])
+  @@map("roles")
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  roleId       String     @map("role_id")
+  permissionId String     @map("permission_id")
+  grantedAt    DateTime   @default(now()) @map("granted_at")
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([roleId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id         String   @id @default(uuid())
+  userId     String   @map("user_id")
+  roleId     String   @map("role_id")
+  assignedBy String?  @map("assigned_by")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model RoleTemplate {
+  id          String   @id @default(uuid())
+  tenantId    String?  @map("tenant_id")
+  keyword     String
+  module      String
+  action      String
+  isWildcard  Boolean  @default(false) @map("is_wildcard")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([keyword])
+  @@map("role_templates")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  tenantId    String?  @map("tenant_id")
+  actorUserId String?  @map("actor_user_id")
+  action      String   // e.g. 'CREATE_ROLE', 'UPDATE_PERMISSIONS', 'ASSIGN_STAFF'
+  entityType  String   @map("entity_type") // e.g. 'role', 'user', 'patient'
+  entityId    String?  @map("entity_id")
+  beforeState Json?    @map("before_state")
+  afterState  Json?    @map("after_state")
+  ip          String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actor       User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([actorUserId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// -------------------------------------------------------------
+// 3. CLINICAL DOMAIN MODELS
+// -------------------------------------------------------------
+
+model Department {
+  id          String         @id @default(uuid())
+  tenantId    String         @map("tenant_id")
+  name        String
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  staff       StaffProfile[]
+  appointments Appointment[]
+
+  @@index([tenantId])
+  @@map("departments")
+}
+
+model StaffProfile {
+  id           String        @id @default(uuid())
+  userId       String        @unique @map("user_id")
+  departmentId String?       @map("department_id")
+  specialty    String?
+  licenseNo    String?       @map("license_no")
+  createdAt    DateTime      @default(now()) @map("created_at")
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  department   Department?   @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  appointments Appointment[]
+
+  @@map("staff_profiles")
+}
+
+model Patient {
+  id             String        @id @default(uuid())
+  tenantId       String        @map("tenant_id")
+  mrn            String        @unique // Medical Record Number
+  fullName       String        @map("full_name")
+  dob            DateTime
+  gender         String
+  bloodGroup     String?       @map("blood_group")
+  phone          String
+  email          String?
+  address        String?
+  allergies      Json?         @default("[]")
+  chronicConditions Json?      @default("[]") @map("chronic_conditions")
+  medicalHistory Json?         @default("{}") @map("medical_history")
+  createdBy      String?       @map("created_by")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointments   Appointment[]
+  prescriptions  Prescription[]
+  invoices       Invoice[]
+
+  @@index([tenantId])
+  @@index([mrn])
+  @@index([fullName])
+  @@map("patients")
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  CONFIRMED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model Appointment {
+  id             String            @id @default(uuid())
+  tenantId       String            @map("tenant_id")
+  patientId      String            @map("patient_id")
+  staffId        String?           @map("staff_id")
+  departmentId   String?           @map("department_id")
+  scheduledAt    DateTime          @map("scheduled_at")
+  durationMinutes Int              @default(30) @map("duration_minutes")
+  status         AppointmentStatus @default(SCHEDULED)
+  type           String            @default("In-Person Consultation")
+  room           String?
+  reason         String?
+  notes          String?
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+
+  tenant         Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient        Patient           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  doctor         StaffProfile?     @relation(fields: [staffId], references: [id], onDelete: SetNull)
+  department     Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  prescriptions  Prescription[]
+  invoices       Invoice[]
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@index([staffId])
+  @@index([scheduledAt])
+  @@map("appointments")
+}
+
+model Prescription {
+  id            String       @id @default(uuid())
+  appointmentId String?      @map("appointment_id")
+  patientId     String       @map("patient_id")
+  prescribedBy  String       @map("prescribed_by") // Doctor name or ID
+  diagnosis     String
+  medications   Json         // Array of { drug, dosage, frequency, duration, refills }
+  notes         String?
+  status        String       @default("Active")
+  createdAt     DateTime     @default(now()) @map("created_at")
+
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  patient       Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId])
+  @@index([appointmentId])
+  @@map("prescriptions")
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  VOID
+}
+
+model Invoice {
+  id                    String        @id @default(uuid())
+  tenantId              String        @map("tenant_id")
+  patientId             String        @map("patient_id")
+  appointmentId         String?       @map("appointment_id")
+  invoiceNumber         String        @unique @map("invoice_number")
+  amount                Float
+  insuranceCoverage     Float         @default(0) @map("insurance_coverage")
+  patientResponsibility Float         @default(0) @map("patient_responsibility")
+  status                InvoiceStatus @default(PENDING)
+  paymentMethod         String?       @map("payment_method")
+  dueDate               DateTime?     @map("due_date")
+  createdAt             DateTime      @default(now()) @map("created_at")
+
+  tenant                Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient               Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment           Appointment?  @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  items                 InvoiceItem[]
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@index([invoiceNumber])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid())
+  invoiceId   String   @map("invoice_id")
+  description String
+  code        String?  // CPT or local billing code
+  fee         Float
+
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("invoice_items")
+}
+
+model InventoryItem {
+  id                  String   @id @default(uuid())
+  tenantId            String   @map("tenant_id")
+  itemCode            String   @map("item_code")
+  name                String
+  category            String
+  stockQuantity       Int      @default(0) @map("stock_quantity")
+  unit                String   @default("Units")
+  minReorderThreshold Int      @default(50) @map("min_reorder_threshold")
+  batchNumber         String?  @map("batch_number")
+  expiryDate          DateTime? @map("expiry_date")
+  unitCost            Float    @default(0) @map("unit_cost")
+  sellingPrice        Float    @default(0) @map("selling_price")
+  status              String   @default("Optimal")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, itemCode])
+  @@index([tenantId])
+  @@map("inventory_items")
+}
+
+// -------------------------------------------------------------
+// 4. CMS & MARKETING SITE DOMAIN
+// -------------------------------------------------------------
+
+model PublicSiteContent {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  content   Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("public_site_content")
+}
+
+model NewsletterSubscription {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  subscribedAt DateTime @default(now()) @map("subscribed_at")
+
+  @@map("newsletter_subscriptions")
+}
+
+model DemoRequest {
+  id          String   @id @default(uuid())
+  name        String
+  email       String
+  clinicName  String?  @map("clinic_name")
+  phone       String?
+  status      String   @default("PENDING")
+  requestedAt DateTime @default(now()) @map("requested_at")
+
+  @@map("demo_requests")
+}
+
+// -------------------------------------------------------------
+// 5. CLINIC CATEGORIES & CATEGORY ROLE TEMPLATES
+// -------------------------------------------------------------
+
+model ClinicCategory {
+  id          String                         @id @default(uuid())
+  name        String                         @unique
+  description String?
+  isActive    Boolean                        @default(true) @map("is_active")
+  createdAt   DateTime                       @default(now()) @map("created_at")
+  updatedAt   DateTime                       @updatedAt @map("updated_at")
+
+  tenants         Tenant[]
+  roleTemplates   ClinicCategoryRoleTemplate[]
+  categoryModules ClinicCategoryModule[]
+
+  @@map("clinic_categories")
+}
+
+model ClinicCategoryRoleTemplate {
+  id               String         @id @default(uuid())
+  clinicCategoryId String         @map("clinic_category_id")
+  roleName         String         @map("role_name")
+  module           String
+  action           String
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  clinicCategory   ClinicCategory @relation(fields: [clinicCategoryId], references: [id], onDelete: Cascade)
+
+  @@index([clinicCategoryId])
+  @@index([roleName])
+  @@map("clinic_category_role_templates")
+}
+
+model ClinicCategoryModule {
+  id               String         @id @default(uuid())
+  clinicCategoryId String         @map("clinic_category_id")
+  moduleId         String         @map("module_id")
+  displayOrder     Int            @default(0) @map("display_order")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt @map("updated_at")
+
+  clinicCategory   ClinicCategory @relation(fields: [clinicCategoryId], references: [id], onDelete: Cascade)
+  module           Module         @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([clinicCategoryId, moduleId])
+  @@index([clinicCategoryId])
+  @@index([moduleId])
+  @@map("clinic_category_modules")
+}
+
+model TenantModule {
+  id        String   @id @default(uuid())
+  tenantId  String   @map("tenant_id")
+  moduleId  String   @map("module_id")
+  isEnabled Boolean  @default(true) @map("is_enabled")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  module    Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, moduleId])
+  @@index([tenantId])
+  @@index([moduleId])
+  @@map("tenant_modules")
+}
+

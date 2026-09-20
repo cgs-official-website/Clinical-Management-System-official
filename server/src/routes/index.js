@@ -1,0 +1,36 @@
+import { Router } from 'express'
+import authRoutes from './auth.routes.js'
+import superadminRoutes from './superadmin.routes.js'
+import adminRoutes from './admin.routes.js'
+import staffRoutes from './staff.routes.js'
+import publicRoutes from './public.routes.js'
+import docsRoutes from './docs.routes.js'
+import permissionRoutes from './permission.routes.js'
+import { PermissionController } from '../controllers/permission.controller.js'
+
+const router = Router()
+
+// Public CMS and Health
+router.use('/', publicRoutes)
+
+// OpenAPI Swagger Docs
+router.use('/docs', docsRoutes)
+
+// Authentication
+router.use('/auth', authRoutes)
+
+// Superadmin Platform Operations
+router.use('/superadmin', superadminRoutes)
+
+// Clinic Admin RBAC & Clinic Operations
+router.use('/admin', adminRoutes)
+
+// Dynamic RBAC Permission Engine
+router.use('/permissions', permissionRoutes)
+router.get('/modules', PermissionController.getModules)
+router.get('/roles', PermissionController.getRoles)
+
+// Staff Clinical Operations (Patients, Appointments, Prescriptions, Billing, Inventory)
+router.use('/staff', staffRoutes)
+
+export default router

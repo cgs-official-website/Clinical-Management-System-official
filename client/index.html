@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/zuna-logo.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+
+  <!-- Primary Meta Tags -->
+  <title>Zuna | Next-Gen AI-Powered Clinical Management System</title>
+  <meta name="title" content="Zuna | Next-Gen AI-Powered Clinical Management System" />
+  <meta name="description"
+    content="Production-grade, multi-role Clinical Management System with dynamic role-based access control, intelligent appointment workflows, and real-time clinical intelligence." />
+
+  <!-- Open Graph / Facebook -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://zuna.health/" />
+  <meta property="og:title" content="Zuna | Next-Gen Clinical Management System" />
+  <meta property="og:description"
+    content="Multi-role Clinical Management System with granular permissions, real-time analytics, and seamless clinical workflows." />
+  <meta property="og:image" content="/zuna-logo.png" />
+
+  <!-- Twitter -->
+  <meta property="twitter:card" content="summary_large_image" />
+  <meta property="twitter:title" content="Zuna | Next-Gen Clinical Management System" />
+  <meta property="twitter:description"
+    content="Multi-role Clinical Management System with granular permissions, real-time analytics, and seamless clinical workflows." />
+
+  <!-- Google Fonts: Plus Jakarta Sans, Inter, Sora, Space Grotesk -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
+    rel="stylesheet" />
+
+  <!-- Pre-paint Theme Script (Zero FOUC) -->
+  <script>
+    (function () {
+      try {
+        const stored = localStorage.getItem('clinic-theme');
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const theme = stored ? stored : (prefersDark ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+        if (theme === 'dark') {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    })();
+  </script>
+</head>
+
+<body
+  class="bg-bg text-text-primary antialiased selection:bg-primary/20 selection:text-primary transition-colors duration-200">
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
+</body>
+
+</html>
