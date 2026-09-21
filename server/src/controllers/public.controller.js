@@ -40,7 +40,7 @@ export class PublicController {
           {
             plan: 'ENTERPRISE',
             title: 'Hospital Network',
-            priceINR: 65000,
+            priceINR: 65001,
             period: 'per month',
             description: 'Dedicated multi-tenant infrastructure, custom audit feeds, and 24/7 dedicated support.',
             features: ['Unlimited Staff & Tenants', 'Custom Modules & Workflows', 'Dedicated Redis Cluster', '24/7 Phone & On-Site Support']
@@ -97,7 +97,7 @@ export class PublicController {
         where: { email: email.toLowerCase() },
         update: { isActive: true },
         create: { email: email.toLowerCase() }
-      }).catch(() => {})
+      }).catch(() => { })
 
       return res.status(200).json({
         success: true,

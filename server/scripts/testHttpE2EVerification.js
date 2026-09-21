@@ -1,7 +1,7 @@
 async function runHttpE2E() {
   console.log('=== RUNNING LIVE HTTP REST API E2E VERIFICATION ===\n')
 
-  const BASE_URL = 'http://localhost:5000'
+  const BASE_URL = 'http://localhost:5001'
 
   // 1. GET /api/public/clinic-categories
   console.log('1. Testing GET /api/public/clinic-categories...')

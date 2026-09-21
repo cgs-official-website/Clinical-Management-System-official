@@ -6,7 +6,7 @@ async function run() {
   const superToken = superRes.tokens.accessToken
   console.log('Superadmin logged in. userType:', superRes.user.userType, 'isSuperadmin:', superRes.user.isSuperadmin)
 
-  const pendingRes = await fetch('http://localhost:5000/api/superadmin/pending-registrations', {
+  const pendingRes = await fetch('http://localhost:5001/api/superadmin/pending-registrations', {
     headers: { Authorization: 'Bearer ' + superToken }
   })
   console.log('SUPERADMIN GET /pending-registrations STATUS:', pendingRes.status)
@@ -18,14 +18,14 @@ async function run() {
   const adminToken = adminRes.tokens.accessToken
   console.log('Admin logged in. userType:', adminRes.user.userType, 'isSuperadmin:', adminRes.user.isSuperadmin, 'isAdmin:', adminRes.user.isAdmin)
 
-  const rolesRes = await fetch('http://localhost:5000/api/admin/roles', {
+  const rolesRes = await fetch('http://localhost:5001/api/admin/roles', {
     headers: { Authorization: 'Bearer ' + adminToken }
   })
   console.log('ADMIN GET /api/admin/roles STATUS:', rolesRes.status)
   const rolesJson = await rolesRes.json()
   console.log('ROLES COUNT:', rolesJson.roles?.length)
 
-  const kpisRes = await fetch('http://localhost:5000/api/admin/kpis', {
+  const kpisRes = await fetch('http://localhost:5001/api/admin/kpis', {
     headers: { Authorization: 'Bearer ' + adminToken }
   })
   console.log('ADMIN GET /api/admin/kpis STATUS:', kpisRes.status)

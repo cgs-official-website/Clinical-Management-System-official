@@ -4,7 +4,7 @@ import { z } from 'zod'
 dotenv.config()
 
 const envSchema = z.object({
-  PORT: z.union([z.string(), z.number()]).default('5000').transform((v) => (typeof v === 'number' ? v : parseInt(v, 10))),
+  PORT: z.union([z.string(), z.number()]).default('5001').transform((v) => (typeof v === 'number' ? v : parseInt(v, 10))),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   DATABASE_URL: z.string().default('postgresql://postgres:password@localhost:5432/clinic_db?schema=public'),
   REDIS_URL: z.string().default('redis://localhost:6379'),
@@ -14,8 +14,8 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRY: z.string().default('30d'),
   CORS_ORIGIN: z.string().default('*'),
   API_PREFIX: z.string().default('/api'),
-  OPENROUTER_API_KEY: z.string().default('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'),
-  OPENROUTER_MODEL: z.string().default('google/gemini-2.5-flash'),
+  OPENROUTER_API_KEY: z.string().default(process.env.OPENROUTER_API_KEY || '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'),
+  OPENROUTER_MODEL: z.string().default(process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash'),
 })
 
 const parsed = envSchema.safeParse(process.env)

@@ -9,10 +9,15 @@ import permissionRoutes from './permission.routes.js'
 import aiRoutes from './ai.routes.js'
 import { PermissionController } from '../controllers/permission.controller.js'
 
+import chatRoutes from './chat.routes.js'
+
 const router = Router()
 
 // Public CMS and Health
 router.use('/', publicRoutes)
+
+// OpenRouter AI Chatbot Endpoint
+router.use('/chat', chatRoutes)
 
 // OpenAPI Swagger Docs
 router.use('/docs', docsRoutes)

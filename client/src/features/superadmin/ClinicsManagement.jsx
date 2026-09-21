@@ -72,7 +72,7 @@ export const ClinicsManagement = () => {
       return res.data
     },
     enabled: !!isSuperadmin,
-    refetchInterval: isSuperadmin ? 5000 : false,
+    refetchInterval: isSuperadmin ? 5001 : false,
     retry: (failureCount, error) => {
       if (error?.response?.status === 403) return false
       return failureCount < 2
@@ -92,7 +92,7 @@ export const ClinicsManagement = () => {
           notify.info(`New clinic registration received: ${event.data.clinicName || 'Pending Tenant'}`)
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const handleStorage = (e) => {
       if (e.key === 'clinic_last_created_registration' && e.newValue) {
@@ -132,7 +132,7 @@ export const ClinicsManagement = () => {
           tokens: resData?.tokens,
         })
         channel.close()
-      } catch (e) {}
+      } catch (e) { }
 
       // 2. LocalStorage beacon for cross-tab storage event
       try {
@@ -145,7 +145,7 @@ export const ClinicsManagement = () => {
             tokens: resData?.tokens,
           })
         )
-      } catch (e) {}
+      } catch (e) { }
 
       queryClient.invalidateQueries({ queryKey: ['superadmin', 'pending-registrations'] })
       queryClient.invalidateQueries({ queryKey: ['superadmin', 'clinics'] })
@@ -186,7 +186,7 @@ export const ClinicsManagement = () => {
           rejectedAt: new Date().toISOString(),
         })
         channel.close()
-      } catch (e) {}
+      } catch (e) { }
 
       // 2. LocalStorage beacon for cross-tab storage event
       try {
@@ -200,7 +200,7 @@ export const ClinicsManagement = () => {
             rejectedAt: new Date().toISOString(),
           })
         )
-      } catch (e) {}
+      } catch (e) { }
 
       queryClient.invalidateQueries({ queryKey: ['superadmin', 'pending-registrations'] })
       queryClient.invalidateQueries({ queryKey: ['superadmin', 'clinics'] })
@@ -405,11 +405,10 @@ export const ClinicsManagement = () => {
       <div className="flex items-center gap-2 border-b border-border/70 pb-3">
         <button
           onClick={() => setActiveTab('active')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 ${
-            activeTab === 'active'
+          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 ${activeTab === 'active'
               ? 'bg-primary text-white shadow-sm'
               : 'bg-surface text-text-secondary hover:text-text-primary border border-border/80'
-          }`}
+            }`}
         >
           <Building2 className="w-3.5 h-3.5" />
           <span>Active Clinic Tenants</span>
@@ -420,21 +419,19 @@ export const ClinicsManagement = () => {
 
         <button
           onClick={() => setActiveTab('pending')}
-          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 relative ${
-            activeTab === 'pending'
+          className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 relative ${activeTab === 'pending'
               ? 'bg-amber-500 text-white shadow-sm'
               : 'bg-surface text-text-secondary hover:text-text-primary border border-border/80'
-          }`}
+            }`}
         >
           <Clock className="w-3.5 h-3.5" />
           <span>Pending Approvals</span>
           {pendingList.length > 0 && (
             <span
-              className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                activeTab === 'pending'
+              className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${activeTab === 'pending'
                   ? 'bg-white text-amber-600'
                   : 'bg-amber-500 text-white animate-pulse'
-              }`}
+                }`}
             >
               {pendingList.length}
             </span>
