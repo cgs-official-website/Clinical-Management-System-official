@@ -303,7 +303,7 @@ export const AppShell = () => {
           }`}
       >
         {/* Sidebar Header */}
-        <div className="h-16 px-4 flex items-center justify-between border-b border-border">
+        <div className={`h-16 flex items-center border-b border-border ${sidebarCollapsed ? 'px-2 justify-between' : 'px-4 justify-between'}`}>
           {!sidebarCollapsed ? (
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="w-8 h-8 rounded-xl bg-surface border border-primary/20 p-1 flex items-center justify-center shrink-0 shadow-sm">
@@ -328,7 +328,7 @@ export const AppShell = () => {
               </div>
             </div>
           ) : (
-            <div className="mx-auto w-8 h-8 rounded-xl bg-surface border border-primary/20 p-1 flex items-center justify-center shrink-0 shadow-sm">
+            <div className="w-8 h-8 rounded-xl bg-surface border border-primary/20 p-1 flex items-center justify-center shrink-0 shadow-sm">
               <img
                 src="/zuna-logo.png"
                 alt="Zuna"
@@ -341,9 +341,9 @@ export const AppShell = () => {
 
           <button
             onClick={toggleSidebar}
-            className={`p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-border/50 transition-colors ${sidebarCollapsed ? 'mx-auto mt-2' : ''
-              }`}
+            className="p-1.5 rounded-lg text-text-secondary hover:text-text-primary hover:bg-border/50 transition-colors shrink-0"
             aria-label="Toggle sidebar collapse"
+            title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
             {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
           </button>
@@ -394,30 +394,51 @@ export const AppShell = () => {
         </nav>
 
         {/* Sidebar Footer User Area */}
-        <div className="p-3 border-t border-border flex items-center justify-between">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <Avatar src={user?.avatar} name={user?.name} size="sm" status="online" />
-            {!sidebarCollapsed && (
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-bold text-text-primary truncate">{user?.name}</div>
-                <div
-                  className="text-[10px] text-primary font-semibold truncate"
-                  title={getEffectiveRoleTitle(user)}
-                >
-                  {getEffectiveRoleTitle(user)}
-                </div>
-                <div className="text-[9px] text-text-secondary truncate">{user?.email}</div>
+        <div className="border-t border-border bg-surface/40">
+          {sidebarCollapsed ? (
+            <div className="flex flex-col items-center gap-2.5 py-3 px-2">
+              <div
+                className="relative group cursor-pointer p-0.5 rounded-full hover:ring-2 hover:ring-primary/40 transition-all duration-200"
+                title={`${user?.name || 'User'} (${getEffectiveRoleTitle(user)})\n${user?.email || ''}`}
+              >
+                <Avatar src={user?.avatar} name={user?.name} size="sm" status="online" />
               </div>
-            )}
-          </div>
-          <button
-            onClick={logout}
-            className="p-2 rounded-lg text-text-secondary hover:text-danger hover:bg-danger/10 transition-colors"
-            title="Sign out"
-            aria-label="Sign out"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+              <button
+                onClick={logout}
+                className="w-9 h-9 rounded-xl flex items-center justify-center text-text-secondary hover:text-danger hover:bg-danger/10 active:scale-95 transition-all duration-150 group"
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                <LogOut className="w-4 h-4 transition-transform duration-150 group-hover:translate-x-0.5" />
+              </button>
+            </div>
+          ) : (
+            <div className="p-2.5">
+              <div className="p-2 rounded-2xl bg-surface/80 border border-border/70 hover:border-border transition-all duration-200 shadow-xs flex items-center justify-between gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <Avatar src={user?.avatar} name={user?.name} size="sm" status="online" />
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-bold text-text-primary truncate">{user?.name}</div>
+                    <div
+                      className="text-[10px] text-primary font-semibold truncate"
+                      title={getEffectiveRoleTitle(user)}
+                    >
+                      {getEffectiveRoleTitle(user)}
+                    </div>
+                    <div className="text-[9px] text-text-secondary truncate">{user?.email}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={logout}
+                  className="p-2 rounded-xl text-text-secondary hover:text-danger hover:bg-danger/10 active:scale-95 transition-all duration-150 shrink-0"
+                  title="Sign out"
+                  aria-label="Sign out"
+                >
+                  <LogOut className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -524,23 +545,27 @@ export const AppShell = () => {
                 )}
               </nav>
 
-              <div className="pt-4 border-t border-border flex items-center justify-between">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <Avatar src={user?.avatar} name={user?.name} size="xs" />
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold text-text-primary truncate">{user?.name}</div>
-                    <div className="text-[10px] text-primary font-semibold truncate" title={getEffectiveRoleTitle(user)}>
-                      {getEffectiveRoleTitle(user)}
+              <div className="pt-3 border-t border-border">
+                <div className="p-2.5 rounded-2xl bg-surface/90 border border-border/70 flex items-center justify-between gap-2.5 shadow-xs">
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <Avatar src={user?.avatar} name={user?.name} size="sm" status="online" />
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-text-primary truncate">{user?.name}</div>
+                      <div className="text-[10px] text-primary font-semibold truncate mt-0.5" title={getEffectiveRoleTitle(user)}>
+                        {getEffectiveRoleTitle(user)}
+                      </div>
+                      <div className="text-[9px] text-text-secondary truncate mt-0.5">{user?.email}</div>
                     </div>
                   </div>
+                  <button
+                    onClick={logout}
+                    className="p-2 rounded-xl text-text-secondary hover:text-danger hover:bg-danger/10 active:scale-95 transition-all duration-150 shrink-0"
+                    aria-label="Sign out"
+                    title="Sign out"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
                 </div>
-                <button
-                  onClick={logout}
-                  className="p-2 text-danger hover:bg-danger/10 rounded-lg shrink-0"
-                  aria-label="Sign out"
-                >
-                  <LogOut className="w-4 h-4" />
-                </button>
               </div>
             </div>
           </div>

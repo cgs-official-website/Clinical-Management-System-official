@@ -21,6 +21,7 @@ import {
   Zap,
   AlertCircle,
   FolderTree,
+  Info,
 } from 'lucide-react'
 import { Input } from '../../components/ui/Input'
 import { Button } from '../../components/ui/Button'
@@ -218,6 +219,11 @@ export const RegisterPage = () => {
   }, [prefillState, searchParams, setValue])
 
   const clinicNameValue = watch('clinicName')
+  const selectedCategoryId = watch('clinicCategoryId')
+  const selectedCategory = useMemo(
+    () => categories.find((c) => c.id === selectedCategoryId),
+    [categories, selectedCategoryId]
+  )
 
   // Auto-suggest subdomain from clinic name if not manually modified
   const handleClinicNameChange = (e) => {
@@ -668,7 +674,7 @@ export const RegisterPage = () => {
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Category Dropdown */}
-                  <div>
+                  <div className="min-w-0">
                     <label className="block text-xs font-semibold text-text-primary mb-1.5 flex items-center justify-between">
                       <span className="flex items-center gap-1.5">
                         <FolderTree className="w-3.5 h-3.5 text-primary" />
@@ -676,7 +682,7 @@ export const RegisterPage = () => {
                       </span>
                     </label>
                     <select
-                      className={`w-full h-11 px-3 rounded-xl bg-surface border text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all ${
+                      className={`w-full h-11 px-3 rounded-xl bg-surface border text-xs text-text-primary truncate focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all ${
                         errors.clinicCategoryId ? 'border-danger' : 'border-border focus:border-primary'
                       }`}
                       {...register('clinicCategoryId', {
@@ -688,22 +694,28 @@ export const RegisterPage = () => {
                     >
                       <option value="">-- Select Clinic Category --</option>
                       {categories.map((cat) => (
-                        <option key={cat.id} value={cat.id}>
-                          {cat.name} {cat.description ? `(${cat.description})` : ''}
+                        <option key={cat.id} value={cat.id} title={cat.description || ''}>
+                          {cat.name ? cat.name.charAt(0).toUpperCase() + cat.name.slice(1) : ''}
                         </option>
                       ))}
                     </select>
+                    {selectedCategory?.description && (
+                      <div className="mt-2 p-2.5 rounded-xl bg-primary/5 border border-primary/15 text-[11px] text-text-secondary flex items-start gap-2 animate-fadeIn">
+                        <Info className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                        <span className="leading-relaxed">{selectedCategory.description}</span>
+                      </div>
+                    )}
                     {errors.clinicCategoryId && (
                       <p className="mt-1 text-xs text-danger font-medium">{errors.clinicCategoryId.message}</p>
                     )}
                   </div>
 
-                  <div>
+                  <div className="min-w-0">
                     <label className="block text-xs font-semibold text-text-primary mb-1.5">
                       Data Residency Region <span className="text-primary">*</span>
                     </label>
                     <select
-                      className="w-full h-11 px-3 rounded-xl bg-surface border border-border text-xs text-text-primary focus:outline-none focus:border-primary transition-all"
+                      className="w-full h-11 px-3 rounded-xl bg-surface border border-border text-xs text-text-primary truncate focus:outline-none focus:border-primary transition-all"
                       {...register('region')}
                     >
                       <option value="Asia / India (INR ₹)">Asia / India (INR ₹ - Mumbai Region)</option>

@@ -295,6 +295,15 @@ export class SuperadminController {
     }
   }
 
+  static async deleteAllClinicCategories(req, res, next) {
+    try {
+      const data = await SuperadminService.deleteAllClinicCategories(req.user?.id)
+      return res.status(200).json(data)
+    } catch (error) {
+      next(error)
+    }
+  }
+
   static async getCategoryRoleTemplates(req, res, next) {
     try {
       const { id } = req.params

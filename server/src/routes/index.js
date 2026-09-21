@@ -6,6 +6,7 @@ import staffRoutes from './staff.routes.js'
 import publicRoutes from './public.routes.js'
 import docsRoutes from './docs.routes.js'
 import permissionRoutes from './permission.routes.js'
+import aiRoutes from './ai.routes.js'
 import { PermissionController } from '../controllers/permission.controller.js'
 
 const router = Router()
@@ -18,6 +19,9 @@ router.use('/docs', docsRoutes)
 
 // Authentication
 router.use('/auth', authRoutes)
+
+// AI Engine & Clinical Tools (OpenRouter Powered)
+router.use('/ai', aiRoutes)
 
 // Superadmin Platform Operations
 router.use('/superadmin', superadminRoutes)

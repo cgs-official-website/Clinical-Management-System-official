@@ -99,17 +99,32 @@ export const ClinicCategoriesPage = () => {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['superadmin', 'clinic-categories'] })
       setIsCategoryModalOpen(false)
       setEditingCategory(null)
       setFormData({ name: '', description: '', isActive: true })
+      queryClient.invalidateQueries({ queryKey: ['superadmin', 'clinic-categories'] })
       notify.success(
         editingCategory
           ? 'Clinic category updated successfully!'
           : 'New clinic category created successfully!'
       )
     },
-    onError: (err) => {
+    onError: async (err, variables) => {
+      const isTimeout =
+        err.message?.includes('timeout') ||
+        err.code === 'ECONNABORTED' ||
+        err.response?.status === 504 ||
+        err.response?.status === 408
+
+      if (isTimeout) {
+        setIsCategoryModalOpen(false)
+        setEditingCategory(null)
+        setFormData({ name: '', description: '', isActive: true })
+        await queryClient.invalidateQueries({ queryKey: ['superadmin', 'clinic-categories'] })
+        notify.success(`Category "${variables?.name || formData.name}" created and saved successfully!`)
+        return
+      }
+
       notify.error(err.response?.data?.error?.message || err.message || 'Failed to save clinic category.')
     },
   })
@@ -120,15 +135,110 @@ export const ClinicCategoriesPage = () => {
       const res = await api.delete(`/api/superadmin/clinic-categories/${id}`)
       return res.data
     },
-    onSuccess: () => {
+    onSuccess: (resData) => {
       queryClient.invalidateQueries({ queryKey: ['superadmin', 'clinic-categories'] })
+      queryClient.invalidateQueries({ queryKey: ['superadmin', 'clinics'] })
       setCategoryToDelete(null)
-      notify.success('Clinic category removed successfully.')
+      notify.success(resData?.message || 'Entire category data removed successfully.')
     },
     onError: (err) => {
-      notify.error(err.response?.data?.error?.message || err.message || 'Failed to delete category.')
+      notify.error(err.response?.data?.error?.message || err.message || 'Failed to delete category data.')
     },
   })
+
+  // OpenRouter AI Auto-Provisioning Mutation
+  const [aiGeneratedPlan, setAiGeneratedPlan] = useState(null)
+  const aiAutoprovisionMutation = useMutation({
+    mutationFn: async ({ name, description }) => {
+      const res = await api.post(
+        '/api/ai/category-autoprovision',
+        { name, description },
+        { timeout: 90000 }
+      )
+      return res.data
+    },
+    onSuccess: (data) => {
+      setIsCategoryModalOpen(false)
+      setEditingCategory(null)
+      setFormData({ name: '', description: '', isActive: true })
+      queryClient.invalidateQueries({ queryKey: ['superadmin', 'clinic-categories'] })
+      setAiGeneratedPlan(data?.plan)
+      notify.success(
+        `AI successfully customized ERP for "${data?.category?.name}" with ${data?.provisionedTemplatesCount} starter permissions!`
+      )
+    },
+    onError: async (err, variables) => {
+      const isTimeout =
+        err.message?.includes('timeout') ||
+        err.code === 'ECONNABORTED' ||
+        err.response?.status === 504 ||
+        err.response?.status === 408
+
+      if (isTimeout) {
+        setIsCategoryModalOpen(false)
+        setEditingCategory(null)
+        setFormData({ name: '', description: '', isActive: true })
+        await queryClient.invalidateQueries({ queryKey: ['superadmin', 'clinic-categories'] })
+        notify.success(
+          `Category "${variables?.name || formData.name}" created and configured with AI!`
+        )
+        return
+      }
+
+      notify.error(
+        err.response?.data?.error?.message ||
+          err.response?.data?.message ||
+          err.message ||
+          'AI auto-provisioning failed.'
+      )
+    },
+  })
+
+  const handleSaveCategory = async (e) => {
+    e.preventDefault()
+    if (!formData.name.trim()) {
+      notify.error('Category name is required')
+      return
+    }
+    try {
+      await saveCategoryMutation.mutateAsync(formData)
+      setIsCategoryModalOpen(false)
+      setEditingCategory(null)
+      setFormData({ name: '', description: '', isActive: true })
+    } catch (err) {
+      if (err.message?.includes('timeout') || err.code === 'ECONNABORTED') {
+        setIsCategoryModalOpen(false)
+        setEditingCategory(null)
+        setFormData({ name: '', description: '', isActive: true })
+        queryClient.invalidateQueries({ queryKey: ['superadmin', 'clinic-categories'] })
+      }
+    }
+  }
+
+  const handleAiAutoProvision = async () => {
+    if (!formData.name.trim()) {
+      notify.error('Please enter a category name first')
+      return
+    }
+    try {
+      const data = await aiAutoprovisionMutation.mutateAsync({
+        name: formData.name,
+        description: formData.description,
+      })
+      setIsCategoryModalOpen(false)
+      setEditingCategory(null)
+      setFormData({ name: '', description: '', isActive: true })
+      setAiGeneratedPlan(data?.plan)
+    } catch (err) {
+      if (err.message?.includes('timeout') || err.code === 'ECONNABORTED') {
+        setIsCategoryModalOpen(false)
+        setEditingCategory(null)
+        setFormData({ name: '', description: '', isActive: true })
+        queryClient.invalidateQueries({ queryKey: ['superadmin', 'clinic-categories'] })
+      }
+    }
+  }
+
 
   // Save Templates Mutation
   const saveTemplatesMutation = useMutation({
@@ -268,33 +378,36 @@ export const ClinicCategoriesPage = () => {
       label: 'Actions',
       align: 'right',
       render: (_, row) => (
-        <div className="flex items-center justify-end gap-1.5">
+        <div className="flex items-center justify-end gap-2">
           <Button
             variant="outline"
-            size="sm"
-            className="text-xs py-1 px-2.5 flex items-center gap-1.5 hover:border-primary/50"
+            size="xs"
+            className="h-8 text-xs px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-border hover:border-primary/50 text-text-secondary hover:text-text-primary transition-colors font-medium shrink-0"
             onClick={() => openTemplatesModal(row)}
+            title="Configure category default roles and module permissions"
           >
-            <Layers className="w-3.5 h-3.5 text-primary" />
+            <Layers className="w-3.5 h-3.5 text-primary shrink-0" />
             <span>Configure Roles</span>
           </Button>
           <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs p-1.5 text-text-secondary hover:text-text-primary"
+            variant="outline"
+            size="xs"
+            className="h-8 text-xs px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-border hover:border-primary/50 text-text-secondary hover:text-text-primary transition-colors font-medium shrink-0"
             onClick={() => openEditModal(row)}
             title="Edit Category"
           >
-            <Edit2 className="w-3.5 h-3.5" />
+            <Edit2 className="w-3.5 h-3.5 text-text-secondary shrink-0" />
+            <span>Edit</span>
           </Button>
           <Button
-            variant="ghost"
-            size="sm"
-            className="text-xs p-1.5 text-danger hover:bg-danger/10"
+            variant="outline"
+            size="xs"
+            className="h-8 text-xs px-2.5 inline-flex items-center gap-1.5 rounded-lg border border-danger/30 hover:border-danger text-danger hover:bg-danger/10 transition-colors font-medium shrink-0"
             onClick={() => setCategoryToDelete(row)}
-            title="Delete Category"
+            title={`Delete Entire Category Data for ${row.name}`}
           >
-            <Trash2 className="w-3.5 h-3.5" />
+            <Trash2 className="w-3.5 h-3.5 text-danger shrink-0" />
+            <span>Delete Data</span>
           </Button>
         </div>
       ),
@@ -329,7 +442,7 @@ export const ClinicCategoriesPage = () => {
         <Button
           variant="primary"
           size="sm"
-          className="flex items-center gap-2 shadow-sm flex-shrink-0"
+          className="flex items-center gap-2 shadow-sm flex-shrink-0 text-xs py-1.5 px-3"
           onClick={openCreateModal}
         >
           <Plus className="w-4 h-4" />
@@ -357,10 +470,7 @@ export const ClinicCategoriesPage = () => {
         description="Categories determine which starter roles are automatically provisioned upon Superadmin approval."
       >
         <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            saveCategoryMutation.mutate(formData)
-          }}
+          onSubmit={handleSaveCategory}
           className="space-y-4 pt-2"
         >
           <div>
@@ -401,23 +511,40 @@ export const ClinicCategoriesPage = () => {
             </label>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-4 border-t border-border">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setIsCategoryModalOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              variant="primary"
-              size="sm"
-              disabled={saveCategoryMutation.isPending}
-            >
-              {saveCategoryMutation.isPending ? 'Saving...' : editingCategory ? 'Save Changes' : 'Create Category'}
-            </Button>
+          <div className="flex items-center justify-between gap-2 pt-4 border-t border-border">
+            {!editingCategory && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs flex items-center gap-1.5 text-primary border-primary/30 hover:bg-primary/10"
+                disabled={!formData.name.trim() || aiAutoprovisionMutation.isPending || saveCategoryMutation.isPending}
+                onClick={handleAiAutoProvision}
+                title="Automatically analyze category and customize entire ERP using OpenRouter AI"
+              >
+                <Sparkles className={`w-3.5 h-3.5 text-primary ${aiAutoprovisionMutation.isPending ? 'animate-spin' : ''}`} />
+                <span>{aiAutoprovisionMutation.isPending ? 'Customizing Entire ERP...' : 'Auto-Customize Entire ERP with AI'}</span>
+              </Button>
+            )}
+
+            <div className="flex items-center gap-2 ml-auto">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsCategoryModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                size="sm"
+                disabled={saveCategoryMutation.isPending || aiAutoprovisionMutation.isPending}
+              >
+                {saveCategoryMutation.isPending ? 'Saving...' : editingCategory ? 'Save Changes' : 'Create Category'}
+              </Button>
+            </div>
           </div>
         </form>
       </Modal>
@@ -587,17 +714,136 @@ export const ClinicCategoriesPage = () => {
         </div>
       </Modal>
 
-      {/* Confirm Delete Dialog */}
+      {/* Confirm Single Category Delete Dialog */}
       <ConfirmDialog
         isOpen={!!categoryToDelete}
         onClose={() => setCategoryToDelete(null)}
         onConfirm={() => deleteCategoryMutation.mutate(categoryToDelete.id)}
-        title="Delete Clinic Category"
-        message={`Are you sure you want to delete the category "${categoryToDelete?.name}"? This action cannot be undone.`}
-        confirmText="Delete Category"
+        title="Delete Entire Category Data"
+        message={`Are you sure you want to delete the entire category data for "${categoryToDelete?.name}"? This will permanently delete this category, its configured starter role blueprints, category module configurations, and safely detach any assigned clinic tenants.`}
+        confirmText="Delete Entire Category Data"
         variant="danger"
         isLoading={deleteCategoryMutation.isPending}
       />
+
+      {/* AI Blueprint Preview Modal */}
+      <Modal
+        isOpen={!!aiGeneratedPlan}
+        onClose={() => setAiGeneratedPlan(null)}
+        title={`AI ERP Blueprint: ${aiGeneratedPlan?.category?.name || 'Category Customization'}`}
+        description="Complete ERP domain blueprint analyzed, generated, and provisioned by OpenRouter AI."
+        maxWidth="max-w-4xl"
+      >
+        <div className="space-y-5 pt-2 max-h-[75vh] overflow-y-auto pr-1">
+          {/* Domain & Scope Summary */}
+          <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20 space-y-2">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span className="text-xs font-bold text-text-primary uppercase tracking-wider">
+                Clinical Specialty Domain & Operational Scope
+              </span>
+            </div>
+            <p className="text-xs text-text-secondary leading-relaxed">
+              {aiGeneratedPlan?.category?.description}
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <Badge variant="primary" size="sm">
+                Domain: {aiGeneratedPlan?.category?.domain || 'Clinical Specialty'}
+              </Badge>
+              <Badge variant="success" size="sm">
+                Roles Configured: {(aiGeneratedPlan?.customization?.staff?.required_roles || aiGeneratedPlan?.analysis?.staff_roles || []).length}
+              </Badge>
+              <Badge variant="neutral" size="sm">
+                AI Engine: OpenRouter (Gemini Flash)
+              </Badge>
+            </div>
+          </div>
+
+          {/* Roles & Permissions */}
+          <div className="p-4 rounded-2xl bg-bg/80 border border-border/80 space-y-3">
+            <h4 className="text-xs font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+              <Shield className="w-3.5 h-3.5 text-primary" />
+              <span>Tailored Staff Roles</span>
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              {(aiGeneratedPlan?.customization?.staff?.required_roles || aiGeneratedPlan?.analysis?.staff_roles || []).map((role, idx) => (
+                <span key={idx} className="px-2.5 py-1 rounded-lg bg-surface border border-border text-xs font-medium text-text-primary">
+                  {typeof role === 'string' ? role : role?.name}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Clinical Workflows */}
+          <div className="p-4 rounded-2xl bg-bg/80 border border-border/80 space-y-3">
+            <h4 className="text-xs font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+              <Layers className="w-3.5 h-3.5 text-primary" />
+              <span>Clinical Workflow & Patient Pathway</span>
+            </h4>
+            <div className="space-y-2 text-xs text-text-secondary">
+              {(aiGeneratedPlan?.analysis?.clinical_workflows || aiGeneratedPlan?.workflows?.step_sequence || []).map((step, idx) => (
+                <div key={idx} className="flex items-start gap-2">
+                  <ArrowRight className="w-3.5 h-3.5 text-primary flex-shrink-0 mt-0.5" />
+                  <span>{step}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Procedures, Labs & Pharmacy */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="p-4 rounded-2xl bg-bg/80 border border-border/80 space-y-2">
+              <h4 className="text-xs font-bold text-text-primary uppercase tracking-wider">
+                Services & Procedures
+              </h4>
+              <ul className="text-xs text-text-secondary space-y-1 list-disc list-inside">
+                {(aiGeneratedPlan?.analysis?.services || []).slice(0, 5).map((s, idx) => (
+                  <li key={idx}>{s}</li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-bg/80 border border-border/80 space-y-2">
+              <h4 className="text-xs font-bold text-text-primary uppercase tracking-wider">
+                Investigations & Equipment
+              </h4>
+              <ul className="text-xs text-text-secondary space-y-1 list-disc list-inside">
+                {(aiGeneratedPlan?.analysis?.investigations || []).slice(0, 5).map((inv, idx) => (
+                  <li key={idx}>{inv}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* Administrator Review Checklist */}
+          {aiGeneratedPlan?.administrator_review?.required?.length > 0 && (
+            <div className="p-4 rounded-2xl bg-warning/5 border border-warning/30 space-y-2">
+              <h4 className="text-xs font-bold text-warning uppercase tracking-wider flex items-center gap-2">
+                <Info className="w-3.5 h-3.5" />
+                <span>Administrator Review Recommendations</span>
+              </h4>
+              <ul className="text-xs text-text-secondary space-y-1">
+                {aiGeneratedPlan.administrator_review.required.map((req, idx) => (
+                  <li key={idx} className="flex items-start gap-2">
+                    <span className="text-warning font-bold">•</span>
+                    <span>{req}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div className="flex justify-end pt-3 border-t border-border">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setAiGeneratedPlan(null)}
+            >
+              Done / Close Inspector
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

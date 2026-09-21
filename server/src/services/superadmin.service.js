@@ -958,31 +958,101 @@ export class SuperadminService {
   }
 
   /**
-   * Delete clinic category
+   * Delete clinic category and its entire associated data (templates, blueprints, detach tenants)
    */
   static async deleteClinicCategory(id, actorId = null) {
     const category = await prisma.clinicCategory.findUnique({
       where: { id },
-      include: { _count: { select: { tenants: true } } },
+      include: {
+        _count: {
+          select: {
+            tenants: true,
+            roleTemplates: true,
+            categoryModules: true,
+          },
+        },
+      },
     })
     if (!category) throw new NotFoundError('Clinic category not found')
-    if (category._count.tenants > 0) {
-      throw new ConflictError(
-        'Cannot delete clinic category that is assigned to existing clinic tenants. Deactivate it instead.'
-      )
-    }
 
-    await prisma.clinicCategory.delete({ where: { id } })
+    await prisma.$transaction(async (tx) => {
+      // 1. Detach any tenants assigned to this category
+      await tx.tenant.updateMany({
+        where: { clinicCategoryId: id },
+        data: { clinicCategoryId: null },
+      })
+
+      // 2. Delete role blueprints
+      await tx.clinicCategoryRoleTemplate.deleteMany({
+        where: { clinicCategoryId: id },
+      })
+
+      // 3. Delete category module blueprints
+      await tx.clinicCategoryModule.deleteMany({
+        where: { clinicCategoryId: id },
+      })
+
+      // 4. Delete the category itself
+      await tx.clinicCategory.delete({
+        where: { id },
+      })
+    })
 
     await AuditService.log({
       actorId,
       action: 'CLINIC_CATEGORY_DELETED',
       entityType: 'ClinicCategory',
       entityId: id,
-      details: { name: category.name },
+      details: {
+        name: category.name,
+        unlinkedTenants: category._count?.tenants || 0,
+        deletedRoleTemplates: category._count?.roleTemplates || 0,
+        deletedCategoryModules: category._count?.categoryModules || 0,
+      },
     })
 
-    return { success: true, message: 'Clinic category deleted successfully' }
+    return {
+      success: true,
+      message: `Entire category data for "${category.name}" deleted successfully`,
+    }
+  }
+
+  /**
+   * Delete all clinic categories and entire category dataset across the system
+   */
+  static async deleteAllClinicCategories(actorId = null) {
+    const totalCategories = await prisma.clinicCategory.count()
+
+    await prisma.$transaction(async (tx) => {
+      // 1. Detach all clinic tenants from categories
+      await tx.tenant.updateMany({
+        where: { clinicCategoryId: { not: null } },
+        data: { clinicCategoryId: null },
+      })
+
+      // 2. Delete all role templates
+      await tx.clinicCategoryRoleTemplate.deleteMany({})
+
+      // 3. Delete all category module blueprints
+      await tx.clinicCategoryModule.deleteMany({})
+
+      // 4. Delete all clinic categories
+      await tx.clinicCategory.deleteMany({})
+    })
+
+    await AuditService.log({
+      actorId,
+      action: 'ALL_CLINIC_CATEGORIES_DELETED',
+      entityType: 'ClinicCategory',
+      entityId: 'ALL',
+      details: { deletedCount: totalCategories },
+    })
+
+    return {
+      success: true,
+      message: `All category data (${totalCategories} categories) deleted successfully`,
+      deletedCount: totalCategories,
+    }
   }
 
   /**
