@@ -14,7 +14,7 @@ const envSchema = z.object({
   JWT_REFRESH_EXPIRY: z.string().default('30d'),
   CORS_ORIGIN: z.string().default('*'),
   API_PREFIX: z.string().default('/api'),
-  OPENROUTER_API_KEY: z.string().default(process.env.OPENROUTER_API_KEY || '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'),
+  OPENROUTER_API_KEY: z.string().default(process.env.OPENROUTER_API_KEY || ''),
   OPENROUTER_MODEL: z.string().default(process.env.OPENROUTER_MODEL || 'google/gemini-2.5-flash'),
 })
 
