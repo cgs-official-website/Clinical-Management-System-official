@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { SuperadminController } from '../controllers/superadmin.controller.js'
+import { NotificationController } from '../controllers/notification.controller.js'
 import { authenticateToken, requireSuperadmin } from '../middlewares/auth.middleware.js'
 import { validateRequest } from '../middlewares/validate.middleware.js'
 
@@ -56,5 +57,10 @@ router.get('/settings', SuperadminController.getSettings)
 router.put('/settings', SuperadminController.updateSettings)
 router.get('/audit-logs', SuperadminController.getAuditLogs)
 router.get('/health', SuperadminController.getHealth)
+
+// Superadmin DB Notifications
+router.get('/notifications', NotificationController.getNotifications)
+router.patch('/notifications/:id/read', NotificationController.markAsRead)
+router.post('/notifications/mark-all-read', NotificationController.markAllAsRead)
 
 export default router

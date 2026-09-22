@@ -96,6 +96,24 @@
   ],
   "approved": [
     {
+      "id": "reg-1790057960621",
+      "clinicName": "Healthcare",
+      "subdomain": "healthcare",
+      "adminName": "Anu",
+      "email": "anu@gmail.com",
+      "passwordHash": "$2a$12$RdyFM.nPJwF2elRNUgkkPuGvE59kAg4BI51dMFcqpAqMrjQFPbPoi",
+      "phone": "0989867548",
+      "specialty": "Dentist",
+      "clinicCategoryId": "923ce02d-c783-428b-a5ff-56e3ba643410",
+      "clinicCategoryName": "Dentist",
+      "region": "Asia / India (INR ₹)",
+      "plan": "Starter Clinic",
+      "status": "approved",
+      "submittedAt": "2026-09-22T06:19:20.621Z",
+      "tenantId": "c450d20f-6a70-4b32-b7ed-5c5a8a649e0b",
+      "approvedAt": "2026-09-22T06:20:43.749Z"
+    },
+    {
       "id": "reg-1790009612067",
       "clinicName": "suhail",
       "subdomain": "suhail",

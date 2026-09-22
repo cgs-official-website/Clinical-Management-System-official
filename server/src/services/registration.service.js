@@ -9,6 +9,7 @@ import { AdminService } from './admin.service.js'
 import { SuperadminService } from './superadmin.service.js'
 import { AuthService } from './auth.service.js'
 import { RbacService } from './rbac.service.js'
+import { NotificationService } from './notification.service.js'
 import { ConflictError, ValidationError, NotFoundError, DatabaseConnectionError } from '../utils/errors.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -214,6 +215,29 @@ export class RegistrationService {
     if (!registry.pending) registry.pending = []
     registry.pending.unshift(registrationRecord)
     writeLocalRegistry(registry)
+
+    // 7. Create persistent PostgreSQL notification for Superadmin
+    try {
+      await NotificationService.createNotification({
+        type: 'CLINIC_REGISTRATION_PENDING',
+        title: `New Clinic Registration: ${clinicName}`,
+        message: `${adminName} submitted a new clinic registration for "${clinicName}" (${cleanSubdomain}.clinic.io).`,
+        entityType: 'REGISTRATION',
+        entityId: registrationRecord.tenantId || regId,
+        data: {
+          id: regId,
+          tenantId: registrationRecord.tenantId || null,
+          clinicName,
+          subdomain: cleanSubdomain,
+          adminName,
+          email: normalizedEmail,
+          phone,
+          submittedAt: registrationRecord.submittedAt,
+        },
+      })
+    } catch (notifErr) {
+      logger.warn('Failed to create DB notification during registration:', notifErr.message)
+    }
 
     logger.info(`✅ Registration record stored successfully. ID: ${regId}`)
 
@@ -469,6 +493,30 @@ export class RegistrationService {
       }
     } catch (e) {
       logger.warn('Could not query PostgreSQL for pending tenants:', e.message)
+    }
+
+    // Also sync pending registrations into PostgreSQL notifications table
+    try {
+      for (const item of pending) {
+        const entityId = item.tenantId || item.id
+        if (entityId) {
+          const existingNotif = await prisma.notification.findFirst({
+            where: { entityId },
+          })
+          if (!existingNotif) {
+            await NotificationService.createNotification({
+              type: 'CLINIC_REGISTRATION_PENDING',
+              title: `New Clinic Registration: ${item.clinicName}`,
+              message: `${item.adminName} submitted a new clinic registration for "${item.clinicName}" (${item.subdomain}.clinic.io).`,
+              entityType: 'REGISTRATION',
+              entityId,
+              data: item,
+            })
+          }
+        }
+      }
+    } catch (syncErr) {
+      logger.warn('Could not sync pending registrations into PostgreSQL notifications:', syncErr.message)
     }
 
     return {
