@@ -42,6 +42,7 @@ import { Badge } from '../ui/Badge'
 import { notify } from '../ui/Toast'
 import { ErrorBoundary } from '../common/ErrorBoundary'
 import { SkeletonCard, SkeletonTable } from '../ui/Skeleton'
+import { SuperadminNotificationBell } from './SuperadminNotificationBell'
 
 const ModuleLoader = () => (
   <div className="p-2 sm:p-4 space-y-6 animate-pulse">
@@ -452,6 +453,7 @@ export const AppShell = () => {
               <span className="sm:hidden truncate">{getEffectiveRoleTitle(user, true)}</span>
               <span className="hidden sm:inline truncate">{getEffectiveRoleTitle(user)}</span>
             </Badge>
+            {(isSuperadmin || isRbacSuper) && <SuperadminNotificationBell />}
             <ThemeToggle />
           </div>
         </header>

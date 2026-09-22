@@ -23,6 +23,7 @@ export const ToastProvider = ({ children }) => {
       message,
       duration: options.duration || 4000,
       title: options.title || (type.charAt(0).toUpperCase() + type.slice(1)),
+      action: options.action,
     }
 
     setToasts((prev) => [...prev, newToast])
@@ -71,6 +72,17 @@ export const ToastProvider = ({ children }) => {
               <div className="flex-1 min-w-0">
                 <h4 className="text-xs font-semibold text-text-primary capitalize">{toast.title}</h4>
                 <p className="text-xs text-text-secondary mt-0.5 leading-relaxed break-words">{toast.message}</p>
+                {toast.action && (
+                  <button
+                    onClick={() => {
+                      toast.action.onClick?.()
+                      removeToast(toast.id)
+                    }}
+                    className="mt-2 px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-white hover:bg-primary/90 transition-colors shadow-sm inline-flex items-center gap-1.5 cursor-pointer"
+                  >
+                    {toast.action.label}
+                  </button>
+                )}
               </div>
               <button
                 onClick={() => removeToast(toast.id)}

@@ -95,6 +95,17 @@ export const LoginPage = () => {
           'clinic_pending_registration',
           JSON.stringify({ clinicName, email: data.email, subdomain, queueReferenceId })
         )
+        try {
+          const channel = new BroadcastChannel('clinic_registration_channel')
+          channel.postMessage({
+            type: 'REGISTRATION_CREATED',
+            clinicName,
+            email: data.email,
+            submittedAt: new Date().toISOString(),
+          })
+          channel.close()
+        } catch (e) {}
+        localStorage.setItem('clinic_last_created_registration', Date.now().toString())
         navigate('/registration-pending', {
           state: {
             clinicName,
