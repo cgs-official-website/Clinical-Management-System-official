@@ -1,17 +1,15 @@
 import React, { useState, lazy, Suspense } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Boxes, AlertTriangle, Plus, CheckCircle2, Pill, Hash, Clock, FileCheck } from 'lucide-react'
+import { Boxes, Plus, CheckCircle2, Pill, Download, FileSpreadsheet } from 'lucide-react'
 import { api } from '../../lib/api'
-import { useAuth } from '../../hooks/useAuth'
-import { usePermissions } from '../../hooks/usePermissions'
 import { DataTable } from '../../components/ui/DataTable'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { Input } from '../../components/ui/Input'
-import { Select } from '../../components/ui/Select'
 import { notify } from '../../components/ui/Toast'
 import { PermissionAction } from '../../components/common/PermissionAction'
+import { BulkImportModal } from './components/BulkImportModal'
 
 // Lazy load fulfillment modal
 const PharmacyFulfillModal = lazy(() =>
@@ -20,12 +18,11 @@ const PharmacyFulfillModal = lazy(() =>
 
 export const InventoryPage = () => {
   const queryClient = useQueryClient()
-  const { hasPermission, isSuperadmin, isAdmin } = usePermissions()
-  const canAddStock = isSuperadmin || isAdmin || hasPermission('inventory.create') || hasPermission('inventory.*')
 
   const [activeTab, setActiveTab] = useState('inventory') // 'inventory' | 'prescriptions'
   const [selectedFulfillRx, setSelectedFulfillRx] = useState(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isBulkImportOpen, setIsBulkImportOpen] = useState(false)
   const [formData, setFormData] = useState({
     itemCode: 'MED-CIPRO-500',
     name: 'Ciprofloxacin 500mg Tablets',
@@ -38,6 +35,27 @@ export const InventoryPage = () => {
     unitCost: 0.35,
     sellingPrice: 1.5,
   })
+
+  const handleDownloadTemplate = async () => {
+    try {
+      notify.info('Preparing Pharmacy Inventory template...')
+      const res = await api.get('/api/pharmacy/inventory/import-template', {
+        responseType: 'blob',
+      })
+      const url = window.URL.createObjectURL(new Blob([res.data]))
+      const link = document.createElement('a')
+      link.href = url
+      link.setAttribute('download', 'Pharmacy_Inventory_Import_Template.xlsx')
+      document.body.appendChild(link)
+      link.click()
+      link.parentNode.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      notify.success('Template downloaded successfully!')
+    } catch (err) {
+      console.error('Template download error:', err)
+      notify.error('Failed to download template. Please try again.')
+    }
+  }
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['staff', 'inventory'],
@@ -85,19 +103,67 @@ export const InventoryPage = () => {
   const columns = [
     {
       key: 'name',
-      label: 'Item Name & Code',
+      label: 'Item & Brand Name',
       sortable: true,
       render: (val, row) => (
         <div>
           <div className="font-bold text-xs text-text-primary">{val}</div>
-          <div className="text-[11px] font-mono text-text-secondary">{row.itemCode || row.sku}</div>
+          <div className="text-[11px] font-mono text-text-secondary flex items-center gap-1.5 mt-0.5">
+            <span>{row.itemCode || row.sku}</span>
+            {row.brandName && (
+              <span className="text-[10px] px-1 py-0.2 rounded bg-surface border border-border text-text-secondary">
+                {row.brandName}
+              </span>
+            )}
+          </div>
         </div>
+      ),
+    },
+    {
+      key: 'schedule',
+      label: 'Schedule',
+      render: (val) => (
+        <Badge
+          size="sm"
+          variant={
+            val === 'H1' || val === 'X'
+              ? 'danger'
+              : val === 'H'
+              ? 'warning'
+              : val === 'G'
+              ? 'info'
+              : 'neutral'
+          }
+        >
+          {val || 'OTC'}
+        </Badge>
       ),
     },
     {
       key: 'category',
       label: 'Category',
-      render: (val) => <span className="text-xs text-text-secondary">{val || 'General'}</span>,
+      render: (val, row) => (
+        <div>
+          <span className="text-xs text-text-secondary">{val || 'General Supplies'}</span>
+          {row.dosageForm && (
+            <div className="text-[10px] text-text-secondary/70">
+              {row.dosageForm} {row.strength ? `• ${row.strength}` : ''}
+            </div>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'batchNumber',
+      label: 'Batch & Expiry',
+      render: (val, row) => (
+        <div>
+          <div className="font-mono text-xs text-text-primary font-medium">{val || row.batchNo || '-'}</div>
+          <div className="text-[10px] text-text-secondary">
+            {row.expiryDate ? new Date(row.expiryDate).toLocaleDateString() : 'Active Batch'}
+          </div>
+        </div>
+      ),
     },
     {
       key: 'stockQuantity',
@@ -110,12 +176,19 @@ export const InventoryPage = () => {
       ),
     },
     {
-      key: 'expiryDate',
-      label: 'Batch Expiry',
-      render: (val) => (
-        <span className="text-xs text-text-secondary">
-          {val ? new Date(val).toLocaleDateString() : 'Active Batch'}
-        </span>
+      key: 'sellingPrice',
+      label: 'Price (MRP)',
+      render: (val, row) => (
+        <div>
+          <div className="font-bold text-xs text-text-primary">
+            ₹{Number(val || row.unitPrice || 0).toFixed(2)}
+          </div>
+          {row.unitCost > 0 && (
+            <div className="text-[10px] text-text-secondary">
+              Cost: ₹{Number(row.unitCost).toFixed(2)}
+            </div>
+          )}
+        </div>
       ),
     },
     {
@@ -145,17 +218,43 @@ export const InventoryPage = () => {
           </p>
         </div>
 
-        <PermissionAction action="edit">
+        <div className="flex items-center flex-wrap gap-2 w-full sm:w-auto">
           <Button
-            variant="primary"
+            type="button"
+            variant="secondary"
             size="sm"
-            onClick={() => setIsAddOpen(true)}
-            leftIcon={<Plus className="w-4 h-4" />}
-            className="w-full sm:w-auto shrink-0 shadow-sm"
+            onClick={handleDownloadTemplate}
+            leftIcon={<Download className="w-4 h-4" />}
+            className="flex-1 sm:flex-none shadow-sm"
           >
-            Add Stock Item
+            Download Template
           </Button>
-        </PermissionAction>
+
+          <PermissionAction action="edit">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setIsBulkImportOpen(true)}
+              leftIcon={<FileSpreadsheet className="w-4 h-4 text-emerald-500" />}
+              className="flex-1 sm:flex-none shadow-sm border-emerald-500/30 hover:bg-emerald-500/5 text-text-primary"
+            >
+              Bulk Import
+            </Button>
+          </PermissionAction>
+
+          <PermissionAction action="edit">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsAddOpen(true)}
+              leftIcon={<Plus className="w-4 h-4" />}
+              className="w-full sm:w-auto shrink-0 shadow-sm"
+            >
+              Add Stock Item
+            </Button>
+          </PermissionAction>
+        </div>
       </div>
 
       {isError && (
@@ -390,6 +489,15 @@ export const InventoryPage = () => {
           />
         </Suspense>
       )}
+
+      {/* Bulk Import Modal */}
+      <BulkImportModal
+        isOpen={isBulkImportOpen}
+        onClose={() => setIsBulkImportOpen(false)}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['staff', 'inventory'] })
+        }}
+      />
     </div>
   )
 }

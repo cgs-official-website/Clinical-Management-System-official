@@ -984,7 +984,8 @@ export const handleSimulatedRequest = async (config) => {
   // 1. PUBLIC ENDPOINTS
   if (url === '/chat' && method === 'post') {
     try {
-      const backendRes = await fetch('http://localhost:5001/api/chat', {
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
+      const backendRes = await fetch(`${apiBase}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
@@ -2519,6 +2520,39 @@ export const handleSimulatedRequest = async (config) => {
     return [201, newItem]
   }
 
+  if ((url === '/pharmacy/inventory/bulk-import' || url === '/staff/inventory/bulk-import') && method === 'post') {
+    if (data?.commit && Array.isArray(data?.validRows)) {
+      data.validRows.forEach((r) => {
+        const d = r.data || {}
+        db.inventory.unshift({
+          id: 'inv-item-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+          name: d.name,
+          category: d.category || 'General Supplies',
+          stockQuantity: d.stockQuantity || 0,
+          unit: d.unit || 'Units',
+          sellingPrice: d.sellingPrice || 0,
+          unitCost: d.unitCost || 0,
+          batchNumber: d.batchNumber,
+          expiryDate: d.expiryDate,
+          schedule: d.schedule || 'OTC',
+          brandName: d.brandName,
+          status: 'Optimal',
+        })
+      })
+      saveDb()
+      return [
+        200,
+        {
+          success: true,
+          importedCount: data.validRows.length,
+          createdCount: data.validRows.length,
+          updatedCount: 0,
+          importBatchId: 'IMP-DEV-' + Date.now(),
+          message: `Successfully imported ${data.validRows.length} items in dev simulator.`,
+        },
+      ]
+    }
+  }
   if (url === '/staff/reports' && method === 'get') {
     return [
       200,

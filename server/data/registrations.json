@@ -96,6 +96,24 @@
   ],
   "approved": [
     {
+      "id": "reg-1790009612067",
+      "clinicName": "suhail",
+      "subdomain": "suhail",
+      "adminName": "dr.suhail",
+      "email": "suhail321@gmail.com",
+      "passwordHash": "$2a$12$AmBAK6UkelGukGKVuLuoA.8WBHIwkQ2Tmsb3p5TdDCy0MchQnHkrq",
+      "phone": "9876543218",
+      "specialty": "Psychartist",
+      "clinicCategoryId": "d4c99a4a-06f4-4f78-8fa8-673ec12e606e",
+      "clinicCategoryName": "Psychartist",
+      "region": "Asia / India (INR ₹)",
+      "plan": "Professional Health Center",
+      "status": "approved",
+      "submittedAt": "2026-09-21T16:53:32.069Z",
+      "tenantId": "2f679d24-6dba-4265-bdb3-e12e5357a738",
+      "approvedAt": "2026-09-21T16:54:01.804Z"
+    },
+    {
       "id": "reg-1789922233772",
       "clinicName": "super physio",
       "subdomain": "super-physio",

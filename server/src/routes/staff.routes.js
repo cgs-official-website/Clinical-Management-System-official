@@ -1,9 +1,16 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { ClinicalController } from '../controllers/clinical.controller.js'
+import { PharmacyController } from '../controllers/pharmacy.controller.js'
 import { authenticateToken } from '../middlewares/auth.middleware.js'
 import { requirePermission, requireAnyPermission } from '../middlewares/rbac.middleware.js'
 import { validateRequest } from '../middlewares/validate.middleware.js'
+import multer from 'multer'
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }
+})
 
 const router = Router()
 
@@ -145,6 +152,10 @@ router.patch('/billing/:id/status', requirePermission('billing.edit'), ClinicalC
 /* =========================================================================
  * INVENTORY
  * ========================================================================= */
+router.get('/inventory/import-template', requireAnyPermission('inventory.view', 'inventory.create'), PharmacyController.downloadTemplate)
+router.post('/inventory/bulk-import', requireAnyPermission('inventory.create', 'inventory.edit'), upload.single('file'), PharmacyController.bulkImport)
+router.post('/inventory/error-report', requireAnyPermission('inventory.view', 'inventory.create'), PharmacyController.downloadErrorReport)
+
 router.get('/inventory', requirePermission('inventory.view'), ClinicalController.getInventory)
 router.post('/inventory', requirePermission('inventory.create'), validateRequest({ body: createInventoryItemSchema }), ClinicalController.createInventoryItem)
 router.patch('/inventory/:id', requirePermission('inventory.edit'), ClinicalController.updateInventoryItem)

@@ -35,8 +35,8 @@ export default {
         info: "#3B82F6",
       },
       fontFamily: {
-        sans: ["'Plus Jakarta Sans'", "'Inter'", "sans-serif"],
-        heading: ["'Sora'", "'Space Grotesk'", "sans-serif"],
+        sans: ["'Poppins'", "sans-serif"],
+        heading: ["'Poppins'", "sans-serif"],
         mono: ["'JetBrains Mono'", "monospace"],
       },
       borderRadius: {

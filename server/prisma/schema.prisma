@@ -41,6 +41,7 @@ model Tenant {
   appointments    Appointment[]
   invoices        Invoice[]
   inventory       InventoryItem[]
+  stockMovements  StockMovement[]
   auditLogs       AuditLog[]
   roleTemplates   RoleTemplate[]
   tenantModules   TenantModule[]
@@ -414,13 +415,58 @@ model InventoryItem {
   unitCost            Float    @default(0) @map("unit_cost")
   sellingPrice        Float    @default(0) @map("selling_price")
   status              String   @default("Optimal")
+  
+  // India-compliant Pharmacy Inventory Extension Fields
+  brandName            String?   @map("brand_name")
+  dosageForm           String?   @map("dosage_form")
+  strength             String?   @map("strength")
+  manufacturer         String?   @map("manufacturer")
+  mfgDate              DateTime? @map("mfg_date")
+  schedule             String?   @default("OTC") @map("schedule") // OTC, H, H1, X, G
+  hsnCode              String?   @map("hsn_code")
+  packSize             String?   @map("pack_size")
+  gstRate              Float?    @default(12) @map("gst_rate")
+  supplierName         String?   @map("supplier_name")
+  storageCondition     String?   @map("storage_condition")
+  prescriptionRequired Boolean   @default(false) @map("prescription_required")
+  mfrLicenseNumber     String?   @map("mfr_license_number")
+  dpcoCeilingPrice     Float?    @map("dpco_ceiling_price")
+  importBatchId        String?   @map("import_batch_id")
+  importedBy           String?   @map("imported_by")
+  importedAt           DateTime? @map("imported_at")
+  
   createdAt           DateTime @default(now()) @map("created_at")
 
-  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  stockMovements       StockMovement[]
 
   @@unique([tenantId, itemCode])
   @@index([tenantId])
+  @@index([tenantId, batchNumber])
   @@map("inventory_items")
+}
+
+model StockMovement {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  inventoryItemId String   @map("inventory_item_id")
+  type            String   @default("Bulk Import") // "Bulk Import", "Adjustment", "Dispensed"
+  quantityIn      Int      @default(0) @map("quantity_in")
+  quantityOut     Int      @default(0) @map("quantity_out")
+  balance         Int      @default(0)
+  batchNumber     String?  @map("batch_number")
+  handledBy       String?  @map("handled_by")
+  importBatchId   String?  @map("import_batch_id")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([inventoryItemId])
+  @@index([importBatchId])
+  @@map("stock_movements")
 }
 
 // -------------------------------------------------------------

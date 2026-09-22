@@ -10,6 +10,7 @@ import aiRoutes from './ai.routes.js'
 import { PermissionController } from '../controllers/permission.controller.js'
 
 import chatRoutes from './chat.routes.js'
+import pharmacyRoutes from './pharmacy.routes.js'
 
 const router = Router()
 
@@ -38,6 +39,9 @@ router.use('/admin', adminRoutes)
 router.use('/permissions', permissionRoutes)
 router.get('/modules', PermissionController.getModules)
 router.get('/roles', PermissionController.getRoles)
+
+// Pharmacy & Inventory Management (Bulk Import, Stock Movements, Compliance)
+router.use('/pharmacy', pharmacyRoutes)
 
 // Staff Clinical Operations (Patients, Appointments, Prescriptions, Billing, Inventory)
 router.use('/staff', staffRoutes)

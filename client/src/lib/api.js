@@ -5,7 +5,7 @@ import { handleSimulatedRequest } from './devApiSimulator'
 
 const baseURL =
   import.meta.env.VITE_API_BASE_URL ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:5001' : '')
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:5000' : '')
 const useMockApi = import.meta.env.VITE_ENABLE_DEV_MOCK_SERVER === 'true'
 
 export const api = axios.create({
