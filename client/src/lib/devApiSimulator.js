@@ -973,7 +973,7 @@ export const handleSimulatedRequest = async (config) => {
       const parsed = new URL(rawUrl)
       rawUrl = parsed.pathname
     }
-  } catch (e) {}
+  } catch (e) { }
   const url = rawUrl.split('?')[0].replace(/^\/api/, '')
   const method = (config.method || 'get').toLowerCase()
   const data = config.data ? (typeof config.data === 'string' ? JSON.parse(config.data) : config.data) : {}
@@ -982,6 +982,23 @@ export const handleSimulatedRequest = async (config) => {
   await delay(200 + Math.random() * 150) // Realistic server latency
 
   // 1. PUBLIC ENDPOINTS
+  if (url === '/chat' && method === 'post') {
+    try {
+      const backendRes = await fetch('http://localhost:5001/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (backendRes.ok) {
+        const backendData = await backendRes.json()
+        return [200, backendData]
+      }
+    } catch (err) {
+      // Backend offline fallback
+    }
+    return [200, { success: true, reply: "The AI Assistant backend is processing your request. Make sure your backend server is running (`npm run dev` in server) with your OPENROUTER_API_KEY." }]
+  }
+
   if (url === '/public/site-content' && method === 'get') {
     return [200, db.publicSiteContent]
   }
@@ -1137,7 +1154,7 @@ export const handleSimulatedRequest = async (config) => {
             submittedAt: registration.submittedAt,
           })
           bc.close()
-        } catch (e) {}
+        } catch (e) { }
 
         try {
           localStorage.setItem(
@@ -1149,7 +1166,7 @@ export const handleSimulatedRequest = async (config) => {
               email: normalizedEmail,
             })
           )
-        } catch (e) {}
+        } catch (e) { }
       }
     } catch (saveErr) {
       return [
@@ -1297,7 +1314,7 @@ export const handleSimulatedRequest = async (config) => {
         const raw = localStorage.getItem('clinic_user')
         if (raw) currentUser = JSON.parse(raw)
       }
-    } catch (e) {}
+    } catch (e) { }
 
     if (!currentUser) {
       currentUser = {
@@ -1325,7 +1342,7 @@ export const handleSimulatedRequest = async (config) => {
           const raw = localStorage.getItem('clinic_user')
           if (raw) userEmail = JSON.parse(raw)?.email || ''
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     const tokenIdentifier = userEmail || 'admin@aurahealth.org'
     const tokenPayload = {
@@ -1696,7 +1713,7 @@ export const handleSimulatedRequest = async (config) => {
     const activeTenants = (db.clinics || []).filter((c) => c.status === 'active').length
     const totalStaff = (db.staff || []).length + 42
     const totalAdmins = (db.admins || []).length || 3
-    const monthlyRecurringRevenue = 285000 + (totalClinics * 25000)
+    const monthlyRecurringRevenue = 285001 + (totalClinics * 25001)
 
     return [
       200,
@@ -1710,11 +1727,11 @@ export const handleSimulatedRequest = async (config) => {
         activeSessions: 184,
         systemHealth: '99.99% Operational',
         revenueTrends: [
-          { month: 'Apr', revenue: 195000, clinics: Math.max(1, totalClinics - 4) },
-          { month: 'May', revenue: 215000, clinics: Math.max(2, totalClinics - 3) },
+          { month: 'Apr', revenue: 195001, clinics: Math.max(1, totalClinics - 4) },
+          { month: 'May', revenue: 215001, clinics: Math.max(2, totalClinics - 3) },
           { month: 'Jun', revenue: 240000, clinics: Math.max(3, totalClinics - 2) },
           { month: 'Jul', revenue: 260000, clinics: Math.max(4, totalClinics - 1) },
-          { month: 'Aug', revenue: 275000, clinics: Math.max(5, totalClinics) },
+          { month: 'Aug', revenue: 275001, clinics: Math.max(5, totalClinics) },
           { month: 'Sep', revenue: monthlyRecurringRevenue, clinics: totalClinics },
         ],
       },
@@ -1828,7 +1845,7 @@ export const handleSimulatedRequest = async (config) => {
         tokens: tokenPayload,
       })
       channel.close()
-    } catch (e) {}
+    } catch (e) { }
 
     // 2. LocalStorage beacon for cross-tab storage event
     localStorage.setItem(
@@ -1880,7 +1897,7 @@ export const handleSimulatedRequest = async (config) => {
         rejectedAt,
       })
       channel.close()
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       localStorage.setItem(
@@ -1893,7 +1910,7 @@ export const handleSimulatedRequest = async (config) => {
           rejectedAt,
         })
       )
-    } catch (e) {}
+    } catch (e) { }
 
     return [200, { success: true, message: 'Registration request rejected.' }]
   }
@@ -2058,7 +2075,7 @@ export const handleSimulatedRequest = async (config) => {
           timestamp: Date.now(),
         })
         channel.close()
-      } catch (e) {}
+      } catch (e) { }
 
       localStorage.setItem(
         'clinic_last_role_update',
@@ -2087,7 +2104,7 @@ export const handleSimulatedRequest = async (config) => {
     try {
       const authRaw = typeof localStorage !== 'undefined' ? localStorage.getItem('clinic_user') : null
       if (authRaw) currentUser = JSON.parse(authRaw)
-    } catch (e) {}
+    } catch (e) { }
 
     const userTenantId = currentUser?.tenantId || currentUser?.clinicId
 
@@ -2144,7 +2161,7 @@ export const handleSimulatedRequest = async (config) => {
         timestamp: Date.now(),
       })
       channel.close()
-    } catch (e) {}
+    } catch (e) { }
 
     return [201, newStaff]
   }
@@ -2171,7 +2188,7 @@ export const handleSimulatedRequest = async (config) => {
           timestamp: Date.now(),
         })
         channel.close()
-      } catch (e) {}
+      } catch (e) { }
 
       return [200, db.staff[idx]]
     }
@@ -2342,7 +2359,7 @@ export const handleSimulatedRequest = async (config) => {
   if (url === '/staff/triage' && method === 'post') {
     if (!db.triageQueue) db.triageQueue = []
     const tokenNumber = data.tokenNumber ? String(data.tokenNumber).trim() : `TK-${Math.floor(100 + Math.random() * 900)}`
-    
+
     // Check if patient exists or add walk-in
     let patient = db.patients.find(p => p.id === data.patientId || (data.patientName && (p.fullName === data.patientName || p.name === data.patientName)))
     if (!patient && (data.patientName || data.name)) {
@@ -2444,7 +2461,7 @@ export const handleSimulatedRequest = async (config) => {
       rx.fulfilledAt = new Date().toISOString()
       rx.fulfilledBy = data?.dispensedBy || 'Pharmacy Staff'
       rx.notes = (rx.notes ? rx.notes + '\n' : '') + `[Fulfilled by ${rx.fulfilledBy} on ${new Date().toLocaleDateString()}]: ${data?.notes || 'Medications dispensed and verified'}`
-      
+
       // Update matching triageQueue item to PHARMACY_FULFILLED
       if (db.triageQueue && (rx.tokenNumber || rx.patientName)) {
         const match = db.triageQueue.find(t => (rx.tokenNumber && t.tokenNumber === rx.tokenNumber) || t.patientName === rx.patientName)

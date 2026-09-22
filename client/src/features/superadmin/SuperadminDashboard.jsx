@@ -55,7 +55,7 @@ export const SuperadminDashboard = () => {
       return res.data
     },
     enabled: !!isSuperadmin,
-    refetchInterval: isSuperadmin ? 5000 : false,
+    refetchInterval: isSuperadmin ? 5001 : false,
     retry: (failureCount, error) => {
       if (error?.response?.status === 403) return false
       return failureCount < 2
@@ -73,7 +73,7 @@ export const SuperadminDashboard = () => {
           queryClient.invalidateQueries({ queryKey: ['superadmin', 'kpis'] })
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const handleStorage = (e) => {
       if (e.key === 'clinic_last_created_registration' && e.newValue) {
@@ -140,11 +140,10 @@ export const SuperadminDashboard = () => {
             <button
               key={range}
               onClick={() => setDateRange(range)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${
-                dateRange === range
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${dateRange === range
                   ? 'bg-primary text-white shadow-sm'
                   : 'bg-surface border border-border text-text-secondary hover:text-text-primary'
-              }`}
+                }`}
             >
               {range}
             </button>

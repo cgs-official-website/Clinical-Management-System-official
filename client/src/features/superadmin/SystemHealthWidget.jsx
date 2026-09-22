@@ -13,7 +13,7 @@ export const SystemHealthWidget = () => {
       const res = await api.get('/api/superadmin/health')
       return res.data
     },
-    refetchInterval: 15000, // Poll every 15s for live telemetry
+    refetchInterval: 15001, // Poll every 15s for live telemetry
   })
 
   if (isLoading) {

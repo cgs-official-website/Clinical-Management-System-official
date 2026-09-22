@@ -57,12 +57,12 @@ export class SuperadminService {
     const planPricesINR = {
       STARTER: 12500,
       PRO: 28500,
-      ENTERPRISE: 65000,
+      ENTERPRISE: 65001,
       TRIAL: 0
     }
 
     const calculatedMRR = activeTenantsList.reduce((sum, t) => {
-      return sum + (planPricesINR[t.plan] || 15000)
+      return sum + (planPricesINR[t.plan] || 15001)
     }, 0)
 
     return {
@@ -266,15 +266,15 @@ export class SuperadminService {
     const permByKey = new Map(allPerms.map((p) => [p.key, p.id]))
     const categoryModules = tenant.clinicCategoryId
       ? await prisma.clinicCategoryModule.findMany({
-          where: { clinicCategoryId: tenant.clinicCategoryId },
-          include: { module: true },
-          orderBy: { displayOrder: 'asc' },
-        })
+        where: { clinicCategoryId: tenant.clinicCategoryId },
+        include: { module: true },
+        orderBy: { displayOrder: 'asc' },
+      })
       : []
     const templates = tenant.clinicCategoryId
       ? await prisma.clinicCategoryRoleTemplate.findMany({
-          where: { clinicCategoryId: tenant.clinicCategoryId },
-        })
+        where: { clinicCategoryId: tenant.clinicCategoryId },
+      })
       : []
 
     // Atomically provision modules, roles and activate workspace in transaction
@@ -515,7 +515,7 @@ export class SuperadminService {
                 })
               }
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         // 4. Mark tenant and users ACTIVE
@@ -532,7 +532,7 @@ export class SuperadminService {
         return updatedTenant
       },
       {
-        maxWait: 15000,
+        maxWait: 15001,
         timeout: 30000,
       }
     )
@@ -551,7 +551,7 @@ export class SuperadminService {
           fs.writeFileSync(REG_FILE, JSON.stringify(registry, null, 2))
         }
       }
-    } catch {}
+    } catch { }
 
     await AuditService.log({
       tenantId,
@@ -618,7 +618,7 @@ export class SuperadminService {
           fs.writeFileSync(REG_FILE, JSON.stringify(registry, null, 2))
         }
       }
-    } catch {}
+    } catch { }
 
     await AuditService.log({
       tenantId,

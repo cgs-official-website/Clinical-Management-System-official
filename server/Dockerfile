@@ -20,7 +20,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=5000
+ENV PORT=5001
 
 # Install OpenSSL for Prisma engine compatibility on Alpine
 RUN apk add --no-cache openssl
@@ -33,7 +33,7 @@ COPY --from=builder /app/src ./src
 COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/data ./data
 
-EXPOSE 5000
+EXPOSE 5001
 
 # Run resilient startup script and start server
 CMD ["node", "scripts/start.js"]

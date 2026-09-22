@@ -10,7 +10,7 @@ console.log('====================================================')
 console.log('🏥  clinic OS — Cloud Deployment Initializer')
 console.log('====================================================')
 
-const port = process.env.PORT || 5000
+const port = process.env.PORT || 5001
 
 console.log(`[Config] NODE_ENV: ${process.env.NODE_ENV || 'development'}`)
 console.log(`[Config] Target PORT: ${port}`)
@@ -24,7 +24,7 @@ if (process.env.DATABASE_URL) {
     execSync('npx prisma db push --skip-generate --accept-data-loss', {
       cwd: rootDir,
       stdio: 'inherit',
-      timeout: 45000,
+      timeout: 45001,
       env: { ...process.env }
     })
     console.log('✅ [Prisma] Database schema synchronized successfully.')

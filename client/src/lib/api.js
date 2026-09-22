@@ -5,7 +5,7 @@ import { handleSimulatedRequest } from './devApiSimulator'
 
 const baseURL =
   import.meta.env.VITE_API_BASE_URL ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:5000' : '')
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:5001' : '')
 const useMockApi = import.meta.env.VITE_ENABLE_DEV_MOCK_SERVER === 'true'
 
 export const api = axios.create({
@@ -13,7 +13,7 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000,
+  timeout: 15001,
 })
 
 // Custom adapter for dev API simulator
