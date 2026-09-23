@@ -587,7 +587,8 @@ export class RegistrationService {
         await SuperadminService.approveTenantTransaction(newTenant.id)
       }
     } catch (e) {
-      logger.warn('Could not update PostgreSQL tenant status upon approval:', e.message)
+      logger.error('Could not update PostgreSQL tenant status upon approval:', e.message)
+      throw e
     }
 
     const clinicName = reg ? reg.clinicName : 'Clinic'

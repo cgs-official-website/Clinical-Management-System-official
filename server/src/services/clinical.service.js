@@ -373,22 +373,48 @@ export class ClinicalService {
       scheduledAt = new Date(Date.now() + 86400000)
     }
 
-    let staffId = data.staffId || data.doctorId || null
-    if (!staffId && data.doctorName) {
+    let validStaffId = null
+    let candidateStaffId = data.staffId || data.doctorId || null
+
+    if (candidateStaffId) {
+      const profileById = await prisma.staffProfile.findUnique({
+        where: { id: candidateStaffId }
+      }).catch(() => null)
+
+      if (profileById) {
+        validStaffId = profileById.id
+      } else {
+        const profileByUserId = await prisma.staffProfile.findUnique({
+          where: { userId: candidateStaffId }
+        }).catch(() => null)
+
+        if (profileByUserId) {
+          validStaffId = profileByUserId.id
+        }
+      }
+    }
+
+    if (!validStaffId && data.doctorName) {
       const docUser = await prisma.user.findFirst({
         where: {
           tenantId: targetTenantId,
           fullName: { equals: data.doctorName, mode: 'insensitive' }
         }
       }).catch(() => null)
-      staffId = docUser?.id || null
+
+      if (docUser) {
+        const profile = await prisma.staffProfile.findUnique({
+          where: { userId: docUser.id }
+        }).catch(() => null)
+        validStaffId = profile?.id || null
+      }
     }
 
     const appointment = await prisma.appointment.create({
       data: {
         tenantId: targetTenantId,
         patientId,
-        staffId,
+        staffId: validStaffId,
         scheduledAt,
         durationMinutes: parseInt(data.durationMinutes, 10) || 30,
         type: data.type || 'In-Person Consultation',
@@ -437,6 +463,20 @@ export class ClinicalService {
     const updatePayload = { ...data }
     if (updatePayload.scheduledAt) {
       updatePayload.scheduledAt = new Date(updatePayload.scheduledAt)
+    }
+    if (updatePayload.staffId) {
+      const profileById = await prisma.staffProfile.findUnique({
+        where: { id: updatePayload.staffId }
+      }).catch(() => null)
+
+      if (profileById) {
+        updatePayload.staffId = profileById.id
+      } else {
+        const profileByUserId = await prisma.staffProfile.findUnique({
+          where: { userId: updatePayload.staffId }
+        }).catch(() => null)
+        updatePayload.staffId = profileByUserId?.id || null
+      }
     }
 
     const updated = await prisma.appointment.update({
@@ -1040,8 +1080,12 @@ export class ClinicalService {
       patientId = newPat.id
     }
 
-    const invoiceCount = await prisma.invoice.count({ where: { tenantId: targetTenantId } }).catch(() => 0)
-    const invoiceNumber = `INV-${new Date().getFullYear()}-${String(invoiceCount + 1).padStart(5, '0')}`
+    let count = (await prisma.invoice.count().catch(() => 0)) + 1
+    let invoiceNumber = `INV-${new Date().getFullYear()}-${String(count).padStart(5, '0')}`
+    while (await prisma.invoice.findUnique({ where: { invoiceNumber } })) {
+      count++
+      invoiceNumber = `INV-${new Date().getFullYear()}-${String(count).padStart(5, '0')}`
+    }
 
     const items = data.items || []
     const totalAmount = items.reduce((sum, it) => sum + ((parseFloat(it.unitPrice) || parseFloat(it.fee) || 0) * (it.quantity || 1)), 0) || parseFloat(data.amount) || 100

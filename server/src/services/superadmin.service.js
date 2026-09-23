@@ -8,6 +8,7 @@ import { AuthService } from './auth.service.js'
 import { AdminService } from './admin.service.js'
 import { AuditService } from './audit.service.js'
 import { ConflictError, NotFoundError, ValidationError } from '../utils/errors.js'
+import { CATEGORY_DEPARTMENTS } from '../constants/clinicCategoryDepartments.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -27,7 +28,7 @@ export class SuperadminService {
       recentTenants
     ] = await Promise.all([
       prisma.tenant.count().catch(() => 0),
-      prisma.tenant.count({ where: { isActive: true } }).catch(() => 0),
+      prisma.tenant.count({ where: { status: 'ACTIVE' } }).catch(() => 0),
       prisma.user.count().catch(() => 0),
       prisma.patient.count().catch(() => 0),
       prisma.invoice.findMany({
@@ -50,7 +51,7 @@ export class SuperadminService {
 
     // Calculate calculated MRR estimate from active tenants (Tiered: Starter ₹12,000, Pro ₹28,000, Enterprise ₹65,000)
     const activeTenantsList = await prisma.tenant.findMany({
-      where: { isActive: true },
+      where: { status: 'ACTIVE' },
       select: { plan: true }
     }).catch(() => [])
 
@@ -79,9 +80,10 @@ export class SuperadminService {
       recentTenants: recentTenants.map(t => ({
         id: t.id,
         name: t.name,
-        slug: t.slug,
+        slug: t.subdomain,
+        subdomain: t.subdomain,
         plan: t.plan,
-        isActive: t.isActive,
+        isActive: t.status === 'ACTIVE',
         usersCount: t._count.users,
         patientsCount: t._count.patients,
         createdAt: t.createdAt
@@ -97,12 +99,12 @@ export class SuperadminService {
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
-        { slug: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } }
+        { subdomain: { contains: search, mode: 'insensitive' } },
+        { contactEmail: { contains: search, mode: 'insensitive' } }
       ]
     }
     if (plan) where.plan = plan
-    if (status) where.isActive = status === 'active'
+    if (status) where.status = status.toUpperCase()
 
     const skip = (Math.max(1, page) - 1) * limit
 
@@ -124,6 +126,7 @@ export class SuperadminService {
     return {
       data: tenants.map(t => ({
         ...t,
+        slug: t.subdomain,
         stats: {
           users: t._count.users,
           patients: t._count.patients,
@@ -145,27 +148,33 @@ export class SuperadminService {
   static async createTenant({
     name,
     slug,
+    subdomain,
     email,
+    contactEmail,
     phone,
     address,
-    plan = 'PRO',
+    plan = 'Professional',
+    region = 'North America (East)',
     adminName,
     adminEmail,
     adminPassword,
     actorId = null
   }) {
-    const cleanSlug = (slug || name.toLowerCase().replace(/[^a-z0-9]/g, '-')).toLowerCase()
+    const cleanSubdomain = (subdomain || slug || name.toLowerCase().replace(/[^a-z0-9]/g, '-')).toLowerCase()
+    const targetEmail = (adminEmail || contactEmail || email || '').toLowerCase().trim()
 
-    // Check slug uniqueness
-    const existing = await prisma.tenant.findUnique({ where: { slug: cleanSlug } })
+    // Check subdomain uniqueness
+    const existing = await prisma.tenant.findUnique({ where: { subdomain: cleanSubdomain } })
     if (existing) {
-      throw new ConflictError(`A clinic tenant with slug "${cleanSlug}" already exists`)
+      throw new ConflictError(`A clinic tenant with subdomain "${cleanSubdomain}" already exists`)
     }
 
-    // Check admin email uniqueness
-    const existingUser = await prisma.user.findUnique({ where: { email: adminEmail.toLowerCase() } })
-    if (existingUser) {
-      throw new ConflictError(`User with email "${adminEmail}" already exists`)
+    // Check admin email uniqueness if provided
+    if (targetEmail) {
+      const existingUser = await prisma.user.findUnique({ where: { email: targetEmail } })
+      if (existingUser) {
+        throw new ConflictError(`User with email "${targetEmail}" already exists`)
+      }
     }
 
     const passwordHash = await AuthService.hashPassword(adminPassword || 'Admin@12345')
@@ -174,27 +183,32 @@ export class SuperadminService {
     const tenant = await prisma.tenant.create({
       data: {
         name,
-        slug: cleanSlug,
-        email,
-        phone,
-        address,
-        plan
+        subdomain: cleanSubdomain,
+        domain: `${cleanSubdomain}.clinic.io`,
+        contactEmail: targetEmail || null,
+        plan,
+        region,
+        status: 'ACTIVE'
       }
     })
 
-    const adminUser = await prisma.user.create({
-      data: {
-        tenantId: tenant.id,
-        name: adminName || `${name} Admin`,
-        email: adminEmail.toLowerCase().trim(),
-        passwordHash,
-        phone,
-        status: 'ACTIVE',
-        userType: 'ADMIN'
-      }
-    })
+    let adminUser = null
+    if (targetEmail) {
+      const adminFullName = adminName || `${name} Admin`
+      adminUser = await prisma.user.create({
+        data: {
+          tenantId: tenant.id,
+          fullName: adminFullName,
+          email: targetEmail,
+          passwordHash,
+          phone,
+          status: 'ACTIVE',
+          userType: 'ADMIN'
+        }
+      })
+    }
 
-    // Seed all 5 standard clinical roles for this tenant and bind admin
+    // Seed standard clinical roles for this tenant and bind admin
     await AdminService.seedTenantRoles(tenant.id)
 
     await AuditService.log({
@@ -203,16 +217,22 @@ export class SuperadminService {
       action: 'TENANT_CREATED',
       entityType: 'Tenant',
       entityId: tenant.id,
-      details: { name: tenant.name, slug: tenant.slug, plan: tenant.plan, adminEmail }
+      details: { name: tenant.name, subdomain: tenant.subdomain, plan: tenant.plan, adminEmail: targetEmail }
     })
 
     return {
-      tenant,
-      admin: {
+      id: tenant.id,
+      name: tenant.name,
+      subdomain: tenant.subdomain,
+      plan: tenant.plan,
+      region: tenant.region,
+      status: tenant.status,
+      admin: adminUser ? {
         id: adminUser.id,
-        name: adminUser.name,
+        name: adminUser.fullName,
+        fullName: adminUser.fullName,
         email: adminUser.email
-      }
+      } : null
     }
   }
 
@@ -501,21 +521,17 @@ export class SuperadminService {
 
         // 3. Seed category departments into Department table for this tenant
         if (tenant.clinicCategoryId) {
-          try {
-            const categoryDepts = await tx.$queryRaw`
-              SELECT name FROM clinic_category_departments WHERE clinic_category_id = ${tenant.clinicCategoryId}
-            `
-            for (const d of categoryDepts) {
-              const existingDept = await tx.department.findFirst({
-                where: { tenantId, name: d.name }
+          const deptNames = CATEGORY_DEPARTMENTS[tenant.clinicCategory?.name] || []
+          for (const deptName of deptNames) {
+            const existingDept = await tx.department.findFirst({
+              where: { tenantId, name: deptName }
+            })
+            if (!existingDept) {
+              await tx.department.create({
+                data: { tenantId, name: deptName }
               })
-              if (!existingDept) {
-                await tx.department.create({
-                  data: { tenantId, name: d.name }
-                })
-              }
             }
-          } catch (e) { }
+          }
         }
 
         // 4. Mark tenant and users ACTIVE

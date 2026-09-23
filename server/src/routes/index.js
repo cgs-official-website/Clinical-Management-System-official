@@ -40,8 +40,13 @@ router.use('/permissions', permissionRoutes)
 router.get('/modules', PermissionController.getModules)
 router.get('/roles', PermissionController.getRoles)
 
+import dentalRoutes from './dental.routes.js'
+
 // Pharmacy & Inventory Management (Bulk Import, Stock Movements, Compliance)
 router.use('/pharmacy', pharmacyRoutes)
+
+// Dental Specialty & Radiographic Vault
+router.use('/dental', dentalRoutes)
 
 // Staff Clinical Operations (Patients, Appointments, Prescriptions, Billing, Inventory)
 router.use('/staff', staffRoutes)

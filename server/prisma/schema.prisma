@@ -45,6 +45,7 @@ model Tenant {
   auditLogs       AuditLog[]
   roleTemplates   RoleTemplate[]
   tenantModules   TenantModule[]
+  xrayRecords     XrayRecord[]
 
   @@index([clinicCategoryId])
   @@map("tenants")
@@ -291,6 +292,7 @@ model Patient {
   appointments   Appointment[]
   prescriptions  Prescription[]
   invoices       Invoice[]
+  xrayRecords    XrayRecord[]
 
   @@index([tenantId])
   @@index([mrn])
@@ -361,6 +363,9 @@ enum InvoiceStatus {
   PENDING
   PAID
   VOID
+  PARTIAL
+  DRAFT
+  CANCELLED
 }
 
 model Invoice {
@@ -594,5 +599,40 @@ model Notification {
   @@index([entityId])
   @@map("notifications")
 }
+
+// -------------------------------------------------------------
+// 8. DENTAL RADIOGRAPHIC SCAN VAULT
+// -------------------------------------------------------------
+
+model XrayRecord {
+  id              String   @id @default(uuid())
+  tenantId        String   @map("tenant_id")
+  patientId       String?  @map("patient_id")
+  code            String   @map("code")
+  type            String   @map("type")
+  region          String?  @map("region")
+  acquisitionDate DateTime @map("acquisition_date")
+  radiologist     String?  @map("radiologist")
+  findings        String?  @map("findings")
+  status          String   @default("Verified & Signed") @map("status")
+  aspect          String?  @default("Panoramic 16:9") @map("aspect")
+  fileName        String   @map("file_name")
+  fileMime        String   @map("file_mime")
+  fileSize        Int      @map("file_size")
+  fileData        Bytes?   @map("file_data")
+  filePath        String?  @map("file_path")
+  createdById     String?  @map("created_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient         Patient? @relation(fields: [patientId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@index([code])
+  @@map("xray_records")
+}
+
 
 
