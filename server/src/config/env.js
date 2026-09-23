@@ -1,7 +1,7 @@
 import dotenv from 'dotenv'
 import { z } from 'zod'
 
-dotenv.config()
+dotenv.config({ override: true })
 
 const envSchema = z.object({
   PORT: z.union([z.string(), z.number()]).default('5001').transform((v) => (typeof v === 'number' ? v : parseInt(v, 10))),

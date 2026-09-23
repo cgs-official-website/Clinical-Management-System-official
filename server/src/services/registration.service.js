@@ -10,6 +10,7 @@ import { SuperadminService } from './superadmin.service.js'
 import { AuthService } from './auth.service.js'
 import { RbacService } from './rbac.service.js'
 import { NotificationService } from './notification.service.js'
+import { SubscriptionService } from './subscription.service.js'
 import { ConflictError, ValidationError, NotFoundError, DatabaseConnectionError } from '../utils/errors.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -62,7 +63,9 @@ export const registerClinicSchema = z
     phone: z.string().min(8, 'Valid phone number is required'),
     specialty: z.string().optional().default('General Medicine'),
     region: z.string().optional().default('Asia / India (INR ₹)'),
-    plan: z.string().optional().default('Professional'),
+    plan: z.string().optional().default('Professional Center'),
+    planId: z.string().optional(),
+    plan_id: z.string().optional(),
     clinic_category_id: z.string().optional(),
     clinicCategoryId: z.string().optional(),
   })
@@ -88,8 +91,19 @@ export class RegistrationService {
 
     const { clinicName, subdomain, adminName, email, password, phone, specialty, region, plan } = parsed.data
     const selectedCategoryId = parsed.data.clinic_category_id || parsed.data.clinicCategoryId
+    const selectedPlanId = parsed.data.planId || parsed.data.plan_id || null
     const normalizedEmail = email.toLowerCase().trim()
     const cleanSubdomain = subdomain.toLowerCase().trim()
+
+    // Verify subscription plan from database
+    let verifiedPlan = null
+    try {
+      verifiedPlan = await SubscriptionService.findPlan(selectedPlanId || plan)
+    } catch (e) {
+      logger.warn('Failed to verify subscription plan from DB:', e.message)
+    }
+    const planIdToSet = verifiedPlan?.id || null
+    const planNameToSet = verifiedPlan?.name || plan || 'Professional Center'
 
     // Verify clinic category exists if DB reachable
     let verifiedCategory = null
@@ -168,7 +182,8 @@ export class RegistrationService {
       clinicCategoryId: verifiedCategory?.id || selectedCategoryId || null,
       clinicCategoryName: verifiedCategory?.name || null,
       region,
-      plan,
+      plan: planNameToSet,
+      planId: planIdToSet,
       status: 'pending',
       submittedAt: new Date().toISOString(),
     }
@@ -181,7 +196,8 @@ export class RegistrationService {
             name: clinicName,
             subdomain: cleanSubdomain,
             domain: `${cleanSubdomain}.clinic.io`,
-            plan,
+            plan: planNameToSet,
+            planId: planIdToSet,
             status: 'PENDING',
             region,
             contactEmail: normalizedEmail,
@@ -554,15 +570,32 @@ export class RegistrationService {
       })
 
       if (existingTenant) {
+        if (!existingTenant.planId) {
+          try {
+            const verifiedPlan = await SubscriptionService.findPlan(reg?.planId || reg?.plan || existingTenant.plan)
+            if (verifiedPlan) {
+              await prisma.tenant.update({
+                where: { id: targetTenantId },
+                data: { planId: verifiedPlan.id, plan: verifiedPlan.name },
+              })
+            }
+          } catch {}
+        }
         await SuperadminService.approveTenantTransaction(targetTenantId)
       } else if (reg) {
         // Provision directly into PostgreSQL if not yet created
+        let verifiedPlan = null
+        try {
+          verifiedPlan = await SubscriptionService.findPlan(reg.planId || reg.plan)
+        } catch {}
+
         const newTenant = await prisma.tenant.create({
           data: {
             name: reg.clinicName,
             subdomain: reg.subdomain,
             domain: `${reg.subdomain}.clinic.io`,
-            plan: reg.plan || 'Professional',
+            plan: verifiedPlan?.name || reg.plan || 'Professional Center',
+            planId: verifiedPlan?.id || reg.planId || null,
             status: 'PENDING',
             region: reg.region || 'Asia / India (INR ₹)',
             contactEmail: reg.email,

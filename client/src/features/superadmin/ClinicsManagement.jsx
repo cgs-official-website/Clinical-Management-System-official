@@ -18,6 +18,11 @@ import {
   Eye,
   Phone,
   Globe,
+  FileText,
+  Receipt,
+  Printer,
+  Download,
+  ExternalLink,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { DataTable } from '../../components/ui/DataTable'

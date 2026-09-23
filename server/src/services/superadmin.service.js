@@ -7,6 +7,7 @@ import { logger } from '../utils/logger.js'
 import { AuthService } from './auth.service.js'
 import { AdminService } from './admin.service.js'
 import { AuditService } from './audit.service.js'
+import { SubscriptionService } from './subscription.service.js'
 import { ConflictError, NotFoundError, ValidationError } from '../utils/errors.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -205,6 +206,13 @@ export class SuperadminService {
       entityId: tenant.id,
       details: { name: tenant.name, slug: tenant.slug, plan: tenant.plan, adminEmail }
     })
+
+    // Provision Zuna Subscription Invoice for created tenant
+    try {
+      await SubscriptionService.createInvoiceForTenant(tenant.id, plan)
+    } catch (subErr) {
+      logger.error(`Could not generate subscription invoice on tenant creation: ${subErr.message}`)
+    }
 
     return {
       tenant,
@@ -499,25 +507,6 @@ export class SuperadminService {
           }
         }
 
-        // 3. Seed category departments into Department table for this tenant
-        if (tenant.clinicCategoryId) {
-          try {
-            const categoryDepts = await tx.$queryRaw`
-              SELECT name FROM clinic_category_departments WHERE clinic_category_id = ${tenant.clinicCategoryId}
-            `
-            for (const d of categoryDepts) {
-              const existingDept = await tx.department.findFirst({
-                where: { tenantId, name: d.name }
-              })
-              if (!existingDept) {
-                await tx.department.create({
-                  data: { tenantId, name: d.name }
-                })
-              }
-            }
-          } catch (e) { }
-        }
-
         // 4. Mark tenant and users ACTIVE
         const updatedTenant = await tx.tenant.update({
           where: { id: tenantId },
@@ -580,6 +569,19 @@ export class SuperadminService {
       }
     } catch (e) {
       logger.warn(`Redis pubsub broadcast error on approval: ${e.message}`)
+    }
+
+    // Provision Zuna Subscription Invoice for approved clinic if not already created
+    try {
+      const existingSubInvoice = await prisma.subscriptionInvoice.findFirst({
+        where: { tenantId },
+      })
+      if (!existingSubInvoice) {
+        await SubscriptionService.createInvoiceForTenant(tenantId, tenant.planId || tenant.plan)
+        logger.info(`Generated initial subscription invoice for approved clinic: ${tenant.name}`)
+      }
+    } catch (subErr) {
+      logger.error(`Could not generate subscription invoice on tenant activation: ${subErr.message}`)
     }
 
     return {

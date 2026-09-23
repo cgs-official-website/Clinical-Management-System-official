@@ -23,6 +23,7 @@ import {
   Hospital,
   Sparkles,
   AlertTriangle,
+  Receipt,
   FolderTree,
   Smile,
   Layers,
@@ -245,6 +246,8 @@ export const AppShell = () => {
       { to: '/app/superadmin/clinics', label: 'Clinic Tenants', icon: Hospital },
       { to: '/app/superadmin/clinic-categories', label: 'Clinic Categories', icon: FolderTree },
       { to: '/app/superadmin/admins', label: 'Clinic Admins', icon: Users },
+      { to: '/app/superadmin/subscriptions', label: 'Subscription Monitoring', icon: Receipt },
+      { to: '/app/superadmin/company-settings', label: 'Company / Legal Entity', icon: Building2 },
       { to: '/app/superadmin/settings', label: 'Global Settings', icon: Sliders },
       { to: '/app/superadmin/audit-logs', label: 'Audit Logs', icon: FileText },
       { to: '/app/superadmin/health', label: 'System Health', icon: HeartPulse },
@@ -274,6 +277,13 @@ export const AppShell = () => {
         icon: KeyRound,
       })
     }
+
+    // Clinic-level subscription & invoice management
+    navItems.push({
+      to: '/app/admin/subscription',
+      label: 'Subscription & Invoices',
+      icon: CreditCard,
+    })
   } else {
     // Dynamic Staff Navigation strictly based on user's permitted modules (can_view = true)
     navItems = [
@@ -300,7 +310,7 @@ export const AppShell = () => {
     <div className="min-h-screen bg-bg flex flex-col md:flex-row antialiased">
       {/* Desktop Sidebar: Hidden below md */}
       <aside
-        className={`hidden md:flex flex-col border-r border-border bg-surface/70 backdrop-blur-xl transition-all duration-300 z-30 shrink-0 select-none ${sidebarCollapsed ? 'w-20' : 'w-64'
+        className={`hidden md:flex flex-col border-r border-border bg-surface/70 backdrop-blur-xl transition-all duration-300 z-30 shrink-0 select-none print:hidden ${sidebarCollapsed ? 'w-20' : 'w-64'
           }`}
       >
         {/* Sidebar Header */}
@@ -446,7 +456,7 @@ export const AppShell = () => {
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Navbar */}
-        <header className="h-14 sm:h-16 border-b border-border bg-surface/50 backdrop-blur-md px-3 sm:px-6 flex items-center justify-between sticky top-0 z-20 gap-2">
+        <header className="h-14 sm:h-16 border-b border-border bg-surface/50 backdrop-blur-md px-3 sm:px-6 flex items-center justify-between sticky top-0 z-20 gap-2 print:hidden">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
             {/* Mobile menu hamburger button */}
             <button
@@ -481,7 +491,7 @@ export const AppShell = () => {
 
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
-          <div className="md:hidden fixed inset-0 z-50 flex">
+          <div className="md:hidden fixed inset-0 z-50 flex print:hidden">
             <div
               className="fixed inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => setMobileMenuOpen(false)}
@@ -574,7 +584,7 @@ export const AppShell = () => {
         )}
 
         {/* Page View with Error Boundary & Lazy Route Loading Suspense */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto max-w-7xl 2xl:max-w-[1600px] w-full mx-auto pb-20 md:pb-8">
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto max-w-7xl 2xl:max-w-[1600px] w-full mx-auto pb-20 md:pb-8 print:p-0 print:m-0 print:max-w-none print:w-full print:overflow-visible">
           <ErrorBoundary panelTitle="Clinical Module">
             <Suspense fallback={<ModuleLoader />}>
               <Outlet />
@@ -583,7 +593,7 @@ export const AppShell = () => {
         </main>
 
         {/* Mobile Bottom Navigation (Visible below md) */}
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 border-t border-border bg-surface/90 backdrop-blur-lg flex items-center justify-around z-30 px-2">
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 border-t border-border bg-surface/90 backdrop-blur-lg flex items-center justify-around z-30 px-2 print:hidden">
           {navItems.slice(0, 4).map((item) => {
             const Icon = item.icon
             return (

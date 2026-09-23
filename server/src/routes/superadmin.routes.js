@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { SuperadminController } from '../controllers/superadmin.controller.js'
+import { SubscriptionController } from '../controllers/subscription.controller.js'
 import { NotificationController } from '../controllers/notification.controller.js'
 import { authenticateToken, requireSuperadmin } from '../middlewares/auth.middleware.js'
 import { validateRequest } from '../middlewares/validate.middleware.js'
@@ -55,6 +56,9 @@ router.post('/admins', SuperadminController.createAdmin)
 router.put('/admins/:id', SuperadminController.updateAdmin)
 router.get('/settings', SuperadminController.getSettings)
 router.put('/settings', SuperadminController.updateSettings)
+router.get('/company-settings', SubscriptionController.getCompanySettings)
+router.put('/company-settings', SubscriptionController.updateCompanySettings)
+router.get('/subscriptions/invoices', SubscriptionController.getSuperadminInvoices)
 router.get('/audit-logs', SuperadminController.getAuditLogs)
 router.get('/health', SuperadminController.getHealth)
 

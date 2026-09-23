@@ -1,6 +1,24 @@
 {
   "pending": [
     {
+      "id": "reg-1790159762385",
+      "clinicName": "ABC Hospital 8210",
+      "subdomain": "abc-hospital-8210",
+      "adminName": "Dr. Rajesh Sharma",
+      "email": "admin-8210@abchospital.com",
+      "passwordHash": "$2a$12$C/YiJxecFpfkWo7HVWI0L.OjlkUDywgUwT/W927lY2ZFhWypXU4ty",
+      "phone": "9876543210",
+      "specialty": "Dentist",
+      "clinicCategoryId": "923ce02d-c783-428b-a5ff-56e3ba643410",
+      "clinicCategoryName": "Dentist",
+      "region": "Asia / India (INR ₹)",
+      "plan": "Hospital Network",
+      "planId": "ecc7977c-a6f6-49b3-998b-ff28f3321f1d",
+      "status": "pending",
+      "submittedAt": "2026-09-23T10:36:02.385Z",
+      "tenantId": "85261285-fdd4-4a9d-9ce2-a5f86a769930"
+    },
+    {
       "id": "reg-1789872519054",
       "clinicName": "Kinetic Edge Physiotherapy Clinic",
       "subdomain": "physio-e2e-1789872517702",
@@ -95,6 +113,44 @@
     }
   ],
   "approved": [
+    {
+      "id": "reg-1790159968731",
+      "clinicName": "ABC Hospital 3917",
+      "subdomain": "abc-hospital-3917",
+      "adminName": "Dr. Rajesh Sharma",
+      "email": "admin-3917@abchospital.com",
+      "passwordHash": "$2a$12$Z6JJ.NW53SSiI8G/TOKzjukBbdmK7qqo9/AFPbqQdAtad5RQIGwg2",
+      "phone": "9876543210",
+      "specialty": "Dentist",
+      "clinicCategoryId": "923ce02d-c783-428b-a5ff-56e3ba643410",
+      "clinicCategoryName": "Dentist",
+      "region": "Asia / India (INR ₹)",
+      "plan": "Hospital Network",
+      "planId": "ecc7977c-a6f6-49b3-998b-ff28f3321f1d",
+      "status": "approved",
+      "submittedAt": "2026-09-23T10:39:28.731Z",
+      "tenantId": "fae763d0-2292-4f59-afd7-41a3131405c3",
+      "approvedAt": "2026-09-23T10:39:49.923Z"
+    },
+    {
+      "id": "reg-1790159847058",
+      "clinicName": "ABC Hospital 2707",
+      "subdomain": "abc-hospital-2707",
+      "adminName": "Dr. Rajesh Sharma",
+      "email": "admin-2707@abchospital.com",
+      "passwordHash": "$2a$12$qYz6mh/0TLCbEBnu4FcI8uzglhnm2Ve1y/ceQuPvlvSB..tunh0si",
+      "phone": "9876543210",
+      "specialty": "Dentist",
+      "clinicCategoryId": "923ce02d-c783-428b-a5ff-56e3ba643410",
+      "clinicCategoryName": "Dentist",
+      "region": "Asia / India (INR ₹)",
+      "plan": "Hospital Network",
+      "planId": "ecc7977c-a6f6-49b3-998b-ff28f3321f1d",
+      "status": "approved",
+      "submittedAt": "2026-09-23T10:37:27.058Z",
+      "tenantId": "c1c467c0-084f-4821-8781-fd2007dfec4a",
+      "approvedAt": "2026-09-23T10:37:50.517Z"
+    },
     {
       "id": "reg-1790057960621",
       "clinicName": "Healthcare",

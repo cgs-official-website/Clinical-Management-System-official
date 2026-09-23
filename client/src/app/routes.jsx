@@ -24,6 +24,8 @@ const AdminAccountsPage = lazy(() => import('../features/superadmin/AdminAccount
 const GlobalSettingsPage = lazy(() => import('../features/superadmin/GlobalSettingsPage'))
 const AuditLogsPage = lazy(() => import('../features/superadmin/AuditLogsPage'))
 const SystemHealthWidget = lazy(() => import('../features/superadmin/SystemHealthWidget'))
+const SubscriptionMonitoringPage = lazy(() => import('../features/superadmin/SubscriptionMonitoringPage'))
+const CompanySettingsPage = lazy(() => import('../features/superadmin/CompanySettingsPage'))
 
 // Admin pages
 const AdminDashboard = lazy(() => import('../features/admin/AdminDashboard'))
@@ -35,6 +37,7 @@ const RoleTemplatesPage = lazy(() => import('../features/admin/roles-permissions
 const StaffManagementPage = lazy(() => import('../features/admin/StaffManagementPage'))
 const ClinicalConfigPage = lazy(() => import('../features/admin/ClinicalConfigPage'))
 const AdminReportsPage = lazy(() => import('../features/admin/AdminReportsPage'))
+const AdminSubscriptionPage = lazy(() => import('../features/admin/AdminSubscriptionPage'))
 
 // Staff pages
 const StaffDashboard = lazy(() => import('../features/staff/StaffDashboard'))
@@ -276,6 +279,26 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'superadmin/subscriptions',
+        element: (
+          <RequireRole role="SUPERADMIN">
+            <Suspense fallback={<PageLoader />}>
+              <SubscriptionMonitoringPage />
+            </Suspense>
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'superadmin/company-settings',
+        element: (
+          <RequireRole role="SUPERADMIN">
+            <Suspense fallback={<PageLoader />}>
+              <CompanySettingsPage />
+            </Suspense>
+          </RequireRole>
+        ),
+      },
+      {
         path: 'superadmin/settings',
         element: (
           <RequireRole role="SUPERADMIN">
@@ -393,6 +416,16 @@ export const router = createBrowserRouter([
           <RequireRole role="ADMIN">
             <Suspense fallback={<PageLoader />}>
               <AdminReportsPage />
+            </Suspense>
+          </RequireRole>
+        ),
+      },
+      {
+        path: 'admin/subscription',
+        element: (
+          <RequireRole role="ADMIN">
+            <Suspense fallback={<PageLoader />}>
+              <AdminSubscriptionPage />
             </Suspense>
           </RequireRole>
         ),

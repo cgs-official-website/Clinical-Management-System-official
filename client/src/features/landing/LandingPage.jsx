@@ -23,7 +23,7 @@ export const LandingPage = () => {
     queryKey: ['public', 'site-content'],
     queryFn: async () => {
       const res = await api.get('/api/public/site-content')
-      return res.data
+      return res.data?.data || res.data
     },
   })
 

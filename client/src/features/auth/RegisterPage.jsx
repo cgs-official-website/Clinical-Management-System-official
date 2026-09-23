@@ -44,6 +44,7 @@ const registerSchema = z.object({
   specialty: z.string().optional(),
   region: z.string().min(1, 'Region is required'),
   plan: z.string().min(1, 'Please choose an operational plan'),
+  planId: z.string().optional(),
   clinicCategoryId: z.string().min(1, 'Please select a clinic category'),
 })
 
@@ -57,6 +58,8 @@ export const RegisterPage = () => {
   const [successSubmitted, setSuccessSubmitted] = useState(null)
   const [categories, setCategories] = useState([])
   const [isLoadingCategories, setIsLoadingCategories] = useState(true)
+  const [plans, setPlans] = useState([])
+  const [isLoadingPlans, setIsLoadingPlans] = useState(true)
 
   // Parse invite token or query parameters if this is an employee invite
   const inviteToken = searchParams.get('invite')
@@ -205,6 +208,31 @@ export const RegisterPage = () => {
     return () => { isMounted = false }
   }, [setValue, watch])
 
+  // Fetch active subscription plans from database API
+  useEffect(() => {
+    let isMounted = true
+    api.get('/api/public/subscription-plans')
+      .then((res) => {
+        if (isMounted) {
+          const list = res.data?.data || []
+          setPlans(list)
+          if (list.length > 0) {
+            // Default to Professional Center or first plan
+            const defaultPlan = list.find((p) => p.code === 'PRO') || list[1] || list[0]
+            if (!watch('planId')) {
+              setValue('plan', defaultPlan.name)
+              setValue('planId', defaultPlan.id)
+            }
+          }
+        }
+      })
+      .catch((err) => console.warn('Failed to load subscription plans', err))
+      .finally(() => {
+        if (isMounted) setIsLoadingPlans(false)
+      })
+    return () => { isMounted = false }
+  }, [setValue, watch])
+
   // Pre-fill fields if re-submitting after rejection
   useEffect(() => {
     const prefillClinic = prefillState.clinicName || searchParams.get('clinicName')
@@ -243,8 +271,13 @@ export const RegisterPage = () => {
 
     try {
       const selectedCat = categories.find((c) => c.id === formData.clinicCategoryId)
+      const selectedPlanObj = plans.find(
+        (p) => p.id === formData.planId || p.name === formData.plan || p.code === formData.plan
+      )
       const payload = {
         ...formData,
+        plan: selectedPlanObj?.name || formData.plan || 'Professional Center',
+        planId: selectedPlanObj?.id || formData.planId || undefined,
         specialty: selectedCat?.name || formData.specialty || 'General Care',
         clinic_category_id: formData.clinicCategoryId,
       }
@@ -738,50 +771,47 @@ export const RegisterPage = () => {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  {[
-                    {
-                      id: 'Starter Clinic',
-                      name: 'Starter Practice',
-                      price: '₹12,500/mo',
-                      features: 'Up to 5 Doctors, EHR & Basic Billing',
-                    },
-                    {
-                      id: 'Professional Health Center',
-                      name: 'Professional Center',
-                      price: '₹28,500/mo',
-                      popular: true,
-                      features: 'Up to 25 Staff, Dynamic RBAC, Pharmacy',
-                    },
-                    {
-                      id: 'Enterprise Hospital Network',
-                      name: 'Hospital Network',
-                      price: '₹65,000/mo',
-                      features: 'Unlimited Doctors, Multi-tenant, Dedicated SLA',
-                    },
-                  ].map((tier) => (
-                    <label
-                      key={tier.id}
-                      className={`relative p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
-                        watch('plan') === tier.id
-                          ? 'border-primary bg-primary/5 shadow-soft ring-2 ring-primary/20'
-                          : 'border-border bg-surface hover:border-primary/40'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="font-bold text-xs text-text-primary">{tier.name}</span>
-                          <input
-                            type="radio"
-                            value={tier.id}
-                            className="text-primary focus:ring-primary/20"
-                            {...register('plan')}
-                          />
+                  {plans.map((tier) => {
+                    const isSelected = watch('planId') === tier.id || watch('plan') === tier.name
+                    return (
+                      <label
+                        key={tier.id}
+                        onClick={() => {
+                          setValue('plan', tier.name, { shouldValidate: true })
+                          setValue('planId', tier.id, { shouldValidate: true })
+                        }}
+                        className={`relative p-3.5 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between ${
+                          isSelected
+                            ? 'border-primary bg-primary/5 shadow-soft ring-2 ring-primary/20'
+                            : 'border-border bg-surface hover:border-primary/40'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <span className="font-bold text-xs text-text-primary">{tier.name}</span>
+                            <input
+                              type="radio"
+                              name="operational_plan_radio"
+                              checked={isSelected}
+                              onChange={() => {
+                                setValue('plan', tier.name, { shouldValidate: true })
+                                setValue('planId', tier.id, { shouldValidate: true })
+                              }}
+                              className="text-primary focus:ring-primary/20"
+                            />
+                          </div>
+                          <div className="font-extrabold text-sm text-primary mb-1">
+                            ₹{tier.priceINR?.toLocaleString('en-IN')}/mo
+                          </div>
+                          <p className="text-[11px] text-text-secondary leading-snug">
+                            {Array.isArray(tier.features)
+                              ? tier.features.join(', ')
+                              : tier.description || 'Enterprise operational scale tier'}
+                          </p>
                         </div>
-                        <div className="font-extrabold text-sm text-primary mb-1">{tier.price}</div>
-                        <p className="text-[11px] text-text-secondary leading-snug">{tier.features}</p>
-                      </div>
-                    </label>
-                  ))}
+                      </label>
+                    )
+                  })}
                 </div>
               </div>
 

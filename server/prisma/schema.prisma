@@ -30,10 +30,13 @@ model Tenant {
   contactEmail    String?
   rejectionReason String?         @map("rejection_reason")
   clinicCategoryId String?        @map("clinic_category_id")
+  planId          String?         @map("plan_id")
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
 
-  clinicCategory  ClinicCategory? @relation(fields: [clinicCategoryId], references: [id], onDelete: SetNull)
+  clinicCategory       ClinicCategory?       @relation(fields: [clinicCategoryId], references: [id], onDelete: SetNull)
+  planRelation         SubscriptionPlan?     @relation(fields: [planId], references: [id], onDelete: SetNull)
+  subscriptionInvoices SubscriptionInvoice[]
   users           User[]
   roles           Role[]
   departments     Department[]
@@ -47,6 +50,7 @@ model Tenant {
   tenantModules   TenantModule[]
 
   @@index([clinicCategoryId])
+  @@index([planId])
   @@map("tenants")
 }
 
@@ -361,6 +365,9 @@ enum InvoiceStatus {
   PENDING
   PAID
   VOID
+  PARTIAL
+  DRAFT
+  CANCELLED
 }
 
 model Invoice {
@@ -594,5 +601,92 @@ model Notification {
   @@index([entityId])
   @@map("notifications")
 }
+
+// -------------------------------------------------------------
+// 8. SUBSCRIPTIONS & PLATFORM INVOICING
+// -------------------------------------------------------------
+
+model SubscriptionPlan {
+  id            String                @id @default(uuid())
+  name          String
+  code          String                @unique
+  priceINR      Float                 @map("price_inr")
+  billingPeriod String                @default("monthly") @map("billing_period")
+  description   String?
+  features      Json?
+  isActive      Boolean               @default(true) @map("is_active")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  tenants       Tenant[]
+  invoices      SubscriptionInvoice[]
+
+  @@map("subscription_plans")
+}
+
+model SubscriptionInvoice {
+  id               String           @id @default(uuid())
+  invoiceNumber    String           @unique @map("invoice_number")
+  tenantId         String           @map("tenant_id")
+  planId           String           @map("plan_id")
+  status           String           @default("PAID")
+  currency         String           @default("INR")
+  billingPeriod    String           @default("Monthly") @map("billing_period")
+  periodStart      DateTime         @map("period_start")
+  periodEnd        DateTime         @map("period_end")
+  invoiceDate      DateTime         @default(now()) @map("invoice_date")
+  dueDate          DateTime         @map("due_date")
+  baseAmount       Float            @map("base_amount")
+  taxRate          Float            @default(18.0) @map("tax_rate")
+  cgstAmount       Float            @default(0) @map("cgst_amount")
+  sgstAmount       Float            @default(0) @map("sgst_amount")
+  igstAmount       Float            @default(0) @map("igst_amount")
+  totalAmount      Float            @map("total_amount")
+  amountInWords    String?          @map("amount_in_words")
+  sacCode          String           @default("998313") @map("sac_code")
+  paymentMethod    String           @default("Net Banking / Corporate Card / UPI") @map("payment_method")
+  paymentReference String?          @map("payment_reference")
+  terms            String?
+  notes            String?
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan             SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([planId])
+  @@index([invoiceNumber])
+  @@map("subscription_invoices")
+}
+
+model CompanySettings {
+  id               String   @id @default("default")
+  legalCompanyName String   @default("Zuna Healthcare Technologies Private Limited") @map("legal_company_name")
+  tradeName        String   @default("Zuna Clinical ERP") @map("trade_name")
+  address          String   @default("Building 4A, Tech Park, Outer Ring Road")
+  city             String   @default("Bengaluru")
+  state            String   @default("Karnataka")
+  pincode          String   @default("560103")
+  country          String   @default("India")
+  gstin            String   @default("29AAAAZ0000A1Z5")
+  pan              String   @default("AAAAZ0000A")
+  cin              String   @default("U72200KA2026PTC123456")
+  sacCode          String   @default("998313") @map("sac_code")
+  contactEmail     String   @default("billing@zuna.io") @map("contact_email")
+  phone            String   @default("+91 80 4567 8900")
+  website          String   @default("https://zuna.io")
+  bankName         String   @default("HDFC Bank") @map("bank_name")
+  accountName      String   @default("Zuna Healthcare Technologies Pvt Ltd") @map("account_name")
+  accountNumber    String   @default("50200012345678") @map("account_number")
+  ifsc             String   @default("HDFC0001234")
+  branch           String   @default("Koramangala, Bengaluru")
+  upiId            String   @default("zunaerp@hdfcbank") @map("upi_id")
+  invoiceTerms     String   @default("Payment is due within 15 days of invoice issue. Subscription renews automatically unless cancelled 7 days prior to billing cycle end.") @map("invoice_terms")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("company_settings")
+}
+
 
 

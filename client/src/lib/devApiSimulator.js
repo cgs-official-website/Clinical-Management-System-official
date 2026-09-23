@@ -984,7 +984,7 @@ export const handleSimulatedRequest = async (config) => {
   // 1. PUBLIC ENDPOINTS
   if (url === '/chat' && method === 'post') {
     try {
-      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000'
+      const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001'
       const backendRes = await fetch(`${apiBase}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

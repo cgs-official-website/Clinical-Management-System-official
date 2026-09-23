@@ -38,7 +38,7 @@ export const Modal = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm print:hidden"
           />
 
           {/* Dialog Container */}
@@ -49,10 +49,10 @@ export const Modal = ({
             exit={{ y: 50, opacity: 0, scale: 0.98 }}
             transition={{ type: 'spring', damping: 25, stiffness: 300 }}
             className={`relative w-full ${maxWidth} bg-surface border border-border shadow-2xl z-10 
-              h-[90vh] sm:h-auto max-h-[90vh] rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden`}
+              h-[90vh] sm:h-auto max-h-[90vh] rounded-t-2xl sm:rounded-2xl flex flex-col overflow-hidden print:p-0 print:m-0 print:max-w-none print:w-full print:h-auto print:max-h-none print:overflow-visible print:border-none print:shadow-none print:bg-white`}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-border shrink-0 bg-surface/80 backdrop-blur">
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-border shrink-0 bg-surface/80 backdrop-blur print:hidden">
               <div>
                 <h3 className="text-base font-bold text-text-primary">{title}</h3>
                 {description && (
@@ -69,7 +69,7 @@ export const Modal = ({
             </div>
 
             {/* Modal Body */}
-            <div className="p-4 sm:p-6 overflow-y-auto flex-1">{children}</div>
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 print:p-0 print:m-0 print:overflow-visible">{children}</div>
           </motion.div>
         </div>
       )}

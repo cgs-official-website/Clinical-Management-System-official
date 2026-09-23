@@ -1,9 +1,12 @@
 import { Router } from 'express'
 import { PublicController } from '../controllers/public.controller.js'
+import { SubscriptionController } from '../controllers/subscription.controller.js'
 
 const router = Router()
 
 router.get('/public/site-content', PublicController.getSiteContent)
+router.get('/public/subscription-plans', SubscriptionController.getPublicPlans)
+router.get('/subscription-plans', SubscriptionController.getPublicPlans)
 router.get('/public/clinic-categories', PublicController.getClinicCategories)
 router.get('/clinic-categories', PublicController.getClinicCategories)
 router.post('/public/register', PublicController.registerClinic)

@@ -168,3 +168,83 @@
   animation: slideFromRight 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+/* ==========================================================================
+   Print & PDF Optimization: Isolate Subscription Invoice Document
+   ========================================================================== */
+@media print {
+  /* Strictly hide all application chrome, navigation, headers, sidebars, buttons */
+  header,
+  aside,
+  nav,
+  footer,
+  button,
+  .print\:hidden,
+  [data-print-hide="true"],
+  [aria-label="Open navigation menu"],
+  [aria-label="Toggle sidebar collapse"],
+  .theme-toggle,
+  [role="alert"],
+  [role="status"],
+  .toaster,
+  .toast {
+    display: none !important;
+  }
+
+  /* Reset window/document layout for 100% full-width printing */
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #111815 !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    font-size: 11pt !important;
+  }
+
+  #root,
+  .min-h-screen,
+  main,
+  .max-w-6xl,
+  .max-w-7xl,
+  .flex-1 {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+  }
+
+  /* Master invoice printable container */
+  #printable-subscription-invoice {
+    display: block !important;
+    visibility: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #111815 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* High fidelity print color reproduction */
+  #printable-subscription-invoice * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm;
+  }
+}
+

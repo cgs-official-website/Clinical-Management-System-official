@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { AdminController } from '../controllers/admin.controller.js'
+import { SubscriptionController } from '../controllers/subscription.controller.js'
 import { authenticateToken } from '../middlewares/auth.middleware.js'
 import { requirePermission, requireAnyPermission } from '../middlewares/rbac.middleware.js'
 import { validateRequest } from '../middlewares/validate.middleware.js'
@@ -80,5 +81,9 @@ router.post('/environment-setup', AdminController.saveEnvironmentSetup)
 
 // Clinical Reports & Analytics
 router.get('/reports', requirePermission('reports.view'), AdminController.getReports)
+
+// Clinic Subscription & Invoices
+router.get('/subscription', SubscriptionController.getMySubscription)
+router.get('/subscription/invoices/:id', SubscriptionController.getMyInvoice)
 
 export default router

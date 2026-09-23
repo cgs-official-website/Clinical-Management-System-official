@@ -2,16 +2,15 @@ import { PrismaClient } from '@prisma/client'
 import { env } from './env.js'
 import { logger } from '../utils/logger.js'
 
-const globalForPrisma = globalThis
-
-export const prisma = globalForPrisma.prisma || new PrismaClient({
+export const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: env.DATABASE_URL,
+    },
+  },
   log: env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error'],
   errorFormat: 'pretty',
 })
-
-if (env.NODE_ENV !== 'production') {
-  globalForPrisma.prisma = prisma
-}
 
 export const checkDatabaseHealth = async () => {
   try {
