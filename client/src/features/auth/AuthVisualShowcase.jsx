@@ -18,10 +18,6 @@ export const AuthVisualShowcase = ({ variant = 'signin', clinicName }) => {
 
   return (
     <div className="relative w-full h-full flex flex-col justify-center items-center select-none overflow-hidden py-8 px-2 lg:px-6">
-      {/* Background Ambient Glow Orbs */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[420px] h-[420px] bg-primary/15 dark:bg-primary/20 rounded-full blur-[130px] pointer-events-none animate-pulse-glow" />
-      <div className="absolute top-1/4 right-8 w-60 h-60 bg-emerald-500/10 rounded-full blur-[90px] pointer-events-none animate-float-reverse" />
-
       {/* Decorative Rotating Radar Ring */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[480px] h-[480px] rounded-full border border-primary/15 border-dashed pointer-events-none animate-spin-slow opacity-60" />
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] h-[340px] rounded-full border border-border/40 pointer-events-none opacity-40" />
@@ -29,7 +25,7 @@ export const AuthVisualShowcase = ({ variant = 'signin', clinicName }) => {
       {/* Main Content Container */}
       <div className="relative z-10 w-full max-w-lg space-y-6">
         {/* Top Floating Badge */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface/90 border border-primary/30 backdrop-blur-md shadow-sm">
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface/90 border border-border backdrop-blur-md shadow-sm">
           <div className="w-2 h-2 rounded-full bg-primary animate-pulse-dot" />
           <span className="text-[11px] font-bold text-text-primary tracking-wide uppercase">
             {isSignIn
@@ -38,7 +34,7 @@ export const AuthVisualShowcase = ({ variant = 'signin', clinicName }) => {
                 ? 'Staff Invitation Access'
                 : 'Enterprise Clinical Onboarding'}
           </span>
-          <span className="text-[10px] text-primary font-mono font-bold px-1.5 py-0.5 rounded bg-primary/10">
+          <span className="text-[10px] text-primary font-mono font-bold px-1.5 py-0.5 rounded bg-surface border border-border">
             v3.4
           </span>
         </div>
@@ -49,21 +45,21 @@ export const AuthVisualShowcase = ({ variant = 'signin', clinicName }) => {
             {isSignIn ? (
               <>
                 Intelligent Clinical Care, <br />
-                <span className="bg-gradient-to-r from-primary to-emerald-400 bg-clip-text text-transparent">
+                <span className="text-primary">
                   Synchronized in Real Time.
                 </span>
               </>
             ) : isStaff ? (
               <>
                 Welcome to Your <br />
-                <span className="bg-gradient-to-r from-primary to-emerald-400 bg-clip-text text-transparent">
+                <span className="text-primary">
                   Care Team Workspace.
                 </span>
               </>
             ) : (
               <>
                 Empower Your Clinic with <br />
-                <span className="bg-gradient-to-r from-primary to-emerald-400 bg-clip-text text-transparent">
+                <span className="text-primary">
                   Automated Healthcare OS.
                 </span>
               </>

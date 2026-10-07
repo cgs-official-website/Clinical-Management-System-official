@@ -142,9 +142,6 @@ export const LoginPage = () => {
 
   return (
     <div className="min-h-screen bg-bg flex flex-col justify-between py-6 px-4 sm:px-6 lg:px-8 relative selection:bg-primary/20 overflow-x-hidden">
-      {/* Background radial glow */}
-      <div className="absolute top-1/4 left-1/3 -translate-x-1/2 -translate-y-1/2 w-[650px] h-[450px] bg-primary/10 rounded-full blur-[150px] pointer-events-none" />
-
       {/* Top Bar with Back to Home button & theme toggle */}
       <header className="max-w-7xl mx-auto w-full flex items-center justify-between z-20 mb-4 sm:mb-8">
         <Link
@@ -187,8 +184,8 @@ export const LoginPage = () => {
         <div className="w-full lg:w-[46%] xl:w-[44%] max-w-md mx-auto lg:mx-0 animate-slide-right">
           {/* Header */}
           <div className="text-left mb-6 sm:mb-8">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold uppercase tracking-wider mb-3">
-              <Sparkles className="w-3.5 h-3.5" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-border text-text-primary text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
+              <Sparkles className="w-3.5 h-3.5 text-primary" />
               <span>Unified Clinical Access</span>
             </div>
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-text-primary tracking-tight">

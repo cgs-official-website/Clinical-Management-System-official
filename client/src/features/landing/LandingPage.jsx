@@ -80,10 +80,6 @@ export const LandingPage = () => {
 
       {/* Hero Section */}
       <section className="relative pt-32 pb-20 lg:pt-40 lg:pb-32 overflow-hidden">
-        {/* Subtle mesh backdrop glow */}
-        <div className="absolute top-20 left-1/4 w-[500px] h-[500px] bg-primary/15 rounded-full blur-[140px] pointer-events-none" />
-        <div className="absolute top-40 right-10 w-[400px] h-[400px] bg-emerald-500/10 rounded-full blur-[120px] pointer-events-none" />
-
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
             {/* Left Content Column */}
@@ -94,15 +90,15 @@ export const LandingPage = () => {
               className="lg:col-span-7 flex flex-col items-start text-left"
             >
               {/* Badge */}
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-primary/10 text-primary border border-primary/25 text-xs font-bold uppercase tracking-wider mb-6 shadow-sm">
-                <Sparkles className="w-3.5 h-3.5" />
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface border border-border text-xs font-bold uppercase tracking-wider mb-6 shadow-sm text-text-primary">
+                <Sparkles className="w-3.5 h-3.5 text-primary" />
                 <span>{hero?.badge || 'Next-Gen Clinical Intelligence OS'}</span>
               </div>
 
               {/* Main Headline */}
               <h1 className="font-heading font-extrabold text-4xl sm:text-5xl lg:text-6xl text-text-primary tracking-tight leading-[1.12] mb-6">
                 Precision Healthcare{' '}
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-teal-400 to-emerald-400">
+                <span className="text-primary">
                   Operations
                 </span>
                 , Engineered for the Future.

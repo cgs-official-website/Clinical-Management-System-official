@@ -370,8 +370,8 @@ export const RegisterPage = () => {
             <div className="w-full max-w-md mx-auto lg:mx-0">
               {/* Header */}
               <div className="text-left mb-6 sm:mb-8">
-                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
-                  <Sparkles className="w-3.5 h-3.5" />
+                <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-surface border border-border text-text-primary text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
+                  <Sparkles className="w-3.5 h-3.5 text-primary" />
                   <span>Staff Invitation Access</span>
                 </div>
                 <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-text-primary tracking-tight">
@@ -531,8 +531,8 @@ export const RegisterPage = () => {
         <div className="w-full">
           {/* Header */}
           <div className="text-left mb-6 sm:mb-8">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
-              <Zap className="w-3.5 h-3.5" />
+            <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-surface border border-border text-text-primary text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
+              <Zap className="w-3.5 h-3.5 text-primary" />
               <span>Fast Clinic Onboarding</span>
             </div>
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-text-primary tracking-tight">
