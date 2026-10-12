@@ -31,3 +31,8 @@ dist-ssr
 graphify-out/
 .graphify/
 *.graphify
+
+# Compatibility Junctions
+client
+backend
+
