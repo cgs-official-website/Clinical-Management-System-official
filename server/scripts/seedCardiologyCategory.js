@@ -135,9 +135,9 @@ export async function seedCardiologyCategory() {
   // Note: Reuse existing shared rows (patients, appointments, implant_registry, prescriptions, billing, inventory, reports, staff)
   const moduleMap = new Map()
   for (const modData of CARDIOLOGY_MODULES) {
-    let mod = await prisma.module.findUnique({ where: { key: modData.key } })
+    let mod = await prisma.systemModule.findUnique({ where: { key: modData.key } })
     if (!mod) {
-      mod = await prisma.module.create({
+      mod = await prisma.systemModule.create({
         data: {
           key: modData.key,
           name: modData.name,
@@ -158,8 +158,8 @@ export async function seedCardiologyCategory() {
       if (!perm) {
         perm = await prisma.permission.create({
           data: {
-            moduleId: mod.id,
-            actionId: act.id,
+            systemModuleId: mod.id,
+            permissionActionId: act.id,
             key: permKey,
             description: `Can ${actKey} ${mod.name}`,
           },
@@ -176,7 +176,7 @@ export async function seedCardiologyCategory() {
   await prisma.clinicCategoryModule.deleteMany({
     where: {
       clinicCategoryId: category.id,
-      moduleId: { notIn: cardioModuleIds },
+      systemModuleId: { notIn: cardioModuleIds },
     },
   })
 
@@ -184,9 +184,9 @@ export async function seedCardiologyCategory() {
     const mod = moduleMap.get(modData.key)
     const existing = await prisma.clinicCategoryModule.findUnique({
       where: {
-        clinicCategoryId_moduleId: {
+        clinicCategoryId_systemModuleId: {
           clinicCategoryId: category.id,
-          moduleId: mod.id,
+          systemModuleId: mod.id,
         },
       },
     })
@@ -195,7 +195,7 @@ export async function seedCardiologyCategory() {
       await prisma.clinicCategoryModule.create({
         data: {
           clinicCategoryId: category.id,
-          moduleId: mod.id,
+          systemModuleId: mod.id,
           displayOrder: modData.displayOrder,
         },
       })
@@ -225,8 +225,8 @@ export async function seedCardiologyCategory() {
         templateRows.push({
           clinicCategoryId: category.id,
           roleName,
-          module: modData.key,
-          action: actKey,
+          moduleKey: modData.key,
+          actionKey: actKey,
         })
       }
     }
@@ -249,8 +249,8 @@ export async function seedCardiologyCategory() {
       templateRows.push({
         clinicCategoryId: category.id,
         roleName: 'Cardiologist',
-        module: modKey,
-        action: actKey,
+        moduleKey: modKey,
+        actionKey: actKey,
       })
     }
   }
@@ -262,8 +262,8 @@ export async function seedCardiologyCategory() {
       templateRows.push({
         clinicCategoryId: category.id,
         roleName: 'Cardiac Nurse',
-        module: modKey,
-        action: actKey,
+        moduleKey: modKey,
+        actionKey: actKey,
       })
     }
   }
@@ -275,8 +275,8 @@ export async function seedCardiologyCategory() {
       templateRows.push({
         clinicCategoryId: category.id,
         roleName: 'Cath Lab Technician',
-        module: modKey,
-        action: actKey,
+        moduleKey: modKey,
+        actionKey: actKey,
       })
     }
   }
@@ -288,8 +288,8 @@ export async function seedCardiologyCategory() {
       templateRows.push({
         clinicCategoryId: category.id,
         roleName: 'Billing Officer',
-        module: modKey,
-        action: actKey,
+        moduleKey: modKey,
+        actionKey: actKey,
       })
     }
   }
@@ -299,21 +299,21 @@ export async function seedCardiologyCategory() {
     templateRows.push({
       clinicCategoryId: category.id,
       roleName: 'Front Desk',
-      module: 'appointments',
-      action: actKey,
+      moduleKey: 'appointments',
+      actionKey: actKey,
     })
   }
   templateRows.push({
     clinicCategoryId: category.id,
     roleName: 'Front Desk',
-    module: 'patients',
-    action: 'create',
+    moduleKey: 'patients',
+    actionKey: 'create',
   })
   templateRows.push({
     clinicCategoryId: category.id,
     roleName: 'Front Desk',
-    module: 'billing',
-    action: 'create',
+    moduleKey: 'billing',
+    actionKey: 'create',
   })
 
   // Insert all templates

@@ -111,7 +111,7 @@ async function runCardiologyApprovalTest() {
   console.log(`[PASS] Registration created. ID: ${regResult.registrationId}`)
 
   // Verify created tenant in DB has status PENDING and clinicCategoryId set
-  const tenant = await prisma.tenant.findUnique({
+  const tenant = await prisma.clinic.findUnique({
     where: { subdomain: testSubdomain },
     include: { users: true },
   })
@@ -217,10 +217,10 @@ async function runCardiologyApprovalTest() {
 
   // 11. Clean up test tenant
   console.log(`\n[CLEANUP] Removing test tenant ${tenant.id}...`)
-  await prisma.rolePermission.deleteMany({
+  await prisma.rolePermissionGrant.deleteMany({
     where: { role: { tenantId: tenant.id } },
   })
-  await prisma.userRole.deleteMany({
+  await prisma.userRoleAssignment.deleteMany({
     where: { user: { tenantId: tenant.id } },
   })
   await prisma.role.deleteMany({
@@ -232,7 +232,7 @@ async function runCardiologyApprovalTest() {
   await prisma.user.deleteMany({
     where: { tenantId: tenant.id },
   })
-  await prisma.tenant.delete({
+  await prisma.clinic.delete({
     where: { id: tenant.id },
   })
   console.log('[PASS] Test tenant cleaned up successfully.\n')

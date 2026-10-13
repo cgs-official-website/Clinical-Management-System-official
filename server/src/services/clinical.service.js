@@ -9,10 +9,10 @@ export class ClinicalService {
   static async getPatients({ tenantId, page = 1, limit = 10, search = '', gender = '', status = '' }) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
-    const where = targetTenantId ? { tenantId: targetTenantId } : {}
+    const where = targetTenantId ? { clinicId: targetTenantId } : {}
     if (search) {
       where.OR = [
         { fullName: { contains: search, mode: 'insensitive' } },
@@ -41,11 +41,19 @@ export class ClinicalService {
     ])
 
     const formatted = patients.map(p => {
-      const birthYear = p.dob ? new Date(p.dob).getFullYear() : 1990
+      const normP = {
+        ...p,
+        mrn: p.medicalRecordNumber || p.mrn,
+        dob: p.dateOfBirth || p.dob,
+        phone: p.phoneNumber || p.phone,
+        tenantId: p.clinicId || p.tenantId,
+      }
+      const birthYear = (p.dateOfBirth || p.dob) ? new Date(p.dob).getFullYear() : 1990
       const age = Math.max(0, new Date().getFullYear() - birthYear)
       return {
         ...p,
-        name: p.fullName,
+        ...normP,
+        name: normP.fullName,
         fullName: p.fullName,
         age,
         lastVisit: p.updatedAt ? new Date(p.updatedAt).toISOString().split('T')[0] : new Date(p.createdAt).toISOString().split('T')[0],
@@ -69,11 +77,11 @@ export class ClinicalService {
   static async getPatientById(id, tenantId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     const where = { id }
-    if (targetTenantId) where.tenantId = targetTenantId
+    if (targetTenantId) where.clinicId = targetTenantId
 
     const patient = await prisma.patient.findFirst({
       where,
@@ -94,7 +102,7 @@ export class ClinicalService {
     })
     if (!patient) throw new NotFoundError('Patient record not found')
 
-    const birthYear = patient.dob ? new Date(patient.dob).getFullYear() : 1990
+    const birthYear = (patient.dateOfBirth || patient.dob) ? new Date(patient.dob).getFullYear() : 1990
     return {
       ...patient,
       name: patient.fullName,
@@ -105,11 +113,11 @@ export class ClinicalService {
   static async createPatient(data, tenantId, actorId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     if (!targetTenantId) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       targetTenantId = firstTenant?.id
     }
 
@@ -132,32 +140,32 @@ export class ClinicalService {
 
     const patient = await prisma.patient.create({
       data: {
-        tenantId: targetTenantId,
-        mrn,
+        clinicId: targetTenantId,
+        medicalRecordNumber: mrn,
         fullName,
-        dob,
+        dateOfBirth: dob,
         gender,
         bloodGroup: data.bloodGroup || 'O+',
-        phone,
+        phoneNumber: phone,
         email: data.email || null,
         address: data.address || null,
         allergies,
         chronicConditions,
         medicalHistory,
-        createdBy: actorId || null
+        createdByUserId: actorId || null
       }
     })
 
     await AuditService.log({
-      tenantId: targetTenantId,
+      clinicId: targetTenantId,
       actorId,
       action: 'PATIENT_CREATED',
       entityType: 'Patient',
       entityId: patient.id,
-      details: { fullName: patient.fullName, mrn: patient.mrn, phone: patient.phone }
+      details: { fullName: patient.fullName, mrn: patient.medicalRecordNumber: mrn, phone: patient.phone }
     }).catch(() => {})
 
-    const birthYear = patient.dob ? new Date(patient.dob).getFullYear() : 1990
+    const birthYear = (patient.dateOfBirth || patient.dob) ? new Date(patient.dob).getFullYear() : 1990
     return {
       ...patient,
       name: patient.fullName,
@@ -170,11 +178,11 @@ export class ClinicalService {
   static async updatePatient(id, data, tenantId, actorId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     const where = { id }
-    if (targetTenantId) where.tenantId = targetTenantId
+    if (targetTenantId) where.clinicId = targetTenantId
 
     const existing = await prisma.patient.findFirst({ where })
     if (!existing) throw new NotFoundError('Patient not found')
@@ -190,7 +198,7 @@ export class ClinicalService {
     })
 
     await AuditService.log({
-      tenantId: targetTenantId,
+      clinicId: targetTenantId,
       actorId,
       action: 'PATIENT_UPDATED',
       entityType: 'Patient',
@@ -207,11 +215,11 @@ export class ClinicalService {
   static async deletePatient(id, tenantId, actorId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     const where = { id }
-    if (targetTenantId) where.tenantId = targetTenantId
+    if (targetTenantId) where.clinicId = targetTenantId
 
     const existing = await prisma.patient.findFirst({ where })
     if (!existing) throw new NotFoundError('Patient not found')
@@ -219,7 +227,7 @@ export class ClinicalService {
     await prisma.patient.delete({ where: { id } })
 
     await AuditService.log({
-      tenantId: targetTenantId,
+      clinicId: targetTenantId,
       actorId,
       action: 'PATIENT_DELETED',
       entityType: 'Patient',
@@ -235,10 +243,10 @@ export class ClinicalService {
   static async getAppointments({ tenantId, page = 1, limit = 10, doctorId = '', status = '', date = '' }) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
-    const where = targetTenantId ? { tenantId: targetTenantId } : {}
+    const where = targetTenantId ? { clinicId: targetTenantId } : {}
     if (doctorId) where.staffId = doctorId
     if (status) where.status = status
     if (date) {
@@ -300,11 +308,11 @@ export class ClinicalService {
   static async createAppointment(data, tenantId, actorId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     if (!targetTenantId) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       targetTenantId = firstTenant?.id
     }
 
@@ -313,7 +321,7 @@ export class ClinicalService {
       const pName = data.patientName || data.name
       let existingPatient = await prisma.patient.findFirst({
         where: {
-          tenantId: targetTenantId,
+          clinicId: targetTenantId,
           OR: [
             { fullName: { equals: pName, mode: 'insensitive' } },
             ...(data.patientPhone ? [{ phone: data.patientPhone }] : [])
@@ -324,14 +332,14 @@ export class ClinicalService {
       if (!existingPatient) {
         existingPatient = await prisma.patient.create({
           data: {
-            tenantId: targetTenantId,
+            clinicId: targetTenantId,
             fullName: pName,
             phone: data.patientPhone || '+91 98000 00000',
             mrn: `MRN-${Math.floor(10000 + Math.random() * 90000)}`,
             dob: new Date('1990-01-01'),
             gender: 'Female',
             bloodGroup: 'O+',
-            createdBy: actorId || null
+            createdByUserId: actorId || null
           }
         }).catch(() => null)
       }
@@ -340,7 +348,7 @@ export class ClinicalService {
 
     if (!patientId) {
       const fallbackPatient = await prisma.patient.findFirst({
-        where: { tenantId: targetTenantId }
+        where: { clinicId: targetTenantId }
       }).catch(() => null)
       patientId = fallbackPatient?.id
     }
@@ -348,14 +356,14 @@ export class ClinicalService {
     if (!patientId) {
       const newPat = await prisma.patient.create({
         data: {
-          tenantId: targetTenantId,
+          clinicId: targetTenantId,
           fullName: data.patientName || data.name || 'Walk-in Patient',
           phone: data.patientPhone || '+91 98000 00000',
           mrn: `MRN-${Math.floor(10000 + Math.random() * 90000)}`,
           dob: new Date('1990-01-01'),
           gender: 'Female',
           bloodGroup: 'O+',
-          createdBy: actorId || null
+          createdByUserId: actorId || null
         }
       })
       patientId = newPat.id
@@ -377,7 +385,7 @@ export class ClinicalService {
     if (!staffId && data.doctorName) {
       const docUser = await prisma.user.findFirst({
         where: {
-          tenantId: targetTenantId,
+          clinicId: targetTenantId,
           fullName: { equals: data.doctorName, mode: 'insensitive' }
         }
       }).catch(() => null)
@@ -386,12 +394,12 @@ export class ClinicalService {
 
     const appointment = await prisma.appointment.create({
       data: {
-        tenantId: targetTenantId,
+        clinicId: targetTenantId,
         patientId,
         staffId,
         scheduledAt,
         durationMinutes: parseInt(data.durationMinutes, 10) || 30,
-        type: data.type || 'In-Person Consultation',
+        appointmentType: data.type || data.appointmentType || 'In-Person Consultation',
         room: data.room || 'Exam Room 1A',
         reason: data.reason || null,
         notes: data.notes || null,
@@ -403,7 +411,7 @@ export class ClinicalService {
     })
 
     await AuditService.log({
-      tenantId: targetTenantId,
+      clinicId: targetTenantId,
       actorId,
       action: 'APPOINTMENT_BOOKED',
       entityType: 'Appointment',
@@ -425,11 +433,11 @@ export class ClinicalService {
   static async updateAppointment(id, data, tenantId, actorId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     const where = { id }
-    if (targetTenantId) where.tenantId = targetTenantId
+    if (targetTenantId) where.clinicId = targetTenantId
 
     const existing = await prisma.appointment.findFirst({ where })
     if (!existing) throw new NotFoundError('Appointment not found')
@@ -448,7 +456,7 @@ export class ClinicalService {
     })
 
     await AuditService.log({
-      tenantId: targetTenantId,
+      clinicId: targetTenantId,
       actorId,
       action: 'APPOINTMENT_UPDATED',
       entityType: 'Appointment',
@@ -465,12 +473,12 @@ export class ClinicalService {
   static async getPrescriptions({ tenantId, page = 1, limit = 10, patientId = '' }) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     const where = {}
     if (targetTenantId) {
-      where.patient = { tenantId: targetTenantId }
+      where.patient = { clinicId: targetTenantId }
     }
     if (patientId) where.patientId = patientId
 
@@ -511,11 +519,11 @@ export class ClinicalService {
   static async recordTriage(data, tenantId, actorId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     if (!targetTenantId) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       targetTenantId = firstTenant?.id
     }
 
@@ -530,7 +538,7 @@ export class ClinicalService {
       const pName = data.patientName || data.name
       patient = await prisma.patient.findFirst({
         where: {
-          tenantId: targetTenantId,
+          clinicId: targetTenantId,
           fullName: { equals: pName, mode: 'insensitive' }
         }
       })
@@ -538,14 +546,14 @@ export class ClinicalService {
       if (!patient) {
         patient = await prisma.patient.create({
           data: {
-            tenantId: targetTenantId,
+            clinicId: targetTenantId,
             fullName: pName,
             phone: data.phone || data.patientPhone || '+91 98000 00000',
             mrn: `MRN-${Math.floor(10000 + Math.random() * 90000)}`,
             dob: data.dob ? new Date(data.dob) : new Date('1990-01-01'),
             gender: data.gender || 'Female',
             bloodGroup: data.bloodGroup || 'O+',
-            createdBy: actorId || null
+            createdByUserId: actorId || null
           }
         })
       }
@@ -592,7 +600,7 @@ export class ClinicalService {
     try {
       appointment = await prisma.appointment.create({
         data: {
-          tenantId: targetTenantId,
+          clinicId: targetTenantId,
           patientId: patient.id,
           scheduledAt: new Date(),
           durationMinutes: 30,
@@ -608,7 +616,7 @@ export class ClinicalService {
     }
 
     await AuditService.log({
-      tenantId: targetTenantId,
+      clinicId: targetTenantId,
       actorId,
       action: 'PATIENT_TRIAGED',
       entityType: 'Patient',
@@ -624,8 +632,8 @@ export class ClinicalService {
       patient: {
         id: updatedPatient.id,
         fullName: updatedPatient.fullName,
-        mrn: updatedPatient.mrn,
-        phone: updatedPatient.phone,
+        mrn: updatedPatient.medicalRecordNumber: mrn,
+        phone: updatedPatient.phoneNumber: phone,
         gender: updatedPatient.gender,
         latestVitals: triageReport
       }
@@ -635,10 +643,10 @@ export class ClinicalService {
   static async getTriageQueue({ tenantId }) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
-    const where = targetTenantId ? { tenantId: targetTenantId } : {}
+    const where = targetTenantId ? { clinicId: targetTenantId } : {}
 
     const [patients, recentAppointments, recentPrescriptions] = await Promise.all([
       prisma.patient.findMany({
@@ -658,7 +666,7 @@ export class ClinicalService {
         }
       }).catch(() => []),
       prisma.appointment.findMany({
-        where: targetTenantId ? { tenantId: targetTenantId } : {},
+        where: targetTenantId ? { clinicId: targetTenantId } : {},
         take: 20,
         orderBy: { scheduledAt: 'desc' },
         include: {
@@ -694,8 +702,8 @@ export class ClinicalService {
           tokenNumber: latest.tokenNumber,
           patientId: p.id,
           patientName: p.fullName,
-          patientMrn: p.mrn,
-          patientPhone: p.phone,
+          patientMrn: p.medicalRecordNumber: mrn,
+          patientPhone: p.phoneNumber: phone,
           patientGender: p.gender,
           weight: latest.weight,
           bp: latest.bp,
@@ -726,11 +734,11 @@ export class ClinicalService {
   static async createPrescription(data, tenantId, actorId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     if (!targetTenantId) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       targetTenantId = firstTenant?.id
     }
 
@@ -739,7 +747,7 @@ export class ClinicalService {
       const pName = data.patientName || data.name
       let existingPatient = await prisma.patient.findFirst({
         where: {
-          tenantId: targetTenantId,
+          clinicId: targetTenantId,
           fullName: { equals: pName, mode: 'insensitive' }
         }
       }).catch(() => null)
@@ -747,14 +755,14 @@ export class ClinicalService {
       if (!existingPatient) {
         existingPatient = await prisma.patient.create({
           data: {
-            tenantId: targetTenantId,
+            clinicId: targetTenantId,
             fullName: pName,
             phone: data.patientPhone || '+91 98000 00000',
             mrn: `MRN-${Math.floor(10000 + Math.random() * 90000)}`,
             dob: new Date('1990-01-01'),
             gender: 'Female',
             bloodGroup: 'O+',
-            createdBy: actorId || null
+            createdByUserId: actorId || null
           }
         }).catch(() => null)
       }
@@ -763,7 +771,7 @@ export class ClinicalService {
 
     if (!patientId) {
       const fallbackPatient = await prisma.patient.findFirst({
-        where: { tenantId: targetTenantId }
+        where: { clinicId: targetTenantId }
       }).catch(() => null)
       patientId = fallbackPatient?.id
     }
@@ -815,7 +823,7 @@ export class ClinicalService {
     }
 
     await AuditService.log({
-      tenantId: targetTenantId,
+      clinicId: targetTenantId,
       actorId,
       action: 'PRESCRIPTION_CREATED',
       entityType: 'Prescription',
@@ -835,7 +843,7 @@ export class ClinicalService {
   static async fulfillPrescription(id, data, tenantId, actorId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
 
@@ -885,7 +893,7 @@ export class ClinicalService {
     }
 
     await AuditService.log({
-      tenantId: targetTenantId,
+      clinicId: targetTenantId,
       actorId,
       action: 'PRESCRIPTION_FULFILLED',
       entityType: 'Prescription',
@@ -927,10 +935,10 @@ export class ClinicalService {
   static async getInvoices({ tenantId, page = 1, limit = 10, paymentStatus = '', search = '' }) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
-    const where = targetTenantId ? { tenantId: targetTenantId } : {}
+    const where = targetTenantId ? { clinicId: targetTenantId } : {}
     if (paymentStatus) where.status = paymentStatus
     if (search) {
       where.OR = [
@@ -952,7 +960,30 @@ export class ClinicalService {
           patient: { select: { id: true, fullName: true, phone: true, mrn: true } },
           items: true
         }
-      }).catch(() => [])
+      }).catch(async (err) => {
+        logger.error(`[ClinicalService.getInvoices] findMany error: ${err.message}`)
+        try {
+          const tenantFilter = targetTenantId ? `WHERE i.tenant_id = '${targetTenantId}'` : ''
+          const rawInvoices = await prisma.$queryRawUnsafe(`
+            SELECT i.id, i.tenant_id as "tenantId", i.patient_id as "patientId", i.invoice_number as "invoiceNumber",
+                   i.amount, i.insurance_coverage as "insuranceCoverage", i.patient_responsibility as "patientResponsibility",
+                   i.status::text as status, i.payment_method as "paymentMethod", i.created_at as "createdAt",
+                   p.full_name as "patientFullName", p.phone as "patientPhone", p.mrn as "patientMrn"
+            FROM invoices i
+            LEFT JOIN patients p ON i.patient_id = p.id
+            ${tenantFilter}
+            ORDER BY i.created_at DESC
+            LIMIT ${limit} OFFSET ${skip}
+          `)
+          return rawInvoices.map(r => ({
+            ...r,
+            patient: { id: r.patientId, fullName: r.patientFullName, phone: r.patientPhone, mrn: r.patientMrn },
+            items: []
+          }))
+        } catch {
+          return []
+        }
+      })
     ])
 
     const formatted = invoices.map(inv => ({
@@ -979,11 +1010,11 @@ export class ClinicalService {
   static async createInvoice(data, tenantId, actorId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     if (!targetTenantId) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       targetTenantId = firstTenant?.id
     }
 
@@ -992,7 +1023,7 @@ export class ClinicalService {
       const pName = data.patientName || data.name
       let existingPatient = await prisma.patient.findFirst({
         where: {
-          tenantId: targetTenantId,
+          clinicId: targetTenantId,
           OR: [
             { fullName: { equals: pName, mode: 'insensitive' } },
             ...(data.patientPhone ? [{ phone: data.patientPhone }] : [])
@@ -1003,14 +1034,14 @@ export class ClinicalService {
       if (!existingPatient) {
         existingPatient = await prisma.patient.create({
           data: {
-            tenantId: targetTenantId,
+            clinicId: targetTenantId,
             fullName: pName,
             phone: data.patientPhone || '+91 98000 00000',
-            mrn: `MRN-${Math.floor(10000 + Math.random() * 90000)}`,
+            mrn: `MRN-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`,
             dob: new Date('1990-01-01'),
             gender: 'Female',
             bloodGroup: 'O+',
-            createdBy: actorId || null
+            createdByUserId: actorId || null
           }
         }).catch(() => null)
       }
@@ -1019,7 +1050,7 @@ export class ClinicalService {
 
     if (!patientId) {
       const fallbackPatient = await prisma.patient.findFirst({
-        where: { tenantId: targetTenantId }
+        where: { clinicId: targetTenantId }
       }).catch(() => null)
       patientId = fallbackPatient?.id
     }
@@ -1027,50 +1058,91 @@ export class ClinicalService {
     if (!patientId) {
       const newPat = await prisma.patient.create({
         data: {
-          tenantId: targetTenantId,
+          clinicId: targetTenantId,
           fullName: data.patientName || data.name || 'Walk-in Patient',
           phone: data.patientPhone || '+91 98000 00000',
-          mrn: `MRN-${Math.floor(10000 + Math.random() * 90000)}`,
+          mrn: `MRN-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`,
           dob: new Date('1990-01-01'),
           gender: 'Female',
           bloodGroup: 'O+',
-          createdBy: actorId || null
+          createdByUserId: actorId || null
         }
       })
       patientId = newPat.id
     }
 
-    const invoiceCount = await prisma.invoice.count({ where: { tenantId: targetTenantId } }).catch(() => 0)
-    const invoiceNumber = `INV-${new Date().getFullYear()}-${String(invoiceCount + 1).padStart(5, '0')}`
+    // Compute globally unique invoice number to avoid P2002 unique constraint violations (409 Conflict)
+    let invoiceNumber = data.invoiceNumber
+    if (!invoiceNumber) {
+      const allInvoices = await prisma.invoice.findMany({
+        select: { invoiceNumber: true }
+      }).catch(() => [])
+
+      let maxSeq = 0
+      for (const inv of allInvoices) {
+        const match = inv.invoiceNumber?.match(/INV-\d{4}-(\d+)/)
+        if (match) {
+          const num = parseInt(match[1], 10)
+          if (!isNaN(num) && num > maxSeq) {
+            maxSeq = num
+          }
+        }
+      }
+      let nextSeq = Math.max(maxSeq + 1, allInvoices.length + 1)
+      invoiceNumber = `INV-${new Date().getFullYear()}-${String(nextSeq).padStart(5, '0')}`
+
+      // Check if this exact number exists in DB; increment until guaranteed unique
+      const existingNumbers = new Set(allInvoices.map(i => i.invoiceNumber))
+      while (existingNumbers.has(invoiceNumber)) {
+        nextSeq++
+        invoiceNumber = `INV-${new Date().getFullYear()}-${String(nextSeq).padStart(5, '0')}`
+      }
+    }
 
     const items = data.items || []
     const totalAmount = items.reduce((sum, it) => sum + ((parseFloat(it.unitPrice) || parseFloat(it.fee) || 0) * (it.quantity || 1)), 0) || parseFloat(data.amount) || 100
 
-    const invoice = await prisma.invoice.create({
-      data: {
-        tenantId: targetTenantId,
-        patientId,
-        appointmentId: data.appointmentId || null,
-        invoiceNumber,
-        amount: totalAmount,
-        insuranceCoverage: parseFloat(data.insuranceCoverage) || 0,
-        patientResponsibility: totalAmount - (parseFloat(data.insuranceCoverage) || 0),
-        status: data.status || 'PENDING',
-        paymentMethod: data.paymentMethod || null,
-        dueDate: data.dueDate ? new Date(data.dueDate) : new Date(Date.now() + 30 * 86400000),
-        items: {
-          create: items.map(it => ({
-            description: it.description || 'Consultation Service',
-            code: it.code || 'CPT-99213',
-            fee: parseFloat(it.unitPrice) || parseFloat(it.fee) || 50
-          }))
+    let invoice = null
+    let attempts = 0
+    while (!invoice && attempts < 5) {
+      attempts++
+      try {
+        invoice = await prisma.invoice.create({
+          data: {
+            clinicId: targetTenantId,
+            patientId,
+            appointmentId: data.appointmentId || null,
+            invoiceNumber,
+            amount: totalAmount,
+            insuranceCoverageAmount: parseFloat(data.insuranceCoverage || data.insuranceCoverageAmount) || 0,
+            patientResponsibility: totalAmount - (parseFloat(data.insuranceCoverage) || 0),
+            status: data.status || 'PENDING',
+            paymentMethod: data.paymentMethod || null,
+            dueDate: data.dueDate ? new Date(data.dueDate) : new Date(Date.now() + 30 * 86400000),
+            items: {
+              create: items.map(it => ({
+                description: it.description || 'Consultation Service',
+                code: it.code || 'CPT-99213',
+                fee: parseFloat(it.unitPrice) || parseFloat(it.fee) || 50
+              }))
+            }
+          },
+          include: {
+            patient: { select: { id: true, fullName: true, phone: true } },
+            items: true
+          }
+        })
+      } catch (err) {
+        // If unique constraint collision on invoiceNumber occurs, regenerate and retry
+        if (err.code === 'P2002' && (err.meta?.target?.includes('invoice_number') || err.message?.includes('invoice_number'))) {
+          const randomSuffix = Math.floor(1000 + Math.random() * 9000)
+          const totalInvoices = await prisma.invoice.count().catch(() => 0)
+          invoiceNumber = `INV-${new Date().getFullYear()}-${String(totalInvoices + attempts + 1).padStart(5, '0')}-${randomSuffix}`
+        } else {
+          throw err
         }
-      },
-      include: {
-        patient: { select: { id: true, fullName: true, phone: true } },
-        items: true
       }
-    })
+    }
 
     return {
       ...invoice,
@@ -1084,11 +1156,11 @@ export class ClinicalService {
   static async updateInvoiceStatus(id, paymentStatus, paymentMethod, tenantId, actorId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     const where = { id }
-    if (targetTenantId) where.tenantId = targetTenantId
+    if (targetTenantId) where.clinicId = targetTenantId
 
     const existing = await prisma.invoice.findFirst({ where })
     if (!existing) throw new NotFoundError('Invoice not found')
@@ -1106,7 +1178,7 @@ export class ClinicalService {
     })
 
     await AuditService.log({
-      tenantId: targetTenantId,
+      clinicId: targetTenantId,
       actorId,
       action: 'INVOICE_STATUS_UPDATED',
       entityType: 'Invoice',
@@ -1127,10 +1199,10 @@ export class ClinicalService {
   static async getInventory({ tenantId, page = 1, limit = 10, search = '', category = '', lowStockOnly = false }) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
-    const where = targetTenantId ? { tenantId: targetTenantId } : {}
+    const where = targetTenantId ? { clinicId: targetTenantId } : {}
     if (category) where.category = category
     if (search) {
       where.OR = [
@@ -1180,11 +1252,11 @@ export class ClinicalService {
   static async createInventoryItem(data, tenantId, actorId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     if (!targetTenantId) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       targetTenantId = firstTenant?.id
     }
     const itemCode = data.sku || data.itemCode || `SKU-${Date.now()}`
@@ -1192,12 +1264,12 @@ export class ClinicalService {
 
     const item = await prisma.inventoryItem.create({
       data: {
-        tenantId: targetTenantId,
+        clinicId: targetTenantId,
         itemCode,
         name: data.name,
         category: data.category || 'General Supplies',
         stockQuantity: parseInt(data.quantity, 10) || parseInt(data.stockQuantity, 10) || 0,
-        unit: data.unit || 'Units',
+        unitOfMeasure: data.unitOfMeasure || data.unit || 'Units',
         minReorderThreshold: parseInt(data.minThreshold, 10) || parseInt(data.minReorderThreshold, 10) || 10,
         unitCost: parseFloat(data.unitCost) || price,
         sellingPrice: price,
@@ -1218,11 +1290,11 @@ export class ClinicalService {
   static async updateInventoryItem(id, data, tenantId, actorId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     const where = { id }
-    if (targetTenantId) where.tenantId = targetTenantId
+    if (targetTenantId) where.clinicId = targetTenantId
 
     const existing = await prisma.inventoryItem.findFirst({ where })
     if (!existing) throw new NotFoundError('Inventory item not found')
@@ -1255,10 +1327,10 @@ export class ClinicalService {
   static async getStaffReports(tenantId, staffId = null, role = null) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
-    const where = targetTenantId ? { tenantId: targetTenantId } : {}
+    const where = targetTenantId ? { clinicId: targetTenantId } : {}
 
     const [encountersCount, prescriptionsCount, appointmentsCount, patientsCount, invoicesCount] = await Promise.all([
       prisma.appointment.count({ where: { ...where, status: 'COMPLETED' } }).catch(() => 0),

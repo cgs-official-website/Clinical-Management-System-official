@@ -8,7 +8,6 @@ import {
   ArrowRight,
   TrendingUp,
   Award,
-  Sparkles,
   Plus,
 } from 'lucide-react'
 import { Badge } from '../../components/ui/Badge'

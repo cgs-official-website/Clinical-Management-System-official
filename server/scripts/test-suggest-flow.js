@@ -65,7 +65,7 @@ async function run() {
   }
 
   // Clean up test role
-  await prisma.rolePermission.deleteMany({ where: { roleId: createdRole.id } })
+  await prisma.rolePermissionGrant.deleteMany({ where: { roleId: createdRole.id } })
   await prisma.role.delete({ where: { id: createdRole.id } })
   console.log('Cleaned up test role.')
 

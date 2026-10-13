@@ -1,6 +1,5 @@
 import React, { useState } from 'react'
 import {
-  Sparkles,
   Building2,
   Globe,
   DollarSign,
@@ -113,7 +112,7 @@ export const EnvironmentSetupModal = ({ isOpen, onClose, clinicName = 'Your Clin
           <div className="flex items-center justify-between pb-3 border-b border-border/80">
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-                <Sparkles className="w-5 h-5" />
+                <Building2 className="w-5 h-5" />
               </div>
               <div>
                 <h3 className="font-heading font-extrabold text-lg text-text-primary">

@@ -111,9 +111,9 @@ export async function seedPhysiotherapyCategory() {
   // 3. Upsert exactly the 10 Modules & their permissions
   const moduleMap = new Map()
   for (const modData of PHYSIO_MODULES) {
-    let mod = await prisma.module.findUnique({ where: { key: modData.key } })
+    let mod = await prisma.systemModule.findUnique({ where: { key: modData.key } })
     if (!mod) {
-      mod = await prisma.module.create({
+      mod = await prisma.systemModule.create({
         data: {
           key: modData.key,
           name: modData.name,
@@ -122,7 +122,7 @@ export async function seedPhysiotherapyCategory() {
       })
       console.log(`Created Module: ${mod.key} (${mod.name})`)
     } else {
-      mod = await prisma.module.update({
+      mod = await prisma.systemModule.update({
         where: { id: mod.id },
         data: {
           name: modData.name,
@@ -141,8 +141,8 @@ export async function seedPhysiotherapyCategory() {
       if (!perm) {
         perm = await prisma.permission.create({
           data: {
-            moduleId: mod.id,
-            actionId: act.id,
+            systemModuleId: mod.id,
+            permissionActionId: act.id,
             key: permKey,
             description: `Can ${actKey} ${mod.name}`,
           },
@@ -159,7 +159,7 @@ export async function seedPhysiotherapyCategory() {
   await prisma.clinicCategoryModule.deleteMany({
     where: {
       clinicCategoryId: category.id,
-      moduleId: { notIn: physioModuleIds },
+      systemModuleId: { notIn: physioModuleIds },
     },
   })
 
@@ -167,9 +167,9 @@ export async function seedPhysiotherapyCategory() {
     const mod = moduleMap.get(modData.key)
     const existing = await prisma.clinicCategoryModule.findUnique({
       where: {
-        clinicCategoryId_moduleId: {
+        clinicCategoryId_systemModuleId: {
           clinicCategoryId: category.id,
-          moduleId: mod.id,
+          systemModuleId: mod.id,
         },
       },
     })
@@ -178,7 +178,7 @@ export async function seedPhysiotherapyCategory() {
       await prisma.clinicCategoryModule.create({
         data: {
           clinicCategoryId: category.id,
-          moduleId: mod.id,
+          systemModuleId: mod.id,
           displayOrder: modData.displayOrder,
         },
       })
@@ -209,8 +209,8 @@ export async function seedPhysiotherapyCategory() {
         templateRows.push({
           clinicCategoryId: category.id,
           roleName,
-          module: modData.key,
-          action: actKey,
+          moduleKey: modData.key,
+          actionKey: actKey,
         })
       }
     }
@@ -230,8 +230,8 @@ export async function seedPhysiotherapyCategory() {
       templateRows.push({
         clinicCategoryId: category.id,
         roleName: 'Physiotherapist',
-        module: modKey,
-        action: actKey,
+        moduleKey: modKey,
+        actionKey: actKey,
       })
     }
   }
@@ -243,8 +243,8 @@ export async function seedPhysiotherapyCategory() {
       templateRows.push({
         clinicCategoryId: category.id,
         roleName: 'Physiotherapy Assistant',
-        module: modKey,
-        action: actKey,
+        moduleKey: modKey,
+        actionKey: actKey,
       })
     }
   }
@@ -257,8 +257,8 @@ export async function seedPhysiotherapyCategory() {
       templateRows.push({
         clinicCategoryId: category.id,
         roleName: 'Billing Officer',
-        module: modKey,
-        action: actKey,
+        moduleKey: modKey,
+        actionKey: actKey,
       })
     }
   }
@@ -269,21 +269,21 @@ export async function seedPhysiotherapyCategory() {
     templateRows.push({
       clinicCategoryId: category.id,
       roleName: 'Front Desk',
-      module: 'appointments',
-      action: actKey,
+      moduleKey: 'appointments',
+      actionKey: actKey,
     })
   }
   templateRows.push({
     clinicCategoryId: category.id,
     roleName: 'Front Desk',
-    module: 'patients',
-    action: 'create',
+    moduleKey: 'patients',
+    actionKey: 'create',
   })
   templateRows.push({
     clinicCategoryId: category.id,
     roleName: 'Front Desk',
-    module: 'billing',
-    action: 'create',
+    moduleKey: 'billing',
+    actionKey: 'create',
   })
 
   // Insert all templates

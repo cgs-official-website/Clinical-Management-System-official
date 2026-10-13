@@ -6,7 +6,6 @@ import {
   AlertCircle,
   FileText,
   RotateCcw,
-  Sparkles,
   Save,
   Clock,
   Search,

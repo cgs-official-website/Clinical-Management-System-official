@@ -12,7 +12,6 @@ import {
   Search,
   Building2,
   Layers,
-  Sparkles,
   ArrowRight,
   Info,
 } from 'lucide-react'
@@ -520,10 +519,10 @@ export const ClinicCategoriesPage = () => {
                 className="text-xs flex items-center gap-1.5 text-primary border-primary/30 hover:bg-primary/10"
                 disabled={!formData.name.trim() || aiAutoprovisionMutation.isPending || saveCategoryMutation.isPending}
                 onClick={handleAiAutoProvision}
-                title="Automatically analyze category and customize entire ERP using OpenRouter AI"
+                title="Automatically analyze category and customize entire ERP"
               >
-                <Sparkles className={`w-3.5 h-3.5 text-primary ${aiAutoprovisionMutation.isPending ? 'animate-spin' : ''}`} />
-                <span>{aiAutoprovisionMutation.isPending ? 'Customizing Entire ERP...' : 'Auto-Customize Entire ERP with AI'}</span>
+                <Layers className={`w-3.5 h-3.5 text-primary ${aiAutoprovisionMutation.isPending ? 'animate-spin' : ''}`} />
+                <span>{aiAutoprovisionMutation.isPending ? 'Customizing Entire ERP...' : 'Auto-Customize Entire ERP'}</span>
               </Button>
             )}
 
@@ -560,7 +559,7 @@ export const ClinicCategoriesPage = () => {
         <div className="space-y-5 pt-2">
           {/* Helper Banner */}
           <div className="p-3.5 rounded-2xl bg-primary/5 border border-primary/20 flex items-start gap-3 text-xs text-text-secondary">
-            <Sparkles className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+            <Info className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
             <p>
               When a clinic with category <strong>{selectedCategoryForTemplates?.name}</strong> is approved by Superadmin, all roles listed below will be automatically created and populated with these exact permissions for the tenant workspace.
             </p>
@@ -738,7 +737,7 @@ export const ClinicCategoriesPage = () => {
           {/* Domain & Scope Summary */}
           <div className="p-4 rounded-2xl bg-primary/5 border border-primary/20 space-y-2">
             <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-primary" />
+              <Building2 className="w-4 h-4 text-primary" />
               <span className="text-xs font-bold text-text-primary uppercase tracking-wider">
                 Clinical Specialty Domain & Operational Scope
               </span>

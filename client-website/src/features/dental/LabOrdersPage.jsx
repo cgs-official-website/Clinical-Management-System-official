@@ -9,7 +9,6 @@ import {
   Truck,
   FileCheck,
   Search,
-  Sparkles,
 } from 'lucide-react'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'

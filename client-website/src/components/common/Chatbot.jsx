@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MessageSquare, X, Send, Bot, User, Sparkles, RefreshCw, AlertCircle, Minimize2 } from 'lucide-react'
+import { MessageSquare, X, Send, Stethoscope, User, RefreshCw, AlertCircle, Minimize2 } from 'lucide-react'
 import api from '../../lib/api'
 
 const sanitizeUrl = (url) => {
@@ -467,13 +467,12 @@ export const Chatbot = () => {
             <div className="px-4 py-3 bg-gradient-to-r from-teal-700 via-teal-600 to-emerald-600 text-white flex items-center justify-between shadow-md">
               <div className="flex items-center space-x-2.5">
                 <div className="relative p-1.5 bg-white/10 rounded-lg backdrop-blur-sm">
-                  <Bot className="w-5 h-5 text-teal-100" />
+                  <Stethoscope className="w-5 h-5 text-teal-100" />
                   <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-400 border-2 border-teal-700 rounded-full" />
                 </div>
                 <div>
-                  <h3 className="font-semibold text-sm leading-tight flex items-center gap-1.5">
-                    Clinical Assistant AI
-                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                  <h3 className="font-semibold text-sm leading-tight">
+                    Clinical Assistant
                   </h3>
                   <p className="text-[11px] text-teal-100/80">Online • Answers CMS & Health Questions</p>
                 </div>
@@ -504,7 +503,7 @@ export const Chatbot = () => {
                           : 'bg-teal-100 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800'
                       }`}
                     >
-                      {isUser ? <User className="w-4 h-4" /> : <Bot className="w-4 h-4" />}
+                      {isUser ? <User className="w-4 h-4" /> : <Stethoscope className="w-4 h-4" />}
                     </div>
 
                     <div
@@ -524,7 +523,7 @@ export const Chatbot = () => {
               {isLoading && (
                 <div className="flex items-start gap-2.5">
                   <div className="w-7 h-7 rounded-full bg-teal-100 dark:bg-teal-950/80 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 flex items-center justify-center">
-                    <Bot className="w-4 h-4 animate-bounce" />
+                    <Stethoscope className="w-4 h-4 animate-bounce" />
                   </div>
                   <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3 rounded-2xl rounded-tl-none text-slate-400 flex items-center space-x-1.5">
                     <span className="w-2 h-2 bg-teal-500 rounded-full animate-pulse" />

@@ -8,7 +8,6 @@ import {
   CheckSquare,
   Square,
   RefreshCw,
-  Sparkles,
   Users,
   Calendar,
   Pill,
@@ -38,7 +37,6 @@ const ICON_MAP = {
   Pill,
   CreditCard,
   Boxes,
-  Sparkles,
   BarChart3,
   KeyRound,
   ShieldCheck,
@@ -502,7 +500,7 @@ export const PermissionMatrixPage = () => {
                 size="md"
                 onClick={handleSuggestClick}
                 isLoading={suggestMutation.isPending}
-                leftIcon={<Sparkles className="w-4 h-4 text-amber-300" />}
+                leftIcon={<SlidersHorizontal className="w-4 h-4 text-amber-300" />}
                 className="shrink-0 font-bold shadow-soft"
               >
                 Suggest Permissions
@@ -517,7 +515,7 @@ export const PermissionMatrixPage = () => {
             <Button variant="ghost" size="xs" onClick={handleGrantAllView} leftIcon={<CheckSquare className="w-3.5 h-3.5 text-primary" />}>
               Allow All View
             </Button>
-            <Button variant="ghost" size="xs" onClick={handleGrantAll} leftIcon={<Sparkles className="w-3.5 h-3.5 text-emerald-500" />}>
+            <Button variant="ghost" size="xs" onClick={handleGrantAll} leftIcon={<CheckSquare className="w-3.5 h-3.5 text-emerald-500" />}>
               Grant All (View/Create/Edit/Del)
             </Button>
             <Button variant="ghost" size="xs" onClick={handleClearAll} leftIcon={<Square className="w-3.5 h-3.5 text-danger" />}>
@@ -543,7 +541,7 @@ export const PermissionMatrixPage = () => {
           <div className="flex items-start gap-3">
             {suggestionStatus === 'suggested' ? (
               <div className="w-7 h-7 rounded-xl bg-primary/20 text-primary flex items-center justify-center shrink-0 mt-0.5">
-                <Sparkles className="w-4 h-4" />
+                <ShieldCheck className="w-4 h-4" />
               </div>
             ) : (
               <div className="w-7 h-7 rounded-xl bg-amber-500/20 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">

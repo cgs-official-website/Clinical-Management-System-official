@@ -9,7 +9,6 @@ import {
   Mail,
   ArrowRight,
   ArrowLeft,
-  Sparkles,
   Building2,
   Clock,
 } from 'lucide-react'
@@ -185,7 +184,7 @@ export const LoginPage = () => {
           {/* Header */}
           <div className="text-left mb-6 sm:mb-8">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-border text-text-primary text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
-              <Sparkles className="w-3.5 h-3.5 text-primary" />
+              <Building2 className="w-3.5 h-3.5 text-primary" />
               <span>Unified Clinical Access</span>
             </div>
             <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-text-primary tracking-tight">

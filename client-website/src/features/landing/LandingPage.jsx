@@ -2,7 +2,7 @@ import React, { Suspense, lazy } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowRight, Sparkles, Shield, Lock, CheckCircle2, RefreshCw } from 'lucide-react'
+import { ArrowRight, Shield, Lock, CheckCircle2, RefreshCw } from 'lucide-react'
 import { api } from '../../lib/api'
 import { PublicNavbar } from '../../components/layout/PublicNavbar'
 import { PublicFooter } from '../../components/layout/PublicFooter'
@@ -91,7 +91,7 @@ export const LandingPage = () => {
             >
               {/* Badge */}
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-surface border border-border text-xs font-bold uppercase tracking-wider mb-6 shadow-sm text-text-primary">
-                <Sparkles className="w-3.5 h-3.5 text-primary" />
+                <Shield className="w-3.5 h-3.5 text-primary" />
                 <span>{hero?.badge || 'Next-Gen Clinical Intelligence OS'}</span>
               </div>
 

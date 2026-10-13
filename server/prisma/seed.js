@@ -8,8 +8,8 @@ async function main() {
   console.log('🌱 Starting Clinical Management System database seed...')
 
   // 1. CLEAR EXISTING DATA IN REVERSE DEPENDENCY ORDER
-  await prisma.auditLog.deleteMany()
-  await prisma.invoiceItem.deleteMany()
+  await prisma.activityLog.deleteMany()
+  await prisma.invoiceLineItem.deleteMany()
   await prisma.invoice.deleteMany()
   await prisma.prescription.deleteMany()
   await prisma.appointment.deleteMany()
@@ -17,20 +17,20 @@ async function main() {
   await prisma.staffProfile.deleteMany()
   await prisma.department.deleteMany()
   await prisma.inventoryItem.deleteMany()
-  await prisma.userRole.deleteMany()
-  await prisma.rolePermission.deleteMany()
+  await prisma.userRoleAssignment.deleteMany()
+  await prisma.rolePermissionGrant.deleteMany()
   await prisma.permission.deleteMany()
   await prisma.permissionAction.deleteMany()
-  await prisma.roleTemplate.deleteMany()
-  await prisma.module.deleteMany()
+  await prisma.roleKeywordTemplate.deleteMany()
+  await prisma.systemModule.deleteMany()
   await prisma.role.deleteMany()
   await prisma.refreshToken.deleteMany()
   await prisma.user.deleteMany()
-  await prisma.tenant.deleteMany()
+  await prisma.clinic.deleteMany()
   await prisma.publicSiteContent.deleteMany()
 
   // 2. SEED DEFAULT TENANT
-  const tenant = await prisma.tenant.create({
+  const tenant = await prisma.clinic.create({
     data: {
       name: 'Aura Health Memorial',
       subdomain: 'aura-health',
@@ -59,7 +59,7 @@ async function main() {
 
   const modules = {}
   for (const m of moduleDefs) {
-    modules[m.key] = await prisma.module.create({ data: m })
+    modules[m.key] = await prisma.systemModule.create({ data: m })
   }
   console.log(`✅ Seeded ${Object.keys(modules).length} dynamic modules`)
 
@@ -86,8 +86,8 @@ async function main() {
       const key = `${mod.key}.${act.key}`
       const perm = await prisma.permission.create({
         data: {
-          moduleId: mod.id,
-          actionId: act.id,
+          systemModuleId: mod.id,
+          permissionActionId: act.id,
           key,
           description: `Grants permission to ${act.name.toLowerCase()} ${mod.name}`,
         },
@@ -100,7 +100,7 @@ async function main() {
   // 6. SEED ROLES
   const roleAdmin = await prisma.role.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       name: 'Clinical Administrator',
       description: 'Complete clinic administrative and operational control',
       isSystemRole: true,
@@ -109,7 +109,7 @@ async function main() {
 
   const roleDoctor = await prisma.role.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       name: 'Senior Attending Physician',
       description: 'Direct care provider with diagnosis, prescription and appointment controls',
       isSystemRole: false,
@@ -118,7 +118,7 @@ async function main() {
 
   const roleReceptionist = await prisma.role.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       name: 'Front Desk & Receptionist',
       description: 'Patient check-in, registration, scheduling and initial intake billing',
       isSystemRole: false,
@@ -127,7 +127,7 @@ async function main() {
 
   const roleNurse = await prisma.role.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       name: 'Registered Clinical Nurse',
       description: 'Patient vitals recording, triage, medication administration and chart viewing',
       isSystemRole: false,
@@ -136,7 +136,7 @@ async function main() {
 
   const roleBiller = await prisma.role.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       name: 'Billing & Insurance Officer',
       description: 'Invoicing, claim adjudications, payment collections and financial reports',
       isSystemRole: false,
@@ -148,7 +148,7 @@ async function main() {
     for (const key of keys) {
       const perm = permissionsByKey[key]
       if (perm) {
-        await prisma.rolePermission.create({
+        await prisma.rolePermissionGrant.create({
           data: { roleId, permissionId: perm.id },
         })
       }
@@ -207,7 +207,7 @@ async function main() {
       fullName: 'Alexander Sterling',
       userType: 'SUPERADMIN',
       status: 'ACTIVE',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
     },
   })
 
@@ -219,87 +219,87 @@ async function main() {
       fullName: 'Super Administrator',
       userType: 'SUPERADMIN',
       status: 'ACTIVE',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
+      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=300',
     },
   })
 
   // Clinic Admin
   const adminUser = await prisma.user.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       email: 'admin@aurahealth.org',
       passwordHash: passwordAdmin,
       fullName: 'Dr. Evelyn Vance',
       userType: 'ADMIN',
       status: 'ACTIVE',
-      twoFactorEnabled: true,
-      avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=300',
+      hasTwoFactorEnabled: true,
+      avatarUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&q=80&w=300',
     },
   })
-  await prisma.userRole.create({ data: { userId: adminUser.id, roleId: roleAdmin.id } })
+  await prisma.userRoleAssignment.create({ data: { userId: adminUser.id, roleId: roleAdmin.id } })
 
   // Doctor
   const doctorUser = await prisma.user.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       email: 'doctor@clinic.io',
       passwordHash: passwordDoctor,
       fullName: 'Dr. Sarah Al-Mansoor',
       userType: 'STAFF',
       status: 'ACTIVE',
-      avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
+      avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=300',
     },
   })
-  await prisma.userRole.create({ data: { userId: doctorUser.id, roleId: roleDoctor.id } })
+  await prisma.userRoleAssignment.create({ data: { userId: doctorUser.id, roleId: roleDoctor.id } })
 
   // Receptionist
   const receptionistUser = await prisma.user.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       email: 'reception@clinic.io',
       passwordHash: passwordReception,
       fullName: 'Elena Rostova',
       userType: 'STAFF',
       status: 'ACTIVE',
-      avatar: 'https://images.unsplash.com/photo-1594824813572-c24458514131?auto=format&fit=crop&q=80&w=300',
+      avatarUrl: 'https://images.unsplash.com/photo-1594824813572-c24458514131?auto=format&fit=crop&q=80&w=300',
     },
   })
-  await prisma.userRole.create({ data: { userId: receptionistUser.id, roleId: roleReceptionist.id } })
+  await prisma.userRoleAssignment.create({ data: { userId: receptionistUser.id, roleId: roleReceptionist.id } })
 
   // Nurse
   const nurseUser = await prisma.user.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       email: 'nurse@clinic.io',
       passwordHash: passwordNurse,
       fullName: 'James C. Rodriguez',
       userType: 'STAFF',
       status: 'ACTIVE',
-      avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300',
+      avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=300',
     },
   })
-  await prisma.userRole.create({ data: { userId: nurseUser.id, roleId: roleNurse.id } })
+  await prisma.userRoleAssignment.create({ data: { userId: nurseUser.id, roleId: roleNurse.id } })
 
   // Biller
   const billerUser = await prisma.user.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       email: 'biller@clinic.io',
       passwordHash: passwordBiller,
       fullName: 'Amara Chen',
       userType: 'STAFF',
       status: 'ACTIVE',
-      avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300',
+      avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=300',
     },
   })
-  await prisma.userRole.create({ data: { userId: billerUser.id, roleId: roleBiller.id } })
+  await prisma.userRoleAssignment.create({ data: { userId: billerUser.id, roleId: roleBiller.id } })
 
   console.log('✅ Seeded users with hashed credentials and assigned roles')
 
   // 9. SEED DEPARTMENTS & STAFF PROFILES
-  const deptCardio = await prisma.department.create({ data: { tenantId: tenant.id, name: 'Cardiology' } })
-  const deptDiag = await prisma.department.create({ data: { tenantId: tenant.id, name: 'Diagnostic Medicine' } })
-  const deptER = await prisma.department.create({ data: { tenantId: tenant.id, name: 'Emergency & Critical Care' } })
+  const deptCardio = await prisma.department.create({ data: { clinicId: tenant.id, name: 'Cardiology' } })
+  const deptDiag = await prisma.department.create({ data: { clinicId: tenant.id, name: 'Diagnostic Medicine' } })
+  const deptER = await prisma.department.create({ data: { clinicId: tenant.id, name: 'Emergency & Critical Care' } })
 
   await prisma.staffProfile.create({
     data: {
@@ -322,48 +322,48 @@ async function main() {
   // 10. SEED SAMPLE PATIENTS
   const pat1 = await prisma.patient.create({
     data: {
-      tenantId: tenant.id,
-      mrn: 'MRN-84920',
+      clinicId: tenant.id,
+      medicalRecordNumber: 'MRN-84920',
       fullName: 'Eleanor Vance-Bishop',
-      dob: new Date('1984-06-14'),
+      dateOfBirth: new Date('1984-06-14'),
       gender: 'Female',
       bloodGroup: 'A+',
-      phone: '+1 (555) 912-3401',
+      phoneNumber: '+1 (555) 912-3401',
       email: 'eleanor.vb@gmail.com',
       address: '482 Maplecrest Blvd, Suite 4A',
       allergies: ['Penicillin', 'Sulfa Drugs'],
       chronicConditions: ['Hypertension', 'Mild Asthma'],
-      createdBy: adminUser.id,
+      createdByUserId: adminUser.id,
     },
   })
 
   const pat2 = await prisma.patient.create({
     data: {
-      tenantId: tenant.id,
-      mrn: 'MRN-84921',
+      clinicId: tenant.id,
+      medicalRecordNumber: 'MRN-84921',
       fullName: 'Liam Alexander Reyes',
-      dob: new Date('1992-11-28'),
+      dateOfBirth: new Date('1992-11-28'),
       gender: 'Male',
       bloodGroup: 'O+',
-      phone: '+1 (555) 834-2900',
+      phoneNumber: '+1 (555) 834-2900',
       email: 'liam.reyes@techmail.com',
       address: '109 Pine Ridge Terrace',
       allergies: ['No Known Drug Allergies (NKDA)'],
       chronicConditions: ['Type 2 Diabetes'],
-      createdBy: adminUser.id,
+      createdByUserId: adminUser.id,
     },
   })
 
   // 11. SEED APPOINTMENTS
   const apt1 = await prisma.appointment.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       patientId: pat1.id,
       departmentId: deptCardio.id,
       scheduledAt: new Date(Date.now() + 3600 * 1000 * 4), // 4 hrs from now
       durationMinutes: 30,
       status: 'SCHEDULED',
-      type: 'In-Person Consultation',
+      appointmentType: 'In-Person Consultation',
       room: 'Exam Room 3B',
       reason: 'Quarterly cardiac stress test evaluation & blood pressure check',
     },
@@ -374,7 +374,8 @@ async function main() {
     data: {
       patientId: pat1.id,
       appointmentId: apt1.id,
-      prescribedBy: doctorUser.fullName,
+      prescribedByName: doctorUser.fullName,
+      clinicId: tenant.id,
       diagnosis: 'Stage 1 Essential Hypertension (ICD-10 I10)',
       medications: [
         { drug: 'Amlodipine Besylate', dosage: '5mg', frequency: 'Once daily in the morning', duration: '90 days', refills: 3 },
@@ -388,67 +389,67 @@ async function main() {
   // 13. SEED INVOICES (in INR ₹)
   const inv1 = await prisma.invoice.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       patientId: pat1.id,
       appointmentId: apt1.id,
       invoiceNumber: 'INV-2026-0081',
-      amount: 3500.00,
-      insuranceCoverage: 2800.00,
-      patientResponsibility: 700.00,
+      totalAmount: 3500.00,
+      insuranceCoverageAmount: 2800.00,
+      patientResponsibilityAmount: 700.00,
       status: 'PAID',
       paymentMethod: 'UPI / Net Banking',
     },
   })
 
-  await prisma.invoiceItem.create({
+  await prisma.invoiceLineItem.create({
     data: {
       invoiceId: inv1.id,
       description: 'Comprehensive Cardiology Specialist Consultation',
-      code: 'CPT-99214',
-      fee: 2500.00,
+      billingCode: 'CPT-99214',
+      feeAmount: 2500.00,
     },
   })
 
-  await prisma.invoiceItem.create({
+  await prisma.invoiceLineItem.create({
     data: {
       invoiceId: inv1.id,
       description: '12-Lead Electrocardiogram (ECG) with interpretation',
-      code: 'CPT-93000',
-      fee: 1000.00,
+      billingCode: 'CPT-93000',
+      feeAmount: 1000.00,
     },
   })
 
   // 14. SEED INVENTORY (PHARMACY STOCK)
   await prisma.inventoryItem.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       itemCode: 'MED-AMLO-5',
       name: 'Amlodipine Besylate 5mg Tablets',
       category: 'Cardiovascular',
       stockQuantity: 840,
-      unit: 'Tablets',
+      unitOfMeasure: 'Tablets',
       minReorderThreshold: 200,
       batchNumber: 'BCH-2026-042',
       expiryDate: new Date('2027-11-30'),
-      unitCost: 15.00,
-      sellingPrice: 70.00,
+      unitCostAmount: 15.00,
+      sellingPriceAmount: 70.00,
       status: 'Optimal',
     },
   })
 
   await prisma.inventoryItem.create({
     data: {
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       itemCode: 'MED-MET-1000',
       name: 'Metformin Extended-Release 1000mg',
       category: 'Endocrinology',
       stockQuantity: 140,
-      unit: 'Tablets',
+      unitOfMeasure: 'Tablets',
       minReorderThreshold: 250,
       batchNumber: 'BCH-2025-911',
       expiryDate: new Date('2027-04-15'),
-      unitCost: 18.00,
-      sellingPrice: 90.00,
+      unitCostAmount: 18.00,
+      sellingPriceAmount: 90.00,
       status: 'Low Stock',
     },
   })

@@ -24,7 +24,7 @@ async function runTest() {
   console.log(`[PASS] Created category with ID: ${category.id}`)
 
   // Get any existing module from DB to link
-  const anyModule = await prisma.module.findFirst()
+  const anyModule = await prisma.systemModule.findFirst()
   if (anyModule) {
     await prisma.clinicCategoryModule.create({
       data: {
@@ -38,7 +38,7 @@ async function runTest() {
 
   // 2. Create a test tenant linked to this category
   const testSubdomain = `test-del-cat-${Date.now()}`
-  const tenant = await prisma.tenant.create({
+  const tenant = await prisma.clinic.create({
     data: {
       name: `Clinic for ${testCatName}`,
       subdomain: testSubdomain,
@@ -85,14 +85,14 @@ async function runTest() {
   }
   console.log('[PASS] All category module blueprints for category deleted.')
 
-  const updatedTenant = await prisma.tenant.findUnique({ where: { id: tenant.id } })
+  const updatedTenant = await prisma.clinic.findUnique({ where: { id: tenant.id } })
   if (!updatedTenant || updatedTenant.clinicCategoryId !== null) {
     throw new Error(`FAILED: Tenant was not detached! clinicCategoryId is ${updatedTenant?.clinicCategoryId}`)
   }
   console.log('[PASS] Attached clinic tenant safely detached (clinicCategoryId is null).')
 
   // Clean up test tenant
-  await prisma.tenant.delete({ where: { id: tenant.id } })
+  await prisma.clinic.delete({ where: { id: tenant.id } })
   console.log('[PASS] Cleaned up test tenant.')
 
   console.log('\n=== ALL TESTS PASSED SUCCESSFULLY ===')

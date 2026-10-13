@@ -9,7 +9,6 @@ import {
   User,
   Phone,
   Calendar,
-  Sparkles,
   RefreshCw,
   Clock,
   CheckCircle2,

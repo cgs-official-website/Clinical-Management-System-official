@@ -132,9 +132,28 @@ export class PublicController {
   }
 
   static async getHealth(req, res) {
-    return res.status(200).json({
-      status: 'healthy',
+    let dbStatus = 'disconnected'
+    let dbLatencyMs = null
+    try {
+      const start = Date.now()
+      await prisma.$queryRaw`SELECT 1`
+      dbLatencyMs = Date.now() - start
+      dbStatus = 'connected'
+    } catch (err) {
+      dbStatus = 'error: ' + err.message
+    }
+
+    const isHealthy = dbStatus === 'connected'
+
+    return res.status(isHealthy ? 200 : 503).json({
+      status: isHealthy ? 'healthy' : 'degraded',
       service: 'clinic-api',
+      database: {
+        status: dbStatus,
+        provider: 'PostgreSQL',
+        latencyMs: dbLatencyMs,
+      },
+      uptime: Math.floor(process.uptime()),
       timestamp: new Date().toISOString()
     })
   }

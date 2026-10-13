@@ -94,7 +94,7 @@ async function runTest() {
   console.log(`[PASS] Registration submitted. ID: ${regResult.registrationId}`)
 
   // Verify created tenant in DB has status PENDING and clinicCategoryId set
-  const tenant = await prisma.tenant.findUnique({
+  const tenant = await prisma.clinic.findUnique({
     where: { subdomain: testSubdomain },
     include: { users: true },
   })
@@ -235,7 +235,7 @@ async function runTest() {
 
   // 10. Clean up test tenant
   console.log('\nCleaning up test tenant data...')
-  await prisma.tenant.delete({ where: { id: tenant.id } })
+  await prisma.clinic.delete({ where: { id: tenant.id } })
   console.log('[PASS] Test tenant cleaned up successfully.')
 
   console.log('\n=== ALL PHYSIOTHERAPY VERIFICATION TESTS PASSED SUCCESSFULLY! ===\n')

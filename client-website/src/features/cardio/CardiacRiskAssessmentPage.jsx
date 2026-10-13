@@ -10,7 +10,6 @@ import {
   Percent,
   Sliders,
   Award,
-  Sparkles,
   Download,
 } from 'lucide-react'
 import { Badge } from '../../components/ui/Badge'

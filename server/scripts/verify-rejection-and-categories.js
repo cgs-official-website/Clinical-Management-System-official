@@ -37,7 +37,7 @@ async function runVerification() {
   console.log('Registration submitted successfully:', regResult.registrationId)
 
   // Verify status is PENDING in database
-  const createdTenant = await prisma.tenant.findUnique({
+  const createdTenant = await prisma.clinic.findUnique({
     where: { subdomain: testSubdomain }
   })
   console.log(`Tenant created: ID ${createdTenant?.id}, status: ${createdTenant?.status}, categoryId: ${createdTenant?.clinicCategoryId}`)
@@ -69,7 +69,7 @@ async function runVerification() {
   )
   console.log('Reject result:', rejectResult.status, 'rejectionReason:', rejectResult.rejectionReason)
 
-  const rejectedTenant = await prisma.tenant.findUnique({
+  const rejectedTenant = await prisma.clinic.findUnique({
     where: { id: createdTenant.id }
   })
   if (rejectedTenant.status !== 'REJECTED' || rejectedTenant.rejectionReason !== rejectionReason) {
@@ -106,7 +106,7 @@ async function runVerification() {
     clinic_category_id: dentalCategory.id,
   })
 
-  const tenant2 = await prisma.tenant.findUnique({
+  const tenant2 = await prisma.clinic.findUnique({
     where: { subdomain: testSubdomain2 }
   })
 
@@ -143,7 +143,7 @@ async function runVerification() {
 
   // Cleanup test records
   console.log('\n8. Cleaning up test data...')
-  await prisma.tenant.deleteMany({
+  await prisma.clinic.deleteMany({
     where: { subdomain: { in: [testSubdomain, testSubdomain2] } }
   }).catch(() => {})
 

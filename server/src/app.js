@@ -7,6 +7,7 @@ import { env } from './config/env.js'
 import masterRouter from './routes/index.js'
 import { errorHandler } from './middlewares/error.middleware.js'
 import { standardLimiter } from './middlewares/rateLimit.middleware.js'
+import { prisma } from './config/prisma.js'
 
 const app = express()
 
@@ -50,10 +51,28 @@ app.get('/', (req, res) => {
 })
 
 // Cloud Healthcheck (Railway / container probes)
-app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'healthy',
+app.get('/health', async (req, res) => {
+  let dbStatus = 'disconnected'
+  let dbLatencyMs = null
+  try {
+    const start = Date.now()
+    await prisma.$queryRaw`SELECT 1`
+    dbLatencyMs = Date.now() - start
+    dbStatus = 'connected'
+  } catch (err) {
+    dbStatus = 'error: ' + err.message
+  }
+
+  const isHealthy = dbStatus === 'connected'
+
+  res.status(isHealthy ? 200 : 503).json({
+    status: isHealthy ? 'healthy' : 'degraded',
     service: 'clinic-api',
+    database: {
+      status: dbStatus,
+      provider: 'PostgreSQL',
+      latencyMs: dbLatencyMs,
+    },
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString()
   })

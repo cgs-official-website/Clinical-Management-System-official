@@ -1,0 +1,1666 @@
+{
+  "appointments": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "tenant_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "patient_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "staff_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "department_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "scheduled_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "duration_minutes",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "status",
+      "type": "USER-DEFINED",
+      "udt": "AppointmentStatus"
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "room",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "reason",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "audit_logs": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "tenant_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "actor_user_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "action",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "entity_type",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "entity_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "before_state",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "after_state",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "ip",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "clinic_categories": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "udt": "bool"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "clinic_category_modules": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "clinic_category_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "module_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "display_order",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "clinic_category_role_templates": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "clinic_category_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "role_name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "module",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "action",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "company_settings": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "legal_company_name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "trade_name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "address",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "city",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "state",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "pincode",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "country",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "gstin",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "pan",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "cin",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "sac_code",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "contact_email",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "phone",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "website",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "bank_name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "account_name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "account_number",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "ifsc",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "branch",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "upi_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "invoice_terms",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "demo_requests": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "email",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "clinic_name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "phone",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "requested_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "departments": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "tenant_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "inventory_items": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "tenant_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "item_code",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "category",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "stock_quantity",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "unit",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "min_reorder_threshold",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "batch_number",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "expiry_date",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "unit_cost",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "selling_price",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "gst_rate",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "prescription_required",
+      "type": "boolean",
+      "udt": "bool"
+    },
+    {
+      "name": "schedule",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "brand_name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "dosage_form",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "dpco_ceiling_price",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "hsn_code",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "import_batch_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "imported_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "imported_by",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "manufacturer",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "mfg_date",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "mfr_license_number",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "pack_size",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "storage_condition",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "strength",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "supplier_name",
+      "type": "text",
+      "udt": "text"
+    }
+  ],
+  "invoice_items": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "invoice_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "code",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "fee",
+      "type": "double precision",
+      "udt": "float8"
+    }
+  ],
+  "invoices": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "tenant_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "patient_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "appointment_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "invoice_number",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "amount",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "insurance_coverage",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "patient_responsibility",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "status",
+      "type": "USER-DEFINED",
+      "udt": "InvoiceStatus"
+    },
+    {
+      "name": "payment_method",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "due_date",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "modules": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "key",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "newsletter_subscriptions": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "email",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "subscribed_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "notifications": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "title",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "message",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "entity_type",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "entity_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "is_read",
+      "type": "boolean",
+      "udt": "bool"
+    },
+    {
+      "name": "read_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "data",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "patients": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "tenant_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "mrn",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "full_name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "dob",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "gender",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "blood_group",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "phone",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "email",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "address",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "allergies",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "chronic_conditions",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "medical_history",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "created_by",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "permission_actions": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "key",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "udt": "text"
+    }
+  ],
+  "permissions": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "module_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "action_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "key",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "prescriptions": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "appointment_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "patient_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "prescribed_by",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "diagnosis",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "medications",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "public_site_content": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "key",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "content",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "refresh_tokens": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "token_hash",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "expires_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "revoked_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "user_agent",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "ip",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "role_permissions": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "role_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "permission_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "granted_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "role_templates": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "tenant_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "keyword",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "module",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "action",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "is_wildcard",
+      "type": "boolean",
+      "udt": "bool"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "roles": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "tenant_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "is_system_role",
+      "type": "boolean",
+      "udt": "bool"
+    },
+    {
+      "name": "created_by",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "staff_profiles": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "department_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "specialty",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "license_no",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "stock_movements": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "tenant_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "inventory_item_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "type",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "quantity_in",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "quantity_out",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "balance",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "batch_number",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "handled_by",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "import_batch_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "subscription_invoices": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "invoice_number",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "tenant_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "plan_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "status",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "currency",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "billing_period",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "period_start",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "period_end",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "invoice_date",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "due_date",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "base_amount",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "tax_rate",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "cgst_amount",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "sgst_amount",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "igst_amount",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "total_amount",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "amount_in_words",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "sac_code",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "payment_method",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "payment_reference",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "terms",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "notes",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "subscription_plans": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "code",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "price_inr",
+      "type": "double precision",
+      "udt": "float8"
+    },
+    {
+      "name": "billing_period",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "description",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "features",
+      "type": "jsonb",
+      "udt": "jsonb"
+    },
+    {
+      "name": "is_active",
+      "type": "boolean",
+      "udt": "bool"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "tenant_modules": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "tenant_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "module_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "is_enabled",
+      "type": "boolean",
+      "udt": "bool"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "tenants": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "subdomain",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "domain",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "plan",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "status",
+      "type": "USER-DEFINED",
+      "udt": "TenantStatus"
+    },
+    {
+      "name": "region",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "contactEmail",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "clinic_category_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "rejection_reason",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "plan_id",
+      "type": "text",
+      "udt": "text"
+    }
+  ],
+  "user_roles": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "user_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "role_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "assigned_by",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "assigned_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "users": [
+    {
+      "name": "id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "tenant_id",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "email",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "password_hash",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "full_name",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "phone",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "avatar",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "status",
+      "type": "USER-DEFINED",
+      "udt": "UserStatus"
+    },
+    {
+      "name": "user_type",
+      "type": "USER-DEFINED",
+      "udt": "UserType"
+    },
+    {
+      "name": "two_factor_enabled",
+      "type": "boolean",
+      "udt": "bool"
+    },
+    {
+      "name": "last_login_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ],
+  "xray_records": [
+    {
+      "name": "id",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "tenant_id",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "patient_id",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "code",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "type",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "region",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "acquisition_date",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "radiologist",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "findings",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "status",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "aspect",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "file_name",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "file_mime",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "file_size",
+      "type": "integer",
+      "udt": "int4"
+    },
+    {
+      "name": "file_data",
+      "type": "bytea",
+      "udt": "bytea"
+    },
+    {
+      "name": "file_path",
+      "type": "text",
+      "udt": "text"
+    },
+    {
+      "name": "created_by_id",
+      "type": "character varying",
+      "udt": "varchar"
+    },
+    {
+      "name": "created_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    },
+    {
+      "name": "updated_at",
+      "type": "timestamp without time zone",
+      "udt": "timestamp"
+    }
+  ]
+}

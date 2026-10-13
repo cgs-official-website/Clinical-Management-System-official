@@ -116,7 +116,7 @@ export class PharmacyService {
   static async resolveTenantId(tenantId) {
     let targetTenantId = tenantId
     if (!targetTenantId || targetTenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     return targetTenantId
@@ -309,17 +309,17 @@ export class PharmacyService {
 
     // Fetch existing inventory for duplicate checks in this tenant
     const existingItems = await prisma.inventoryItem.findMany({
-      where: targetTenantId ? { tenantId: targetTenantId } : {},
+      where: targetTenantId ? { clinicId: targetTenantId } : {},
       select: {
         id: true,
         itemCode: true,
         name: true,
         batchNumber: true,
         stockQuantity: true,
-        unitCost: true,
-        sellingPrice: true,
+        unitCostAmount: true,
+        sellingPriceAmount: true,
         expiryDate: true,
-        schedule: true
+        regulatorySchedule: true
       }
     })
 
@@ -601,31 +601,31 @@ export class PharmacyService {
               where: { id: existingId },
               data: {
                 stockQuantity: newStockQty,
-                unitCost: data.unitCost || existing.unitCost,
-                sellingPrice: data.sellingPrice || existing.sellingPrice,
+                unitCostAmount: data.unitCost || existing.unitCostAmount || existing.unitCost,
+                sellingPriceAmount: data.sellingPrice || existing.sellingPriceAmount || existing.sellingPrice,
                 expiryDate: data.expiryDate ? new Date(data.expiryDate) : existing.expiryDate,
-                mfgDate: data.mfgDate ? new Date(data.mfgDate) : existing.mfgDate,
-                schedule: data.schedule || existing.schedule,
+                manufacturedDate: data.mfgDate ? new Date(data.mfgDate) : existing.manufacturedDate,
+                regulatorySchedule: data.schedule || existing.regulatorySchedule || existing.schedule,
                 brandName: data.brandName || existing.brandName,
-                prescriptionRequired: data.prescriptionRequired,
+                isPrescriptionRequired: Boolean(data.prescriptionRequired),
                 importBatchId,
-                importedBy: actorId || 'Admin',
+                importedByUserId: actorId || 'Admin',
                 importedAt: now,
                 status: newStockQty > existing.minReorderThreshold ? 'Optimal' : 'Low Stock'
               }
             })
 
             // Create Stock Movement Log Entry
-            await tx.stockMovement.create({
+            await tx.inventoryStockMovement.create({
               data: {
-                tenantId: targetTenantId,
+                clinicId: targetTenantId,
                 inventoryItemId: updated.id,
-                type: 'Bulk Import',
+                movementType: 'Bulk Import',
                 quantityIn: data.stockQuantity || 0,
                 quantityOut: 0,
-                balance: newStockQty,
+                balanceQuantity: newStockQty,
                 batchNumber: data.batchNumber,
-                handledBy: actorId || 'Admin',
+                handledByUserId: actorId || 'Admin',
                 importBatchId,
                 notes: `Bulk import update batch ${importBatchId}. Stock increased by ${data.stockQuantity}.`
               }
@@ -644,7 +644,7 @@ export class PharmacyService {
 
         const newItem = await tx.inventoryItem.create({
           data: {
-            tenantId: targetTenantId,
+            clinicId: targetTenantId,
             itemCode,
             name: data.name,
             brandName: data.brandName,
@@ -653,40 +653,40 @@ export class PharmacyService {
             strength: data.strength,
             manufacturer: data.manufacturer,
             batchNumber: data.batchNumber,
-            mfgDate: data.mfgDate ? new Date(data.mfgDate) : null,
+            manufacturedDate: data.mfgDate ? new Date(data.mfgDate) : null,
             expiryDate: data.expiryDate ? new Date(data.expiryDate) : null,
-            schedule: data.schedule || 'OTC',
+            regulatorySchedule: data.schedule || 'OTC',
             hsnCode: data.hsnCode,
-            unit: data.unit || 'Units',
+            unitOfMeasure: data.unit || 'Units',
             packSize: data.packSize,
-            unitCost: data.unitCost || 0,
-            sellingPrice: data.sellingPrice || 0,
-            gstRate: data.gstRate ?? 12,
+            unitCostAmount: data.unitCost || 0,
+            sellingPriceAmount: data.sellingPrice || 0,
+            gstRatePercent: data.gstRate ?? 12,
             stockQuantity: data.stockQuantity || 0,
             minReorderThreshold: data.minReorderThreshold || 50,
             supplierName: data.supplierName,
             storageCondition: data.storageCondition,
             prescriptionRequired: data.prescriptionRequired ?? false,
-            mfrLicenseNumber: data.mfrLicenseNumber,
-            dpcoCeilingPrice: data.dpcoCeilingPrice,
+            manufacturerLicenseNumber: data.mfrLicenseNumber,
+            dpcoCeilingPriceAmount: data.dpcoCeilingPrice,
             importBatchId,
-            importedBy: actorId || 'Admin',
+            importedByUserId: actorId || 'Admin',
             importedAt: now,
             status: (data.stockQuantity || 0) > (data.minReorderThreshold || 50) ? 'Optimal' : 'Low Stock'
           }
         })
 
         // Initial Stock Movement Log entry
-        await tx.stockMovement.create({
+        await tx.inventoryStockMovement.create({
           data: {
-            tenantId: targetTenantId,
+            clinicId: targetTenantId,
             inventoryItemId: newItem.id,
-            type: 'Bulk Import',
+            movementType: 'Bulk Import',
             quantityIn: data.stockQuantity || 0,
             quantityOut: 0,
-            balance: data.stockQuantity || 0,
+            balanceQuantity: data.stockQuantity || 0,
             batchNumber: data.batchNumber,
-            handledBy: actorId || 'Admin',
+            handledByUserId: actorId || 'Admin',
             importBatchId,
             notes: `Initial stock opening via Bulk Import batch ${importBatchId}`
           }
@@ -698,7 +698,7 @@ export class PharmacyService {
 
     // Audit Log for compliance traceability
     await AuditService.log({
-      tenantId: targetTenantId,
+      clinicId: targetTenantId,
       actorUserId: actorId || null,
       action: 'PHARMACY_INVENTORY_BULK_IMPORT',
       entityType: 'InventoryItem',

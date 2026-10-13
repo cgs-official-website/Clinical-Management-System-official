@@ -150,7 +150,7 @@ async function runVerification() {
     },
   }).catch(() => {})
 
-  await prisma.tenant.deleteMany({
+  await prisma.clinic.deleteMany({
     where: {
       subdomain: { in: [`pending-${timestamp}`, `approved-${timestamp}`, `rejected-${timestamp}`] },
     },

@@ -21,7 +21,6 @@ import {
   Menu,
   X,
   Hospital,
-  Sparkles,
   AlertTriangle,
   FolderTree,
   Smile,
@@ -72,7 +71,6 @@ const ICON_MAP = {
   Pill,
   CreditCard,
   Boxes,
-  Sparkles,
   BarChart3,
   KeyRound,
   ShieldCheck,
@@ -236,6 +234,17 @@ export const AppShell = () => {
 
   const { permittedModules, hasZeroPermissions, isSuperadmin: isRbacSuper } = useRolePermissions()
 
+  // Clinic Category resolution: dynamically identify chosen category
+  const resolvedCategoryName =
+    user?.clinicCategoryName ||
+    user?.clinicCategory?.name ||
+    user?.tenant?.clinicCategoryName ||
+    user?.tenant?.clinicCategory?.name ||
+    (permittedModules.some((m) => m.route?.includes('/dental/')) ? 'Dentist' :
+     permittedModules.some((m) => m.route?.includes('/cardio/')) ? 'Cardiology' :
+     permittedModules.some((m) => m.route?.includes('/physio/')) ? 'Physiotherapy' :
+     (user?.clinicName ? 'General Care' : null))
+
   // Dynamic Navigation: Render sidebar/menu ONLY for modules with can_view = true from the Permission API
   let navItems = []
 
@@ -300,11 +309,12 @@ export const AppShell = () => {
     <div className="min-h-screen bg-bg flex flex-col md:flex-row antialiased">
       {/* Desktop Sidebar: Hidden below md */}
       <aside
-        className={`hidden md:flex flex-col border-r border-border bg-surface/70 backdrop-blur-xl transition-all duration-300 z-30 shrink-0 select-none ${sidebarCollapsed ? 'w-20' : 'w-64'
-          }`}
+        className={`hidden md:flex flex-col h-screen max-h-screen sticky top-0 border-r border-border bg-surface/80 backdrop-blur-xl transition-all duration-300 z-30 shrink-0 select-none ${
+          sidebarCollapsed ? 'w-20' : 'w-64'
+        }`}
       >
         {/* Sidebar Header */}
-        <div className={`h-16 flex items-center border-b border-border ${sidebarCollapsed ? 'px-2 justify-between' : 'px-4 justify-between'}`}>
+        <div className={`h-16 flex items-center border-b border-border shrink-0 ${sidebarCollapsed ? 'px-2 justify-between' : 'px-4 justify-between'}`}>
           {!sidebarCollapsed ? (
             <div className="flex items-center gap-2.5 overflow-hidden">
               <div className="w-8 h-8 rounded-xl bg-surface border border-primary/20 p-1 flex items-center justify-center shrink-0 shadow-sm">
@@ -352,19 +362,26 @@ export const AppShell = () => {
 
         {/* Tenant/Clinic info pill */}
         {!sidebarCollapsed && user?.clinicName && (
-          <div className="p-3 mx-3 my-3 rounded-xl bg-primary/5 border border-primary/15 flex items-center gap-2.5">
+          <div className="p-3 mx-3 my-3 rounded-xl bg-primary/5 border border-primary/15 flex items-center gap-2.5 shrink-0">
             <Building2 className="w-4 h-4 text-primary shrink-0" />
             <div className="min-w-0 flex-1">
-              <div className="text-[11px] font-semibold text-text-primary truncate">
+              <div className="text-[11px] font-semibold text-text-primary truncate" title={user.clinicName}>
                 {user.clinicName}
               </div>
-              <div className="text-[10px] text-text-secondary truncate">Active Workspace</div>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span
+                  className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-primary/15 text-primary border border-primary/20 truncate uppercase tracking-wider"
+                  title={`Clinic Specialty: ${resolvedCategoryName || 'Active Workspace'}`}
+                >
+                  {resolvedCategoryName || 'Active Workspace'}
+                </span>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Navigation Links */}
-        <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+        {/* Navigation Links with Smooth Scrolling */}
+        <nav className="flex-1 min-h-0 px-3 py-3 space-y-1 overflow-y-auto overscroll-contain">
           {navItems.map((item) => {
             const Icon = item.icon
             return (
@@ -394,8 +411,8 @@ export const AppShell = () => {
           )}
         </nav>
 
-        {/* Sidebar Footer User Area */}
-        <div className="border-t border-border bg-surface/40">
+        {/* Sidebar Footer User Area - Pinned at bottom */}
+        <div className="shrink-0 mt-auto border-t border-border bg-surface/90 backdrop-blur-md">
           {sidebarCollapsed ? (
             <div className="flex flex-col items-center gap-2.5 py-3 px-2">
               <div
@@ -414,24 +431,30 @@ export const AppShell = () => {
               </button>
             </div>
           ) : (
-            <div className="p-2.5">
-              <div className="p-2 rounded-2xl bg-surface/80 border border-border/70 hover:border-border transition-all duration-200 shadow-xs flex items-center justify-between gap-2.5">
+            <div className="p-3">
+              <div className="p-2.5 rounded-xl bg-surface/90 border border-border/80 hover:border-border transition-all duration-200 shadow-xs flex items-center justify-between gap-2.5">
                 <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                  <Avatar src={user?.avatar} name={user?.name} size="sm" status="online" />
+                  <div className="shrink-0">
+                    <Avatar src={user?.avatar} name={user?.name} size="sm" status="online" />
+                  </div>
                   <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold text-text-primary truncate">{user?.name}</div>
+                    <div className="text-xs font-bold text-text-primary truncate" title={user?.name}>
+                      {user?.name || 'User'}
+                    </div>
                     <div
-                      className="text-[10px] text-primary font-semibold truncate"
+                      className="text-[10px] text-primary font-semibold truncate leading-tight mt-0.5"
                       title={getEffectiveRoleTitle(user)}
                     >
                       {getEffectiveRoleTitle(user)}
                     </div>
-                    <div className="text-[9px] text-text-secondary truncate">{user?.email}</div>
+                    <div className="text-[10px] text-text-secondary truncate leading-tight mt-0.5" title={user?.email}>
+                      {user?.email || ''}
+                    </div>
                   </div>
                 </div>
                 <button
                   onClick={logout}
-                  className="p-2 rounded-xl text-text-secondary hover:text-danger hover:bg-danger/10 active:scale-95 transition-all duration-150 shrink-0"
+                  className="p-2 rounded-lg text-text-secondary hover:text-danger hover:bg-danger/10 active:scale-95 transition-all duration-150 shrink-0"
                   title="Sign out"
                   aria-label="Sign out"
                 >
@@ -467,6 +490,13 @@ export const AppShell = () => {
                 {location.pathname.split('/')[3]?.replace(/-/g, ' ') || 'Dashboard'}
               </span>
             </div>
+
+            {/* Specialty Category Badge */}
+            {resolvedCategoryName && !isSuperadmin && (
+              <div className="hidden sm:flex items-center px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[11px] font-bold tracking-tight shrink-0 shadow-2xs">
+                <span className="capitalize">{resolvedCategoryName}</span>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
@@ -487,7 +517,7 @@ export const AppShell = () => {
               onClick={() => setMobileMenuOpen(false)}
             />
             <div className="relative w-72 bg-surface border-r border-border h-full flex flex-col p-4 z-10 shadow-2xl">
-              <div className="flex items-center justify-between pb-4 border-b border-border mb-4">
+              <div className="flex items-center justify-between pb-4 border-b border-border mb-4 shrink-0">
                 <div className="flex items-center gap-2.5 min-w-0">
                   <div className="w-7 h-7 rounded-lg bg-surface border border-primary/20 p-0.5 flex items-center justify-center shrink-0 shadow-sm">
                     <img
@@ -517,7 +547,7 @@ export const AppShell = () => {
                 </button>
               </div>
 
-              <nav className="flex-1 space-y-1 overflow-y-auto">
+              <nav className="flex-1 min-h-0 space-y-1 overflow-y-auto overscroll-contain">
                 {navItems.map((item) => {
                   const Icon = item.icon
                   return (
@@ -547,7 +577,7 @@ export const AppShell = () => {
                 )}
               </nav>
 
-              <div className="pt-3 border-t border-border">
+              <div className="pt-3 border-t border-border shrink-0 mt-auto">
                 <div className="p-2.5 rounded-2xl bg-surface/90 border border-border/70 flex items-center justify-between gap-2.5 shadow-xs">
                   <div className="flex items-center gap-2.5 min-w-0 flex-1">
                     <Avatar src={user?.avatar} name={user?.name} size="sm" status="online" />

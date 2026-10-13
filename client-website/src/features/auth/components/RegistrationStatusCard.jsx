@@ -12,7 +12,6 @@ import {
   Headphones,
   ArrowRight,
   ChevronRight,
-  Sparkles,
   Calendar,
 } from 'lucide-react'
 import { Button } from '../../../components/ui/Button'

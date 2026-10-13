@@ -6,7 +6,7 @@ async function runTest() {
   console.log('🧪 Starting Pharmacy Bulk Import Verification Test...')
 
   // 1. Resolve tenant
-  const tenant = await prisma.tenant.findFirst()
+  const tenant = await prisma.clinic.findFirst()
   if (!tenant) {
     console.error('❌ No tenant found in database')
     process.exit(1)
@@ -145,7 +145,7 @@ async function runTest() {
   console.log('✅ Successfully committed 7 valid items to database!')
 
   // Check stock movement records in DB
-  const movements = await prisma.stockMovement.findMany({
+  const movements = await prisma.inventoryStockMovement.findMany({
     where: { importBatchId: commitResult.importBatchId }
   })
   console.log(`✅ Verified ${movements.length} StockMovement records logged with import batch ${commitResult.importBatchId}`)
@@ -193,7 +193,7 @@ async function runTest() {
   // Cleanup test records
   console.log('\n--- Step 6: Cleaning up test data ---')
   const testBatchNumbers = testRows.map(r => r[6])
-  await prisma.stockMovement.deleteMany({
+  await prisma.inventoryStockMovement.deleteMany({
     where: { batchNumber: { in: testBatchNumbers } }
   })
   await prisma.inventoryItem.deleteMany({

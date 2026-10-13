@@ -3,7 +3,6 @@ import {
   Activity,
   ShieldCheck,
   Zap,
-  Sparkles,
   Building2,
   Lock,
   Stethoscope,

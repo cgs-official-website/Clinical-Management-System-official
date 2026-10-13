@@ -9,6 +9,7 @@ import { env } from '../config/env.js'
 import { RbacService } from './rbac.service.js'
 import { RbacModuleService } from './rbacModule.service.js'
 import { UnauthorizedError, NotFoundError, TenantPendingApprovalError, TenantRejectedError } from '../utils/errors.js'
+import { logger } from '../utils/logger.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -139,7 +140,11 @@ export class AuthService {
       const dbPromise = prisma.user.findUnique({
         where: { email: normalizedEmail },
         include: {
-          tenant: true,
+          tenant: {
+            include: {
+              clinicCategory: true,
+            },
+          },
           userRoles: {
             include: {
               role: true,
@@ -234,8 +239,30 @@ export class AuthService {
         isAdmin,
         tenantId: dbUser.tenantId,
         clinicName: dbUser.tenant ? dbUser.tenant.name : (isSuperadmin ? 'Global Platform Operations' : 'Active Workspace'),
+        clinicCategoryId: dbUser.tenant?.clinicCategoryId || null,
+        clinicCategoryName: dbUser.tenant?.clinicCategory?.name || null,
+        clinicCategory: dbUser.tenant?.clinicCategory
+          ? {
+              id: dbUser.tenant.clinicCategory.id,
+              name: dbUser.tenant.clinicCategory.name,
+              description: dbUser.tenant.clinicCategory.description,
+            }
+          : null,
         tenant: dbUser.tenant
-          ? { id: dbUser.tenant.id, name: dbUser.tenant.name, subdomain: dbUser.tenant.subdomain }
+          ? {
+              id: dbUser.tenant.id,
+              name: dbUser.tenant.name,
+              subdomain: dbUser.tenant.subdomain,
+              clinicCategoryId: dbUser.tenant.clinicCategoryId,
+              clinicCategoryName: dbUser.tenant.clinicCategory?.name,
+              clinicCategory: dbUser.tenant.clinicCategory
+                ? {
+                    id: dbUser.tenant.clinicCategory.id,
+                    name: dbUser.tenant.clinicCategory.name,
+                    description: dbUser.tenant.clinicCategory.description,
+                  }
+                : null,
+            }
           : null,
         roles,
         permissions,
@@ -417,7 +444,11 @@ export class AuthService {
             ]
           },
           include: {
-            tenant: true,
+            tenant: {
+              include: {
+                clinicCategory: true,
+              },
+            },
             userRoles: {
               include: {
                 role: true,
@@ -454,8 +485,30 @@ export class AuthService {
           avatar: user.avatar,
           tenantId: user.tenantId,
           clinicName: user.tenant ? user.tenant.name : (isSuperadmin ? 'Global Platform Operations' : 'Active Workspace'),
+          clinicCategoryId: user.tenant?.clinicCategoryId || null,
+          clinicCategoryName: user.tenant?.clinicCategory?.name || null,
+          clinicCategory: user.tenant?.clinicCategory
+            ? {
+                id: user.tenant.clinicCategory.id,
+                name: user.tenant.clinicCategory.name,
+                description: user.tenant.clinicCategory.description,
+              }
+            : null,
           tenant: user.tenant
-            ? { id: user.tenant.id, name: user.tenant.name, subdomain: user.tenant.subdomain }
+            ? {
+                id: user.tenant.id,
+                name: user.tenant.name,
+                subdomain: user.tenant.subdomain,
+                clinicCategoryId: user.tenant.clinicCategoryId,
+                clinicCategoryName: user.tenant.clinicCategory?.name,
+                clinicCategory: user.tenant.clinicCategory
+                  ? {
+                      id: user.tenant.clinicCategory.id,
+                      name: user.tenant.clinicCategory.name,
+                      description: user.tenant.clinicCategory.description,
+                    }
+                  : null,
+              }
             : null,
           userType: user.userType,
           role: primaryRole,

@@ -26,15 +26,15 @@ export class SuperadminService {
       totalInvoices,
       recentTenants
     ] = await Promise.all([
-      prisma.tenant.count().catch(() => 0),
-      prisma.tenant.count({ where: { isActive: true } }).catch(() => 0),
+      prisma.clinic.count().catch(() => 0),
+      prisma.clinic.count({ where: { isActive: true } }).catch(() => 0),
       prisma.user.count().catch(() => 0),
       prisma.patient.count().catch(() => 0),
       prisma.invoice.findMany({
         where: { status: 'PAID' },
-        select: { amount: true }
+        select: { totalAmount: true }
       }).catch(() => []),
-      prisma.tenant.findMany({
+      prisma.clinic.findMany({
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -49,7 +49,7 @@ export class SuperadminService {
     const totalRevenueInINR = totalInvoices.reduce((acc, inv) => acc + (inv.amount || 0), 0)
 
     // Calculate calculated MRR estimate from active tenants (Tiered: Starter ₹12,000, Pro ₹28,000, Enterprise ₹65,000)
-    const activeTenantsList = await prisma.tenant.findMany({
+    const activeTenantsList = await prisma.clinic.findMany({
       where: { isActive: true },
       select: { plan: true }
     }).catch(() => [])
@@ -107,8 +107,8 @@ export class SuperadminService {
     const skip = (Math.max(1, page) - 1) * limit
 
     const [total, tenants] = await Promise.all([
-      prisma.tenant.count({ where }).catch(() => 0),
-      prisma.tenant.findMany({
+      prisma.clinic.count({ where }).catch(() => 0),
+      prisma.clinic.findMany({
         where,
         skip,
         take: limit,
@@ -157,7 +157,7 @@ export class SuperadminService {
     const cleanSlug = (slug || name.toLowerCase().replace(/[^a-z0-9]/g, '-')).toLowerCase()
 
     // Check slug uniqueness
-    const existing = await prisma.tenant.findUnique({ where: { slug: cleanSlug } })
+    const existing = await prisma.clinic.findUnique({ where: { slug: cleanSlug } })
     if (existing) {
       throw new ConflictError(`A clinic tenant with slug "${cleanSlug}" already exists`)
     }
@@ -171,7 +171,7 @@ export class SuperadminService {
     const passwordHash = await AuthService.hashPassword(adminPassword || 'Admin@12345')
 
     // Create tenant and initial admin
-    const tenant = await prisma.tenant.create({
+    const tenant = await prisma.clinic.create({
       data: {
         name,
         slug: cleanSlug,
@@ -184,7 +184,7 @@ export class SuperadminService {
 
     const adminUser = await prisma.user.create({
       data: {
-        tenantId: tenant.id,
+        clinicId: tenant.id,
         name: adminName || `${name} Admin`,
         email: adminEmail.toLowerCase().trim(),
         passwordHash,
@@ -198,7 +198,7 @@ export class SuperadminService {
     await AdminService.seedTenantRoles(tenant.id)
 
     await AuditService.log({
-      tenantId: tenant.id,
+      clinicId: tenant.id,
       actorId,
       action: 'TENANT_CREATED',
       entityType: 'Tenant',
@@ -230,7 +230,7 @@ export class SuperadminService {
     }
 
     const nextStatus = 'SUSPENDED'
-    const updated = await prisma.tenant.update({
+    const updated = await prisma.clinic.update({
       where: { id: tenantId },
       data: { status: nextStatus }
     })
@@ -253,7 +253,7 @@ export class SuperadminService {
    * Transactionally approve a tenant clinic and seed role templates
    */
   static async approveTenantTransaction(tenantId, actorId = null) {
-    const tenant = await prisma.tenant.findUnique({
+    const tenant = await prisma.clinic.findUnique({
       where: { id: tenantId },
       include: { clinicCategory: true, users: true }
     })
@@ -525,7 +525,7 @@ export class SuperadminService {
         })
 
         await tx.user.updateMany({
-          where: { tenantId },
+          where: { clinicId: tenantId },
           data: { status: 'ACTIVE' },
         })
 
@@ -592,10 +592,10 @@ export class SuperadminService {
    * Reject a pending tenant registration with required rejection reason
    */
   static async rejectTenant(tenantId, reason = 'Registration criteria not met', actorId = null) {
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
+    const tenant = await prisma.clinic.findUnique({ where: { id: tenantId } })
     if (!tenant) throw new NotFoundError('Tenant not found')
 
-    const updated = await prisma.tenant.update({
+    const updated = await prisma.clinic.update({
       where: { id: tenantId },
       data: {
         status: 'REJECTED',
@@ -640,13 +640,13 @@ export class SuperadminService {
    * Decommission a tenant clinic
    */
   static async decommissionTenant(tenantId, actorId = null) {
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
+    const tenant = await prisma.clinic.findUnique({ where: { id: tenantId } })
     if (!tenant) {
       throw new NotFoundError('Tenant not found')
     }
 
-    await prisma.tenant.delete({ where: { id: tenantId } }).catch(async () => {
-      await prisma.tenant.update({
+    await prisma.clinic.delete({ where: { id: tenantId } }).catch(async () => {
+      await prisma.clinic.update({
         where: { id: tenantId },
         data: { status: 'DECOMMISSIONED' }
       })

@@ -12,6 +12,7 @@ import { notify } from '../../components/ui/Toast'
 export const BillingPage = () => {
   const queryClient = useQueryClient()
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
   const [formData, setFormData] = useState({
     patientName: 'Sophia Maria Gonzalez',
     amount: 250.0,
@@ -23,7 +24,7 @@ export const BillingPage = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['staff', 'billing'],
     queryFn: async () => {
-      const res = await api.get('/api/staff/billing')
+      const res = await api.get('/api/staff/billing?limit=100')
       return res.data
     },
   })
@@ -36,12 +37,24 @@ export const BillingPage = () => {
     onSuccess: (newInv) => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'billing'] })
       setIsInvoiceOpen(false)
-      notify.success(`Invoice ${newInv.invoiceNumber} recorded!`)
+      const invNum = newInv.invoiceNumber || newInv.data?.invoiceNumber || 'New'
+      notify.success(`Invoice ${invNum} recorded!`)
     },
-    onError: () => notify.error('Failed to create invoice.'),
+    onError: (err) => {
+      notify.error(err.response?.data?.message || err.message || 'Failed to create invoice.')
+    },
   })
 
-  const invoices = Array.isArray(data) ? data : data?.invoices || data?.data || []
+  const rawInvoices = Array.isArray(data) ? data : data?.invoices || data?.data || []
+  const invoices = rawInvoices.filter((inv) => {
+    if (!searchTerm) return true
+    const term = searchTerm.toLowerCase()
+    return (
+      (inv.invoiceNumber || '').toLowerCase().includes(term) ||
+      (inv.patientName || '').toLowerCase().includes(term) ||
+      (inv.paymentStatus || inv.status || '').toLowerCase().includes(term)
+    )
+  })
 
   const columns = [
     {
@@ -51,7 +64,9 @@ export const BillingPage = () => {
       render: (val, row) => (
         <div>
           <div className="font-mono font-bold text-xs text-primary">{val}</div>
-          <div className="text-[11px] text-text-secondary">{row.date}</div>
+          <div className="text-[11px] text-text-secondary">
+            {row.createdAt ? new Date(row.createdAt).toLocaleDateString() : row.date || 'Today'}
+          </div>
         </div>
       ),
     },
@@ -64,26 +79,29 @@ export const BillingPage = () => {
     {
       key: 'amount',
       label: 'Total Fee',
-      render: (val) => <span className="font-bold text-xs">₹{val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>,
+      render: (val) => <span className="font-bold text-xs">₹{Number(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>,
     },
     {
       key: 'insuranceCoverage',
       label: 'Insurance Paid',
-      render: (val) => <span className="text-xs text-emerald-500 font-semibold">₹{val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>,
+      render: (val) => <span className="text-xs text-emerald-500 font-semibold">₹{Number(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>,
     },
     {
       key: 'patientResponsibility',
       label: 'Patient Copay',
-      render: (val) => <span className="text-xs font-semibold">₹{val.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>,
+      render: (val) => <span className="text-xs font-semibold">₹{Number(val || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>,
     },
     {
       key: 'status',
       label: 'Payment Status',
-      render: (val) => (
-        <Badge variant={val === 'Paid' ? 'success' : 'warning'} size="sm" dot>
-          {val}
-        </Badge>
-      ),
+      render: (val) => {
+        const isPaid = (val || '').toUpperCase() === 'PAID'
+        return (
+          <Badge variant={isPaid ? 'success' : 'warning'} size="sm" dot>
+            {val || 'PENDING'}
+          </Badge>
+        )
+      },
     },
   ]
 
@@ -115,6 +133,8 @@ export const BillingPage = () => {
         data={invoices}
         isLoading={isLoading}
         searchPlaceholder="Search invoices..."
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
       />
 
       {/* Generate Invoice Modal */}

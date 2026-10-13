@@ -7,7 +7,6 @@ import {
   Trash2,
   Edit2,
   RotateCcw,
-  Sparkles,
   Search,
   Shield,
   CheckCircle2,
@@ -322,7 +321,7 @@ export const RoleTemplatesPage = () => {
       {/* Explanation Guide Banner */}
       <div className="glass-panel p-4 rounded-2xl border border-border flex flex-col md:flex-row items-start gap-4">
         <div className="w-9 h-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 mt-0.5">
-          <Sparkles className="w-5 h-5" />
+          <Layers className="w-5 h-5" />
         </div>
         <div className="space-y-1 text-xs text-text-secondary">
           <div className="font-bold text-text-primary text-sm flex items-center gap-2">

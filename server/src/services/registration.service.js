@@ -132,7 +132,7 @@ export class RegistrationService {
     try {
       const dbCheckPromise = Promise.all([
         prisma.user.findUnique({ where: { email: normalizedEmail } }),
-        prisma.tenant.findUnique({ where: { subdomain: cleanSubdomain } }),
+        prisma.clinic.findUnique({ where: { subdomain: cleanSubdomain } }),
       ])
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('DB_TIMEOUT')), 8000)
@@ -176,7 +176,7 @@ export class RegistrationService {
     // 5. Insert into database (Prisma / PostgreSQL) if reachable
     if (dbConnected) {
       try {
-        const tenant = await prisma.tenant.create({
+        const tenant = await prisma.clinic.create({
           data: {
             name: clinicName,
             subdomain: cleanSubdomain,
@@ -191,7 +191,7 @@ export class RegistrationService {
 
         await prisma.user.create({
           data: {
-            tenantId: tenant.id,
+            clinicId: tenant.id,
             email: normalizedEmail,
             passwordHash,
             fullName: adminName,
@@ -219,7 +219,7 @@ export class RegistrationService {
     // 7. Create persistent PostgreSQL notification for Superadmin
     try {
       await NotificationService.createNotification({
-        type: 'CLINIC_REGISTRATION_PENDING',
+        notificationType: 'CLINIC_REGISTRATION_PENDING',
         title: `New Clinic Registration: ${clinicName}`,
         message: `${adminName} submitted a new clinic registration for "${clinicName}" (${cleanSubdomain}.clinic.io).`,
         entityType: 'REGISTRATION',
@@ -281,7 +281,7 @@ export class RegistrationService {
       const targetSubdomain = matchedReg?.subdomain || cleanId
       const targetEmail = matchedReg?.email ? matchedReg.email.toLowerCase() : cleanId.toLowerCase()
 
-      const tenant = await prisma.tenant.findFirst({
+      const tenant = await prisma.clinic.findFirst({
         where: {
           OR: [
             { id: targetTenantId },
@@ -316,7 +316,7 @@ export class RegistrationService {
               userType: 'ADMIN',
               isAdmin: true,
               isSuperadmin: false,
-              tenantId: tenant.id,
+              clinicId: tenant.id,
               clinicName: tenant.name,
               tenant: { id: tenant.id, name: tenant.name, subdomain: tenant.subdomain },
               roles,
@@ -329,7 +329,7 @@ export class RegistrationService {
             status: 'approved',
             registration: {
               id: cleanId,
-              tenantId: tenant.id,
+              clinicId: tenant.id,
               clinicName: tenant.name,
               subdomain: tenant.subdomain,
               adminName: adminUser?.fullName || 'Clinic Administrator',
@@ -353,7 +353,7 @@ export class RegistrationService {
             rejectedAt: tenant.updatedAt || new Date().toISOString(),
             registration: {
               id: cleanId,
-              tenantId: tenant.id,
+              clinicId: tenant.id,
               clinicName: tenant.name,
               subdomain: tenant.subdomain,
               adminName: adminUser?.fullName || 'Clinic Administrator',
@@ -368,7 +368,7 @@ export class RegistrationService {
             status: 'pending',
             registration: {
               id: cleanId,
-              tenantId: tenant.id,
+              clinicId: tenant.id,
               clinicName: tenant.name,
               subdomain: tenant.subdomain,
               adminName: adminUser?.fullName || 'Clinic Administrator',
@@ -463,7 +463,7 @@ export class RegistrationService {
     const pending = [...(registry.pending || [])]
 
     try {
-      const pendingTenants = await prisma.tenant.findMany({
+      const pendingTenants = await prisma.clinic.findMany({
         where: { status: { in: ['PENDING', 'SUSPENDED'] } },
         include: { users: true, clinicCategory: true },
         take: 50,
@@ -505,7 +505,7 @@ export class RegistrationService {
           })
           if (!existingNotif) {
             await NotificationService.createNotification({
-              type: 'CLINIC_REGISTRATION_PENDING',
+              notificationType: 'CLINIC_REGISTRATION_PENDING',
               title: `New Clinic Registration: ${item.clinicName}`,
               message: `${item.adminName} submitted a new clinic registration for "${item.clinicName}" (${item.subdomain}.clinic.io).`,
               entityType: 'REGISTRATION',
@@ -549,7 +549,7 @@ export class RegistrationService {
     // Synchronize or activate in PostgreSQL via transaction
     try {
       const targetTenantId = reg?.tenantId || id
-      const existingTenant = await prisma.tenant.findUnique({
+      const existingTenant = await prisma.clinic.findUnique({
         where: { id: targetTenantId },
       })
 
@@ -557,7 +557,7 @@ export class RegistrationService {
         await SuperadminService.approveTenantTransaction(targetTenantId)
       } else if (reg) {
         // Provision directly into PostgreSQL if not yet created
-        const newTenant = await prisma.tenant.create({
+        const newTenant = await prisma.clinic.create({
           data: {
             name: reg.clinicName,
             subdomain: reg.subdomain,
@@ -572,7 +572,7 @@ export class RegistrationService {
 
         await prisma.user.create({
           data: {
-            tenantId: newTenant.id,
+            clinicId: newTenant.id,
             email: reg.email,
             passwordHash: reg.passwordHash,
             fullName: reg.adminName,
@@ -677,7 +677,7 @@ export class RegistrationService {
       })
     } else {
       // Find tenant if clinicName or default
-      const tenant = await prisma.tenant.findFirst({
+      const tenant = await prisma.clinic.findFirst({
         where: clinicName ? { name: { contains: clinicName, mode: 'insensitive' } } : {}
       })
       user = await prisma.user.create({
@@ -701,11 +701,11 @@ export class RegistrationService {
     if (role && user.tenantId) {
       const resolvedRole = await AdminService.resolveRoleForTenant(role, user.tenantId)
       if (resolvedRole) {
-        const hasRole = await prisma.userRole.findFirst({
+        const hasRole = await prisma.userRoleAssignment.findFirst({
           where: { userId: user.id, roleId: resolvedRole.id }
         })
         if (!hasRole) {
-          await prisma.userRole.create({
+          await prisma.userRoleAssignment.create({
             data: { userId: user.id, roleId: resolvedRole.id }
           }).catch(() => {})
         }

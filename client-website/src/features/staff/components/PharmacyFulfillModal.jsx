@@ -8,10 +8,8 @@ import {
   Hash,
   User,
   ShieldCheck,
-  AlertCircle,
   FileCheck,
-  Printer,
-  Sparkles
+  Printer
 } from 'lucide-react'
 import { api } from '../../../lib/api'
 import { Modal } from '../../../components/ui/Modal'

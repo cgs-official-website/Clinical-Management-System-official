@@ -11,7 +11,6 @@ import {
   Building2,
   User,
   Mail,
-  Sparkles,
   XCircle,
   ArrowRight,
   Radio,
@@ -823,7 +822,7 @@ export const ClinicsManagement = () => {
             {/* Section 3: Automated Workflow Info */}
             <div className="p-3.5 rounded-2xl bg-primary/5 border border-primary/15 space-y-2">
               <span className="text-xs font-bold text-primary flex items-center gap-2 uppercase tracking-wider">
-                <Sparkles className="w-3.5 h-3.5" />
+                <CheckCircle2 className="w-3.5 h-3.5" />
                 <span>Automated Workflow Upon Approval</span>
               </span>
               <ul className="text-xs text-text-secondary space-y-1 list-disc list-inside">

@@ -15,7 +15,6 @@ import {
   Send,
   Plus,
   Trash2,
-  Sparkles,
   Stethoscope
 } from 'lucide-react'
 import { api } from '../../../lib/api'

@@ -13,7 +13,6 @@ import {
   CreditCard,
   Boxes,
   Lock,
-  Sparkles,
   ChevronLeft,
   ChevronRight,
   List,
@@ -37,11 +36,10 @@ const ICON_MAP = {
   Pill,
   CreditCard,
   Boxes,
-  Sparkles,
   BarChart3: Activity,
   KeyRound: Lock,
   ShieldCheck,
-  Sliders: Sparkles,
+  Sliders: ShieldCheck,
   Activity,
 }
 
@@ -52,6 +50,16 @@ export const StaffDashboard = () => {
     hasViewPermission,
     hasZeroPermissions,
   } = useRolePermissions()
+
+  const resolvedCategoryName =
+    user?.clinicCategoryName ||
+    user?.clinicCategory?.name ||
+    user?.tenant?.clinicCategoryName ||
+    user?.tenant?.clinicCategory?.name ||
+    (permittedModules.some((m) => m.route?.includes('/dental/')) ? 'Dentist' :
+     permittedModules.some((m) => m.route?.includes('/cardio/')) ? 'Cardiology' :
+     permittedModules.some((m) => m.route?.includes('/physio/')) ? 'Physiotherapy' :
+     'General Care')
 
   const [showCalendarGrid, setShowCalendarGrid] = useState(false)
   const [calendarViewMode, setCalendarViewMode] = useState('Day') // 'Day' | 'Week' | 'Month'
@@ -189,9 +197,17 @@ export const StaffDashboard = () => {
               <Badge variant="primary" size="sm" className="shrink-0">
                 {user?.roleTitle || user?.role || 'Clinical Staff'}
               </Badge>
+              {resolvedCategoryName && (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-primary font-bold text-[11px] shadow-2xs capitalize shrink-0">
+                  {resolvedCategoryName}
+                </span>
+              )}
             </div>
             <p className="text-xs text-text-secondary mt-0.5 sm:mt-1 truncate">
-              Workspace: <span className="font-semibold text-text-primary">{user?.clinicName}</span> • Zero-leakage role isolation active
+              Workspace: <span className="font-semibold text-text-primary">{user?.clinicName}</span>
+              {resolvedCategoryName && (
+                <> • Specialty: <span className="font-semibold text-primary capitalize">{resolvedCategoryName}</span></>
+              )} • Zero-leakage role isolation active
             </p>
           </div>
         </div>
@@ -224,7 +240,7 @@ export const StaffDashboard = () => {
       ) : (
         <div className="p-3.5 sm:p-4 rounded-2xl bg-surface border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary shrink-0">
-            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <Boxes className="w-3.5 h-3.5 text-primary" />
             <span>Active Role Assigned Modules:</span>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">

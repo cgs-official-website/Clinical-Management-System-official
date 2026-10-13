@@ -10,7 +10,7 @@ const envSchema = z.object({
   REDIS_URL: z.string().default('redis://localhost:6379'),
   JWT_ACCESS_SECRET: z.string().default('super-secret-access-token-key-clinical-os-2026'),
   JWT_REFRESH_SECRET: z.string().default('super-secret-refresh-token-key-clinical-os-2026'),
-  JWT_ACCESS_EXPIRY: z.string().default('15m'),
+  JWT_ACCESS_EXPIRY: z.string().default('7d'),
   JWT_REFRESH_EXPIRY: z.string().default('30d'),
   CORS_ORIGIN: z.string().default('*'),
   API_PREFIX: z.string().default('/api'),

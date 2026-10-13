@@ -4,10 +4,10 @@ import { AdminService } from '../src/services/admin.service.js'
 async function runTests() {
   console.log('=== RUNNING TENANT & CATEGORY SCOPING TESTS ===\n')
 
-  const cardiologyTenant = await prisma.tenant.findFirst({
+  const cardiologyTenant = await prisma.clinic.findFirst({
     where: { name: 'Aura Health Memorial' }
   })
-  const dentalTenant = await prisma.tenant.findFirst({
+  const dentalTenant = await prisma.clinic.findFirst({
     where: { name: 'super' }
   })
 

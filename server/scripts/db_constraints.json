@@ -1,0 +1,796 @@
+{
+  "fkeys": [
+    {
+      "table_name": "users",
+      "column_name": "tenant_id",
+      "constraint_name": "users_tenant_id_fkey",
+      "foreign_table_name": "tenants",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "refresh_tokens",
+      "column_name": "user_id",
+      "constraint_name": "refresh_tokens_user_id_fkey",
+      "foreign_table_name": "users",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "permissions",
+      "column_name": "module_id",
+      "constraint_name": "permissions_module_id_fkey",
+      "foreign_table_name": "modules",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "permissions",
+      "column_name": "action_id",
+      "constraint_name": "permissions_action_id_fkey",
+      "foreign_table_name": "permission_actions",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "roles",
+      "column_name": "tenant_id",
+      "constraint_name": "roles_tenant_id_fkey",
+      "foreign_table_name": "tenants",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "role_permissions",
+      "column_name": "role_id",
+      "constraint_name": "role_permissions_role_id_fkey",
+      "foreign_table_name": "roles",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "role_permissions",
+      "column_name": "permission_id",
+      "constraint_name": "role_permissions_permission_id_fkey",
+      "foreign_table_name": "permissions",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "user_roles",
+      "column_name": "user_id",
+      "constraint_name": "user_roles_user_id_fkey",
+      "foreign_table_name": "users",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "user_roles",
+      "column_name": "role_id",
+      "constraint_name": "user_roles_role_id_fkey",
+      "foreign_table_name": "roles",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "tenant_id",
+      "constraint_name": "audit_logs_tenant_id_fkey",
+      "foreign_table_name": "tenants",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "audit_logs",
+      "column_name": "actor_user_id",
+      "constraint_name": "audit_logs_actor_user_id_fkey",
+      "foreign_table_name": "users",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "departments",
+      "column_name": "tenant_id",
+      "constraint_name": "departments_tenant_id_fkey",
+      "foreign_table_name": "tenants",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "staff_profiles",
+      "column_name": "user_id",
+      "constraint_name": "staff_profiles_user_id_fkey",
+      "foreign_table_name": "users",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "staff_profiles",
+      "column_name": "department_id",
+      "constraint_name": "staff_profiles_department_id_fkey",
+      "foreign_table_name": "departments",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "patients",
+      "column_name": "tenant_id",
+      "constraint_name": "patients_tenant_id_fkey",
+      "foreign_table_name": "tenants",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "appointments",
+      "column_name": "tenant_id",
+      "constraint_name": "appointments_tenant_id_fkey",
+      "foreign_table_name": "tenants",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "appointments",
+      "column_name": "patient_id",
+      "constraint_name": "appointments_patient_id_fkey",
+      "foreign_table_name": "patients",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "appointments",
+      "column_name": "staff_id",
+      "constraint_name": "appointments_staff_id_fkey",
+      "foreign_table_name": "staff_profiles",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "appointments",
+      "column_name": "department_id",
+      "constraint_name": "appointments_department_id_fkey",
+      "foreign_table_name": "departments",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "prescriptions",
+      "column_name": "appointment_id",
+      "constraint_name": "prescriptions_appointment_id_fkey",
+      "foreign_table_name": "appointments",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "prescriptions",
+      "column_name": "patient_id",
+      "constraint_name": "prescriptions_patient_id_fkey",
+      "foreign_table_name": "patients",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "tenant_id",
+      "constraint_name": "invoices_tenant_id_fkey",
+      "foreign_table_name": "tenants",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "patient_id",
+      "constraint_name": "invoices_patient_id_fkey",
+      "foreign_table_name": "patients",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "invoices",
+      "column_name": "appointment_id",
+      "constraint_name": "invoices_appointment_id_fkey",
+      "foreign_table_name": "appointments",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "invoice_items",
+      "column_name": "invoice_id",
+      "constraint_name": "invoice_items_invoice_id_fkey",
+      "foreign_table_name": "invoices",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "inventory_items",
+      "column_name": "tenant_id",
+      "constraint_name": "inventory_items_tenant_id_fkey",
+      "foreign_table_name": "tenants",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "role_templates",
+      "column_name": "tenant_id",
+      "constraint_name": "role_templates_tenant_id_fkey",
+      "foreign_table_name": "tenants",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "tenants",
+      "column_name": "clinic_category_id",
+      "constraint_name": "tenants_clinic_category_id_fkey",
+      "foreign_table_name": "clinic_categories",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "clinic_category_role_templates",
+      "column_name": "clinic_category_id",
+      "constraint_name": "clinic_category_role_templates_clinic_category_id_fkey",
+      "foreign_table_name": "clinic_categories",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "clinic_category_modules",
+      "column_name": "clinic_category_id",
+      "constraint_name": "clinic_category_modules_clinic_category_id_fkey",
+      "foreign_table_name": "clinic_categories",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "clinic_category_modules",
+      "column_name": "module_id",
+      "constraint_name": "clinic_category_modules_module_id_fkey",
+      "foreign_table_name": "modules",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "tenant_modules",
+      "column_name": "tenant_id",
+      "constraint_name": "tenant_modules_tenant_id_fkey",
+      "foreign_table_name": "tenants",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "tenant_modules",
+      "column_name": "module_id",
+      "constraint_name": "tenant_modules_module_id_fkey",
+      "foreign_table_name": "modules",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "tenants",
+      "column_name": "plan_id",
+      "constraint_name": "tenants_plan_id_fkey",
+      "foreign_table_name": "subscription_plans",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "subscription_invoices",
+      "column_name": "tenant_id",
+      "constraint_name": "subscription_invoices_tenant_id_fkey",
+      "foreign_table_name": "tenants",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "subscription_invoices",
+      "column_name": "plan_id",
+      "constraint_name": "subscription_invoices_plan_id_fkey",
+      "foreign_table_name": "subscription_plans",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "tenant_id",
+      "constraint_name": "stock_movements_tenant_id_fkey",
+      "foreign_table_name": "tenants",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "stock_movements",
+      "column_name": "inventory_item_id",
+      "constraint_name": "stock_movements_inventory_item_id_fkey",
+      "foreign_table_name": "inventory_items",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "xray_records",
+      "column_name": "tenant_id",
+      "constraint_name": "fk_xray_records_tenant",
+      "foreign_table_name": "tenants",
+      "foreign_column_name": "id"
+    },
+    {
+      "table_name": "xray_records",
+      "column_name": "patient_id",
+      "constraint_name": "fk_xray_records_patient",
+      "foreign_table_name": "patients",
+      "foreign_column_name": "id"
+    }
+  ],
+  "indexes": [
+    {
+      "tablename": "appointments",
+      "indexname": "appointments_patient_id_idx",
+      "indexdef": "CREATE INDEX appointments_patient_id_idx ON public.appointments USING btree (patient_id)"
+    },
+    {
+      "tablename": "appointments",
+      "indexname": "appointments_pkey",
+      "indexdef": "CREATE UNIQUE INDEX appointments_pkey ON public.appointments USING btree (id)"
+    },
+    {
+      "tablename": "appointments",
+      "indexname": "appointments_scheduled_at_idx",
+      "indexdef": "CREATE INDEX appointments_scheduled_at_idx ON public.appointments USING btree (scheduled_at)"
+    },
+    {
+      "tablename": "appointments",
+      "indexname": "appointments_staff_id_idx",
+      "indexdef": "CREATE INDEX appointments_staff_id_idx ON public.appointments USING btree (staff_id)"
+    },
+    {
+      "tablename": "appointments",
+      "indexname": "appointments_tenant_id_idx",
+      "indexdef": "CREATE INDEX appointments_tenant_id_idx ON public.appointments USING btree (tenant_id)"
+    },
+    {
+      "tablename": "audit_logs",
+      "indexname": "audit_logs_actor_user_id_idx",
+      "indexdef": "CREATE INDEX audit_logs_actor_user_id_idx ON public.audit_logs USING btree (actor_user_id)"
+    },
+    {
+      "tablename": "audit_logs",
+      "indexname": "audit_logs_created_at_idx",
+      "indexdef": "CREATE INDEX audit_logs_created_at_idx ON public.audit_logs USING btree (created_at)"
+    },
+    {
+      "tablename": "audit_logs",
+      "indexname": "audit_logs_pkey",
+      "indexdef": "CREATE UNIQUE INDEX audit_logs_pkey ON public.audit_logs USING btree (id)"
+    },
+    {
+      "tablename": "audit_logs",
+      "indexname": "audit_logs_tenant_id_idx",
+      "indexdef": "CREATE INDEX audit_logs_tenant_id_idx ON public.audit_logs USING btree (tenant_id)"
+    },
+    {
+      "tablename": "clinic_categories",
+      "indexname": "clinic_categories_name_key",
+      "indexdef": "CREATE UNIQUE INDEX clinic_categories_name_key ON public.clinic_categories USING btree (name)"
+    },
+    {
+      "tablename": "clinic_categories",
+      "indexname": "clinic_categories_pkey",
+      "indexdef": "CREATE UNIQUE INDEX clinic_categories_pkey ON public.clinic_categories USING btree (id)"
+    },
+    {
+      "tablename": "clinic_category_modules",
+      "indexname": "clinic_category_modules_clinic_category_id_idx",
+      "indexdef": "CREATE INDEX clinic_category_modules_clinic_category_id_idx ON public.clinic_category_modules USING btree (clinic_category_id)"
+    },
+    {
+      "tablename": "clinic_category_modules",
+      "indexname": "clinic_category_modules_clinic_category_id_module_id_key",
+      "indexdef": "CREATE UNIQUE INDEX clinic_category_modules_clinic_category_id_module_id_key ON public.clinic_category_modules USING btree (clinic_category_id, module_id)"
+    },
+    {
+      "tablename": "clinic_category_modules",
+      "indexname": "clinic_category_modules_module_id_idx",
+      "indexdef": "CREATE INDEX clinic_category_modules_module_id_idx ON public.clinic_category_modules USING btree (module_id)"
+    },
+    {
+      "tablename": "clinic_category_modules",
+      "indexname": "clinic_category_modules_pkey",
+      "indexdef": "CREATE UNIQUE INDEX clinic_category_modules_pkey ON public.clinic_category_modules USING btree (id)"
+    },
+    {
+      "tablename": "clinic_category_role_templates",
+      "indexname": "clinic_category_role_templates_clinic_category_id_idx",
+      "indexdef": "CREATE INDEX clinic_category_role_templates_clinic_category_id_idx ON public.clinic_category_role_templates USING btree (clinic_category_id)"
+    },
+    {
+      "tablename": "clinic_category_role_templates",
+      "indexname": "clinic_category_role_templates_pkey",
+      "indexdef": "CREATE UNIQUE INDEX clinic_category_role_templates_pkey ON public.clinic_category_role_templates USING btree (id)"
+    },
+    {
+      "tablename": "clinic_category_role_templates",
+      "indexname": "clinic_category_role_templates_role_name_idx",
+      "indexdef": "CREATE INDEX clinic_category_role_templates_role_name_idx ON public.clinic_category_role_templates USING btree (role_name)"
+    },
+    {
+      "tablename": "company_settings",
+      "indexname": "company_settings_pkey",
+      "indexdef": "CREATE UNIQUE INDEX company_settings_pkey ON public.company_settings USING btree (id)"
+    },
+    {
+      "tablename": "demo_requests",
+      "indexname": "demo_requests_pkey",
+      "indexdef": "CREATE UNIQUE INDEX demo_requests_pkey ON public.demo_requests USING btree (id)"
+    },
+    {
+      "tablename": "departments",
+      "indexname": "departments_pkey",
+      "indexdef": "CREATE UNIQUE INDEX departments_pkey ON public.departments USING btree (id)"
+    },
+    {
+      "tablename": "departments",
+      "indexname": "departments_tenant_id_idx",
+      "indexdef": "CREATE INDEX departments_tenant_id_idx ON public.departments USING btree (tenant_id)"
+    },
+    {
+      "tablename": "inventory_items",
+      "indexname": "inventory_items_pkey",
+      "indexdef": "CREATE UNIQUE INDEX inventory_items_pkey ON public.inventory_items USING btree (id)"
+    },
+    {
+      "tablename": "inventory_items",
+      "indexname": "inventory_items_tenant_id_batch_number_idx",
+      "indexdef": "CREATE INDEX inventory_items_tenant_id_batch_number_idx ON public.inventory_items USING btree (tenant_id, batch_number)"
+    },
+    {
+      "tablename": "inventory_items",
+      "indexname": "inventory_items_tenant_id_idx",
+      "indexdef": "CREATE INDEX inventory_items_tenant_id_idx ON public.inventory_items USING btree (tenant_id)"
+    },
+    {
+      "tablename": "inventory_items",
+      "indexname": "inventory_items_tenant_id_item_code_key",
+      "indexdef": "CREATE UNIQUE INDEX inventory_items_tenant_id_item_code_key ON public.inventory_items USING btree (tenant_id, item_code)"
+    },
+    {
+      "tablename": "invoice_items",
+      "indexname": "invoice_items_invoice_id_idx",
+      "indexdef": "CREATE INDEX invoice_items_invoice_id_idx ON public.invoice_items USING btree (invoice_id)"
+    },
+    {
+      "tablename": "invoice_items",
+      "indexname": "invoice_items_pkey",
+      "indexdef": "CREATE UNIQUE INDEX invoice_items_pkey ON public.invoice_items USING btree (id)"
+    },
+    {
+      "tablename": "invoices",
+      "indexname": "invoices_invoice_number_idx",
+      "indexdef": "CREATE INDEX invoices_invoice_number_idx ON public.invoices USING btree (invoice_number)"
+    },
+    {
+      "tablename": "invoices",
+      "indexname": "invoices_invoice_number_key",
+      "indexdef": "CREATE UNIQUE INDEX invoices_invoice_number_key ON public.invoices USING btree (invoice_number)"
+    },
+    {
+      "tablename": "invoices",
+      "indexname": "invoices_patient_id_idx",
+      "indexdef": "CREATE INDEX invoices_patient_id_idx ON public.invoices USING btree (patient_id)"
+    },
+    {
+      "tablename": "invoices",
+      "indexname": "invoices_pkey",
+      "indexdef": "CREATE UNIQUE INDEX invoices_pkey ON public.invoices USING btree (id)"
+    },
+    {
+      "tablename": "invoices",
+      "indexname": "invoices_tenant_id_idx",
+      "indexdef": "CREATE INDEX invoices_tenant_id_idx ON public.invoices USING btree (tenant_id)"
+    },
+    {
+      "tablename": "modules",
+      "indexname": "modules_key_key",
+      "indexdef": "CREATE UNIQUE INDEX modules_key_key ON public.modules USING btree (key)"
+    },
+    {
+      "tablename": "modules",
+      "indexname": "modules_pkey",
+      "indexdef": "CREATE UNIQUE INDEX modules_pkey ON public.modules USING btree (id)"
+    },
+    {
+      "tablename": "newsletter_subscriptions",
+      "indexname": "newsletter_subscriptions_email_key",
+      "indexdef": "CREATE UNIQUE INDEX newsletter_subscriptions_email_key ON public.newsletter_subscriptions USING btree (email)"
+    },
+    {
+      "tablename": "newsletter_subscriptions",
+      "indexname": "newsletter_subscriptions_pkey",
+      "indexdef": "CREATE UNIQUE INDEX newsletter_subscriptions_pkey ON public.newsletter_subscriptions USING btree (id)"
+    },
+    {
+      "tablename": "notifications",
+      "indexname": "notifications_entity_id_idx",
+      "indexdef": "CREATE INDEX notifications_entity_id_idx ON public.notifications USING btree (entity_id)"
+    },
+    {
+      "tablename": "notifications",
+      "indexname": "notifications_is_read_idx",
+      "indexdef": "CREATE INDEX notifications_is_read_idx ON public.notifications USING btree (is_read)"
+    },
+    {
+      "tablename": "notifications",
+      "indexname": "notifications_pkey",
+      "indexdef": "CREATE UNIQUE INDEX notifications_pkey ON public.notifications USING btree (id)"
+    },
+    {
+      "tablename": "notifications",
+      "indexname": "notifications_user_id_idx",
+      "indexdef": "CREATE INDEX notifications_user_id_idx ON public.notifications USING btree (user_id)"
+    },
+    {
+      "tablename": "patients",
+      "indexname": "patients_full_name_idx",
+      "indexdef": "CREATE INDEX patients_full_name_idx ON public.patients USING btree (full_name)"
+    },
+    {
+      "tablename": "patients",
+      "indexname": "patients_mrn_idx",
+      "indexdef": "CREATE INDEX patients_mrn_idx ON public.patients USING btree (mrn)"
+    },
+    {
+      "tablename": "patients",
+      "indexname": "patients_mrn_key",
+      "indexdef": "CREATE UNIQUE INDEX patients_mrn_key ON public.patients USING btree (mrn)"
+    },
+    {
+      "tablename": "patients",
+      "indexname": "patients_pkey",
+      "indexdef": "CREATE UNIQUE INDEX patients_pkey ON public.patients USING btree (id)"
+    },
+    {
+      "tablename": "patients",
+      "indexname": "patients_tenant_id_idx",
+      "indexdef": "CREATE INDEX patients_tenant_id_idx ON public.patients USING btree (tenant_id)"
+    },
+    {
+      "tablename": "permission_actions",
+      "indexname": "permission_actions_key_key",
+      "indexdef": "CREATE UNIQUE INDEX permission_actions_key_key ON public.permission_actions USING btree (key)"
+    },
+    {
+      "tablename": "permission_actions",
+      "indexname": "permission_actions_pkey",
+      "indexdef": "CREATE UNIQUE INDEX permission_actions_pkey ON public.permission_actions USING btree (id)"
+    },
+    {
+      "tablename": "permissions",
+      "indexname": "permissions_key_idx",
+      "indexdef": "CREATE INDEX permissions_key_idx ON public.permissions USING btree (key)"
+    },
+    {
+      "tablename": "permissions",
+      "indexname": "permissions_key_key",
+      "indexdef": "CREATE UNIQUE INDEX permissions_key_key ON public.permissions USING btree (key)"
+    },
+    {
+      "tablename": "permissions",
+      "indexname": "permissions_module_id_action_id_key",
+      "indexdef": "CREATE UNIQUE INDEX permissions_module_id_action_id_key ON public.permissions USING btree (module_id, action_id)"
+    },
+    {
+      "tablename": "permissions",
+      "indexname": "permissions_pkey",
+      "indexdef": "CREATE UNIQUE INDEX permissions_pkey ON public.permissions USING btree (id)"
+    },
+    {
+      "tablename": "prescriptions",
+      "indexname": "prescriptions_appointment_id_idx",
+      "indexdef": "CREATE INDEX prescriptions_appointment_id_idx ON public.prescriptions USING btree (appointment_id)"
+    },
+    {
+      "tablename": "prescriptions",
+      "indexname": "prescriptions_patient_id_idx",
+      "indexdef": "CREATE INDEX prescriptions_patient_id_idx ON public.prescriptions USING btree (patient_id)"
+    },
+    {
+      "tablename": "prescriptions",
+      "indexname": "prescriptions_pkey",
+      "indexdef": "CREATE UNIQUE INDEX prescriptions_pkey ON public.prescriptions USING btree (id)"
+    },
+    {
+      "tablename": "public_site_content",
+      "indexname": "public_site_content_key_key",
+      "indexdef": "CREATE UNIQUE INDEX public_site_content_key_key ON public.public_site_content USING btree (key)"
+    },
+    {
+      "tablename": "public_site_content",
+      "indexname": "public_site_content_pkey",
+      "indexdef": "CREATE UNIQUE INDEX public_site_content_pkey ON public.public_site_content USING btree (id)"
+    },
+    {
+      "tablename": "refresh_tokens",
+      "indexname": "refresh_tokens_pkey",
+      "indexdef": "CREATE UNIQUE INDEX refresh_tokens_pkey ON public.refresh_tokens USING btree (id)"
+    },
+    {
+      "tablename": "refresh_tokens",
+      "indexname": "refresh_tokens_token_hash_key",
+      "indexdef": "CREATE UNIQUE INDEX refresh_tokens_token_hash_key ON public.refresh_tokens USING btree (token_hash)"
+    },
+    {
+      "tablename": "refresh_tokens",
+      "indexname": "refresh_tokens_user_id_idx",
+      "indexdef": "CREATE INDEX refresh_tokens_user_id_idx ON public.refresh_tokens USING btree (user_id)"
+    },
+    {
+      "tablename": "role_permissions",
+      "indexname": "role_permissions_permission_id_idx",
+      "indexdef": "CREATE INDEX role_permissions_permission_id_idx ON public.role_permissions USING btree (permission_id)"
+    },
+    {
+      "tablename": "role_permissions",
+      "indexname": "role_permissions_pkey",
+      "indexdef": "CREATE UNIQUE INDEX role_permissions_pkey ON public.role_permissions USING btree (id)"
+    },
+    {
+      "tablename": "role_permissions",
+      "indexname": "role_permissions_role_id_idx",
+      "indexdef": "CREATE INDEX role_permissions_role_id_idx ON public.role_permissions USING btree (role_id)"
+    },
+    {
+      "tablename": "role_permissions",
+      "indexname": "role_permissions_role_id_permission_id_key",
+      "indexdef": "CREATE UNIQUE INDEX role_permissions_role_id_permission_id_key ON public.role_permissions USING btree (role_id, permission_id)"
+    },
+    {
+      "tablename": "role_templates",
+      "indexname": "role_templates_keyword_idx",
+      "indexdef": "CREATE INDEX role_templates_keyword_idx ON public.role_templates USING btree (keyword)"
+    },
+    {
+      "tablename": "role_templates",
+      "indexname": "role_templates_pkey",
+      "indexdef": "CREATE UNIQUE INDEX role_templates_pkey ON public.role_templates USING btree (id)"
+    },
+    {
+      "tablename": "role_templates",
+      "indexname": "role_templates_tenant_id_idx",
+      "indexdef": "CREATE INDEX role_templates_tenant_id_idx ON public.role_templates USING btree (tenant_id)"
+    },
+    {
+      "tablename": "roles",
+      "indexname": "roles_pkey",
+      "indexdef": "CREATE UNIQUE INDEX roles_pkey ON public.roles USING btree (id)"
+    },
+    {
+      "tablename": "roles",
+      "indexname": "roles_tenant_id_idx",
+      "indexdef": "CREATE INDEX roles_tenant_id_idx ON public.roles USING btree (tenant_id)"
+    },
+    {
+      "tablename": "staff_profiles",
+      "indexname": "staff_profiles_pkey",
+      "indexdef": "CREATE UNIQUE INDEX staff_profiles_pkey ON public.staff_profiles USING btree (id)"
+    },
+    {
+      "tablename": "staff_profiles",
+      "indexname": "staff_profiles_user_id_key",
+      "indexdef": "CREATE UNIQUE INDEX staff_profiles_user_id_key ON public.staff_profiles USING btree (user_id)"
+    },
+    {
+      "tablename": "stock_movements",
+      "indexname": "stock_movements_import_batch_id_idx",
+      "indexdef": "CREATE INDEX stock_movements_import_batch_id_idx ON public.stock_movements USING btree (import_batch_id)"
+    },
+    {
+      "tablename": "stock_movements",
+      "indexname": "stock_movements_inventory_item_id_idx",
+      "indexdef": "CREATE INDEX stock_movements_inventory_item_id_idx ON public.stock_movements USING btree (inventory_item_id)"
+    },
+    {
+      "tablename": "stock_movements",
+      "indexname": "stock_movements_pkey",
+      "indexdef": "CREATE UNIQUE INDEX stock_movements_pkey ON public.stock_movements USING btree (id)"
+    },
+    {
+      "tablename": "stock_movements",
+      "indexname": "stock_movements_tenant_id_idx",
+      "indexdef": "CREATE INDEX stock_movements_tenant_id_idx ON public.stock_movements USING btree (tenant_id)"
+    },
+    {
+      "tablename": "subscription_invoices",
+      "indexname": "subscription_invoices_invoice_number_idx",
+      "indexdef": "CREATE INDEX subscription_invoices_invoice_number_idx ON public.subscription_invoices USING btree (invoice_number)"
+    },
+    {
+      "tablename": "subscription_invoices",
+      "indexname": "subscription_invoices_invoice_number_key",
+      "indexdef": "CREATE UNIQUE INDEX subscription_invoices_invoice_number_key ON public.subscription_invoices USING btree (invoice_number)"
+    },
+    {
+      "tablename": "subscription_invoices",
+      "indexname": "subscription_invoices_pkey",
+      "indexdef": "CREATE UNIQUE INDEX subscription_invoices_pkey ON public.subscription_invoices USING btree (id)"
+    },
+    {
+      "tablename": "subscription_invoices",
+      "indexname": "subscription_invoices_plan_id_idx",
+      "indexdef": "CREATE INDEX subscription_invoices_plan_id_idx ON public.subscription_invoices USING btree (plan_id)"
+    },
+    {
+      "tablename": "subscription_invoices",
+      "indexname": "subscription_invoices_tenant_id_idx",
+      "indexdef": "CREATE INDEX subscription_invoices_tenant_id_idx ON public.subscription_invoices USING btree (tenant_id)"
+    },
+    {
+      "tablename": "subscription_plans",
+      "indexname": "subscription_plans_code_key",
+      "indexdef": "CREATE UNIQUE INDEX subscription_plans_code_key ON public.subscription_plans USING btree (code)"
+    },
+    {
+      "tablename": "subscription_plans",
+      "indexname": "subscription_plans_pkey",
+      "indexdef": "CREATE UNIQUE INDEX subscription_plans_pkey ON public.subscription_plans USING btree (id)"
+    },
+    {
+      "tablename": "tenant_modules",
+      "indexname": "tenant_modules_module_id_idx",
+      "indexdef": "CREATE INDEX tenant_modules_module_id_idx ON public.tenant_modules USING btree (module_id)"
+    },
+    {
+      "tablename": "tenant_modules",
+      "indexname": "tenant_modules_pkey",
+      "indexdef": "CREATE UNIQUE INDEX tenant_modules_pkey ON public.tenant_modules USING btree (id)"
+    },
+    {
+      "tablename": "tenant_modules",
+      "indexname": "tenant_modules_tenant_id_idx",
+      "indexdef": "CREATE INDEX tenant_modules_tenant_id_idx ON public.tenant_modules USING btree (tenant_id)"
+    },
+    {
+      "tablename": "tenant_modules",
+      "indexname": "tenant_modules_tenant_id_module_id_key",
+      "indexdef": "CREATE UNIQUE INDEX tenant_modules_tenant_id_module_id_key ON public.tenant_modules USING btree (tenant_id, module_id)"
+    },
+    {
+      "tablename": "tenants",
+      "indexname": "tenants_clinic_category_id_idx",
+      "indexdef": "CREATE INDEX tenants_clinic_category_id_idx ON public.tenants USING btree (clinic_category_id)"
+    },
+    {
+      "tablename": "tenants",
+      "indexname": "tenants_pkey",
+      "indexdef": "CREATE UNIQUE INDEX tenants_pkey ON public.tenants USING btree (id)"
+    },
+    {
+      "tablename": "tenants",
+      "indexname": "tenants_plan_id_idx",
+      "indexdef": "CREATE INDEX tenants_plan_id_idx ON public.tenants USING btree (plan_id)"
+    },
+    {
+      "tablename": "tenants",
+      "indexname": "tenants_subdomain_key",
+      "indexdef": "CREATE UNIQUE INDEX tenants_subdomain_key ON public.tenants USING btree (subdomain)"
+    },
+    {
+      "tablename": "user_roles",
+      "indexname": "user_roles_pkey",
+      "indexdef": "CREATE UNIQUE INDEX user_roles_pkey ON public.user_roles USING btree (id)"
+    },
+    {
+      "tablename": "user_roles",
+      "indexname": "user_roles_role_id_idx",
+      "indexdef": "CREATE INDEX user_roles_role_id_idx ON public.user_roles USING btree (role_id)"
+    },
+    {
+      "tablename": "user_roles",
+      "indexname": "user_roles_user_id_idx",
+      "indexdef": "CREATE INDEX user_roles_user_id_idx ON public.user_roles USING btree (user_id)"
+    },
+    {
+      "tablename": "user_roles",
+      "indexname": "user_roles_user_id_role_id_key",
+      "indexdef": "CREATE UNIQUE INDEX user_roles_user_id_role_id_key ON public.user_roles USING btree (user_id, role_id)"
+    },
+    {
+      "tablename": "users",
+      "indexname": "users_email_idx",
+      "indexdef": "CREATE INDEX users_email_idx ON public.users USING btree (email)"
+    },
+    {
+      "tablename": "users",
+      "indexname": "users_email_key",
+      "indexdef": "CREATE UNIQUE INDEX users_email_key ON public.users USING btree (email)"
+    },
+    {
+      "tablename": "users",
+      "indexname": "users_pkey",
+      "indexdef": "CREATE UNIQUE INDEX users_pkey ON public.users USING btree (id)"
+    },
+    {
+      "tablename": "users",
+      "indexname": "users_tenant_id_idx",
+      "indexdef": "CREATE INDEX users_tenant_id_idx ON public.users USING btree (tenant_id)"
+    },
+    {
+      "tablename": "xray_records",
+      "indexname": "xray_records_code_idx",
+      "indexdef": "CREATE INDEX xray_records_code_idx ON public.xray_records USING btree (code)"
+    },
+    {
+      "tablename": "xray_records",
+      "indexname": "xray_records_patient_id_idx",
+      "indexdef": "CREATE INDEX xray_records_patient_id_idx ON public.xray_records USING btree (patient_id)"
+    },
+    {
+      "tablename": "xray_records",
+      "indexname": "xray_records_pkey",
+      "indexdef": "CREATE UNIQUE INDEX xray_records_pkey ON public.xray_records USING btree (id)"
+    },
+    {
+      "tablename": "xray_records",
+      "indexname": "xray_records_tenant_id_idx",
+      "indexdef": "CREATE INDEX xray_records_tenant_id_idx ON public.xray_records USING btree (tenant_id)"
+    }
+  ]
+}

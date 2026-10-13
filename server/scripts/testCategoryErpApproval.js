@@ -27,7 +27,7 @@ async function runTest() {
 
   // 2. Create a test tenant registered under "Dental Care" in PENDING status
   const testSubdomain = `test-dental-${Date.now()}`
-  const tenant = await prisma.tenant.create({
+  const tenant = await prisma.clinic.create({
     data: {
       name: 'Smile Dental Specialist Hospital',
       subdomain: testSubdomain,
@@ -143,7 +143,7 @@ async function runTest() {
   console.log('[PASS] Module isolation verified: Cardiology module is denied (403), Dental Care module is allowed.')
 
   // 8. Clean up test tenant
-  await prisma.tenant.delete({ where: { id: tenant.id } })
+  await prisma.clinic.delete({ where: { id: tenant.id } })
   console.log(`[PASS] Test tenant cleaned up successfully.`)
 
   console.log('=== ALL TESTS PASSED SUCCESSFULLY! ===')

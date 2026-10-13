@@ -127,9 +127,9 @@ async function seedDentalCare() {
   // 3. Upsert exactly the 13 Modules & their permissions
   const moduleMap = new Map()
   for (const modData of DENTAL_MODULES) {
-    let mod = await prisma.module.findUnique({ where: { key: modData.key } })
+    let mod = await prisma.systemModule.findUnique({ where: { key: modData.key } })
     if (!mod) {
-      mod = await prisma.module.create({
+      mod = await prisma.systemModule.create({
         data: {
           key: modData.key,
           name: modData.name,
@@ -138,7 +138,7 @@ async function seedDentalCare() {
       })
       console.log(`Created Module: ${mod.key} (${mod.name})`)
     } else {
-      mod = await prisma.module.update({
+      mod = await prisma.systemModule.update({
         where: { id: mod.id },
         data: {
           name: modData.name,
@@ -157,8 +157,8 @@ async function seedDentalCare() {
       if (!perm) {
         perm = await prisma.permission.create({
           data: {
-            moduleId: mod.id,
-            actionId: act.id,
+            systemModuleId: mod.id,
+            permissionActionId: act.id,
             key: permKey,
             description: `Can ${actKey} ${mod.name}`,
           },
@@ -173,9 +173,9 @@ async function seedDentalCare() {
     const mod = moduleMap.get(modData.key)
     const existing = await prisma.clinicCategoryModule.findUnique({
       where: {
-        clinicCategoryId_moduleId: {
+        clinicCategoryId_systemModuleId: {
           clinicCategoryId: category.id,
-          moduleId: mod.id,
+          systemModuleId: mod.id,
         },
       },
     })
@@ -184,7 +184,7 @@ async function seedDentalCare() {
       await prisma.clinicCategoryModule.create({
         data: {
           clinicCategoryId: category.id,
-          moduleId: mod.id,
+          systemModuleId: mod.id,
           displayOrder: modData.displayOrder,
         },
       })
@@ -203,7 +203,7 @@ async function seedDentalCare() {
     where: { clinicCategoryId: category.id }
   })
   const existingKeySet = new Set(
-    existingTemplates.map(t => `${t.roleName}|${t.module}|${t.action}`)
+    existingTemplates.map(t => `${t.roleName}|${t.moduleKey}|${t.actionKey}`)
   )
 
   const adminRoleNames = ['Clinic Admin', 'Clinical Administrator']
@@ -216,8 +216,8 @@ async function seedDentalCare() {
           newTemplates.push({
             clinicCategoryId: category.id,
             roleName,
-            module: modData.key,
-            action: actKey,
+            moduleKey: modData.key,
+            actionKey: actKey,
           })
           existingKeySet.add(key)
         }

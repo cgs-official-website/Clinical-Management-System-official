@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { Users, ShieldCheck, CheckCircle2, Save, Sparkles, Search, RefreshCw, AlertCircle } from 'lucide-react'
+import { Users, ShieldCheck, CheckCircle2, Save, Search, RefreshCw, AlertCircle } from 'lucide-react'
 import { api } from '../../../lib/api'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
@@ -361,7 +361,7 @@ export const AssignStaffPage = () => {
               <div className="p-5 rounded-2xl border border-border bg-surface shadow-soft">
                 <div className="flex items-center justify-between mb-4">
                   <h4 className="font-heading font-bold text-xs uppercase tracking-wider text-text-primary flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-primary" />
+                    <ShieldCheck className="w-4 h-4 text-primary" />
                     Effective Privileges Preview (Merged Permission Set)
                   </h4>
                   <Badge variant="success" size="sm">

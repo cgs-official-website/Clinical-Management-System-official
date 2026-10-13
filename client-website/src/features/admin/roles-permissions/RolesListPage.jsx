@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate } from 'react-router-dom'
-import { Plus, KeyRound, Shield, Edit2, Trash2, Users, ArrowRight, Sparkles, SlidersHorizontal } from 'lucide-react'
+import { Plus, KeyRound, Shield, Edit2, Trash2, Users, ArrowRight, SlidersHorizontal } from 'lucide-react'
 import { api } from '../../../lib/api'
 import { DataTable } from '../../../components/ui/DataTable'
 import { Button } from '../../../components/ui/Button'
@@ -271,7 +271,7 @@ export const RolesListPage = () => {
                   }
                 }}
                 isLoading={suggestMutation.isPending}
-                leftIcon={<Sparkles className="w-3.5 h-3.5 text-primary" />}
+                leftIcon={<SlidersHorizontal className="w-3.5 h-3.5 text-primary" />}
                 className="mb-[2px] shrink-0"
               >
                 Suggest
@@ -284,7 +284,7 @@ export const RolesListPage = () => {
             <div className="p-3 rounded-xl bg-surface border border-border text-xs space-y-2">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-text-primary flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  <Shield className="w-3.5 h-3.5 text-primary" />
                   <span>Rule Suggestion Result</span>
                 </span>
                 <Badge variant={suggestPreview.permissions?.length > 0 ? 'primary' : 'neutral'} size="sm">

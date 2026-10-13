@@ -8,7 +8,7 @@ import {
   Activity,
   Clock,
   TrendingUp,
-  Sparkles,
+  Building2,
   Settings,
   ShieldCheck,
   ArrowRight,
@@ -64,6 +64,18 @@ export const AdminDashboard = () => {
 
   const kpis = rawKpis?.data?.kpis || rawKpis?.kpis || rawKpis?.data || rawKpis || {}
 
+  const resolvedCategoryName =
+    kpis?.clinicCategoryName ||
+    kpis?.clinicCategory?.name ||
+    user?.clinicCategoryName ||
+    user?.clinicCategory?.name ||
+    user?.tenant?.clinicCategoryName ||
+    user?.tenant?.clinicCategory?.name ||
+    (permittedModules.some((m) => m.route?.includes('/dental/')) ? 'Dentist' :
+     permittedModules.some((m) => m.route?.includes('/cardio/')) ? 'Cardiology' :
+     permittedModules.some((m) => m.route?.includes('/physio/')) ? 'Physiotherapy' :
+     'General Care')
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -118,16 +130,22 @@ export const AdminDashboard = () => {
       {/* Header with Setup Trigger */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="font-heading font-extrabold text-2xl text-text-primary">
               Clinical Operations Dashboard
             </h1>
+            {resolvedCategoryName && (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/25 text-primary font-bold text-xs shadow-2xs">
+                <span>Specialty: <strong className="capitalize">{resolvedCategoryName}</strong></span>
+              </span>
+            )}
             <Badge variant="success" size="sm" dot>
               Active Workspace
             </Badge>
           </div>
-          <p className="text-xs text-text-secondary mt-0.5">
-            {kpis?.hospitalName || user?.clinicName || 'Clinic'} • Real-time patient intake volume, staff allocations, and scheduling queues
+          <p className="text-xs text-text-secondary mt-1">
+            <span className="font-semibold text-text-primary">{kpis?.hospitalName || user?.clinicName || 'Clinic'}</span>
+            {resolvedCategoryName ? ` (${resolvedCategoryName})` : ''} • Real-time patient intake volume, staff allocations, and scheduling queues
           </p>
         </div>
 
@@ -146,7 +164,7 @@ export const AdminDashboard = () => {
         <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border border-primary/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-soft animate-in fade-in">
           <div className="flex items-center gap-3.5">
             <div className="w-10 h-10 rounded-xl bg-primary/20 text-primary flex items-center justify-center flex-shrink-0">
-              <Sparkles className="w-5 h-5" />
+              <Building2 className="w-5 h-5" />
             </div>
             <div>
               <div className="flex items-center gap-2">

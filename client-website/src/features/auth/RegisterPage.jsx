@@ -16,7 +16,6 @@ import {
   ArrowRight,
   ArrowLeft,
   CheckCircle2,
-  Sparkles,
   ShieldCheck,
   Zap,
   AlertCircle,
@@ -371,7 +370,7 @@ export const RegisterPage = () => {
               {/* Header */}
               <div className="text-left mb-6 sm:mb-8">
                 <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-surface border border-border text-text-primary text-xs font-semibold uppercase tracking-wider mb-3 shadow-sm">
-                  <Sparkles className="w-3.5 h-3.5 text-primary" />
+                  <ShieldCheck className="w-3.5 h-3.5 text-primary" />
                   <span>Staff Invitation Access</span>
                 </div>
                 <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-text-primary tracking-tight">
@@ -731,7 +730,7 @@ export const RegisterPage = () => {
               {/* Step 4: Tier Selection */}
               <div>
                 <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border">
-                  <Sparkles className="w-4 h-4 text-primary" />
+                  <Activity className="w-4 h-4 text-primary" />
                   <h3 className="font-heading font-bold text-sm text-text-primary">
                     4. Operational Scale Plan
                   </h3>
