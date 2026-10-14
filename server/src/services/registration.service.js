@@ -99,7 +99,7 @@ export class RegistrationService {
           where: { id: selectedCategoryId, isActive: true }
         })
       }
-    } catch {}
+    } catch { }
 
     // 2. Check duplicate entry in local registry
     const registry = readLocalRegistry()
@@ -533,13 +533,14 @@ export class RegistrationService {
 
     const registry = readLocalRegistry()
     const regIndex = (registry.pending || []).findIndex((r) => r.id === id || r.tenantId === id)
+    const reg = regIndex !== -1 ? registry.pending[regIndex] : null
 
-    let reg = null
-    if (regIndex !== -1) {
-      reg = registry.pending[regIndex]
-      reg.status = 'approved'
-      reg.approvedAt = new Date().toISOString()
+    // 1. Activate in PostgreSQL FIRST. Any failure is thrown to the caller
+    //    (no more fake "approved" success while the tenant stays PENDING).
+    const targetTenantId = reg?.tenantId || id
+    const existingTenant = await prisma.tenant.findUnique({ where: { id: targetTenantId } })
 
+<<<<<<< HEAD
       registry.pending.splice(regIndex, 1)
       if (!registry.approved) registry.approved = []
       registry.approved.unshift(reg)
@@ -588,13 +589,63 @@ export class RegistrationService {
       }
     } catch (e) {
       logger.warn('Could not update PostgreSQL tenant status upon approval:', e.message)
+=======
+    if (existingTenant) {
+      await SuperadminService.approveTenantTransaction(targetTenantId)
+    } else if (reg) {
+      // Provision directly into PostgreSQL if not yet created
+      const newTenant = await prisma.tenant.create({
+        data: {
+          name: reg.clinicName,
+          subdomain: reg.subdomain,
+          domain: `${reg.subdomain}.clinic.io`,
+          plan: reg.plan || 'Professional',
+          status: 'PENDING',
+          region: reg.region || 'Asia / India (INR ₹)',
+          contactEmail: reg.email,
+          clinicCategoryId: reg.clinicCategoryId || null,
+        },
+      })
+
+      await prisma.user.create({
+        data: {
+          tenantId: newTenant.id,
+          email: reg.email,
+          passwordHash: reg.passwordHash,
+          fullName: reg.adminName,
+          phone: reg.phone,
+          status: 'INVITED',
+          userType: 'ADMIN',
+        },
+      })
+
+      reg.tenantId = newTenant.id
+      writeLocalRegistry(registry)
+      await SuperadminService.approveTenantTransaction(newTenant.id)
+    } else {
+      throw new NotFoundError('Registration request not found')
+>>>>>>> 94d3869 (approval changes)
     }
 
-    const clinicName = reg ? reg.clinicName : 'Clinic'
+    // 2. Only after DB success, move the entry pending -> approved in the local registry
+    const fresh = readLocalRegistry()
+    const idx = (fresh.pending || []).findIndex((r) => r.id === id || r.tenantId === id || r.tenantId === targetTenantId)
+    let approvedReg = reg
+    if (idx !== -1) {
+      approvedReg = fresh.pending[idx]
+      approvedReg.status = 'approved'
+      approvedReg.approvedAt = new Date().toISOString()
+      fresh.pending.splice(idx, 1)
+      if (!fresh.approved) fresh.approved = []
+      fresh.approved.unshift(approvedReg)
+      writeLocalRegistry(fresh)
+    }
+
+    const clinicName = approvedReg ? approvedReg.clinicName : existingTenant?.name || 'Clinic'
     return {
       success: true,
       message: `Registration for "${clinicName}" approved and workspace activated!`,
-      registration: reg || { id, status: 'approved' },
+      registration: approvedReg || { id, status: 'approved' },
     }
   }
 
@@ -707,7 +758,7 @@ export class RegistrationService {
         if (!hasRole) {
           await prisma.userRoleAssignment.create({
             data: { userId: user.id, roleId: resolvedRole.id }
-          }).catch(() => {})
+          }).catch(() => { })
         }
       }
     }

@@ -277,6 +277,20 @@ export class SuperadminService {
       })
       : []
 
+    // Pre-fetch category departments OUTSIDE the transaction.
+    // (A failed query inside a Postgres transaction aborts the whole transaction,
+    //  even if the error is caught in JS - that caused the 500 on approval.)
+    let categoryDepts = []
+    if (tenant.clinicCategoryId) {
+      try {
+        categoryDepts = await prisma.$queryRaw`
+          SELECT name FROM clinic_category_departments WHERE clinic_category_id = ${tenant.clinicCategoryId}
+        `
+      } catch (e) {
+        logger.warn(`Skipping category departments (table missing? run scripts/seedCategoryDepartments.js): ${e.message}`)
+      }
+    }
+
     // Atomically provision modules, roles and activate workspace in transaction
     const result = await prisma.$transaction(
       async (tx) => {
@@ -500,22 +514,15 @@ export class SuperadminService {
         }
 
         // 3. Seed category departments into Department table for this tenant
-        if (tenant.clinicCategoryId) {
-          try {
-            const categoryDepts = await tx.$queryRaw`
-              SELECT name FROM clinic_category_departments WHERE clinic_category_id = ${tenant.clinicCategoryId}
-            `
-            for (const d of categoryDepts) {
-              const existingDept = await tx.department.findFirst({
-                where: { tenantId, name: d.name }
-              })
-              if (!existingDept) {
-                await tx.department.create({
-                  data: { tenantId, name: d.name }
-                })
-              }
-            }
-          } catch (e) { }
+        for (const d of categoryDepts) {
+          const existingDept = await tx.department.findFirst({
+            where: { tenantId, name: d.name }
+          })
+          if (!existingDept) {
+            await tx.department.create({
+              data: { tenantId, name: d.name }
+            })
+          }
         }
 
         // 4. Mark tenant and users ACTIVE
