@@ -26,15 +26,15 @@ export class SuperadminService {
       totalInvoices,
       recentTenants
     ] = await Promise.all([
-      prisma.clinic.count().catch(() => 0),
-      prisma.clinic.count({ where: { isActive: true } }).catch(() => 0),
+      prisma.tenant.count().catch(() => 0),
+      prisma.tenant.count({ where: { status: 'ACTIVE' } }).catch(() => 0),
       prisma.user.count().catch(() => 0),
       prisma.patient.count().catch(() => 0),
       prisma.invoice.findMany({
         where: { status: 'PAID' },
-        select: { totalAmount: true }
+        select: { amount: true }
       }).catch(() => []),
-      prisma.clinic.findMany({
+      prisma.tenant.findMany({
         take: 5,
         orderBy: { createdAt: 'desc' },
         include: {
@@ -49,8 +49,8 @@ export class SuperadminService {
     const totalRevenueInINR = totalInvoices.reduce((acc, inv) => acc + (inv.amount || 0), 0)
 
     // Calculate calculated MRR estimate from active tenants (Tiered: Starter ₹12,000, Pro ₹28,000, Enterprise ₹65,000)
-    const activeTenantsList = await prisma.clinic.findMany({
-      where: { isActive: true },
+    const activeTenantsList = await prisma.tenant.findMany({
+      where: { status: 'ACTIVE' },
       select: { plan: true }
     }).catch(() => [])
 
@@ -79,9 +79,11 @@ export class SuperadminService {
       recentTenants: recentTenants.map(t => ({
         id: t.id,
         name: t.name,
-        slug: t.slug,
+        slug: t.subdomain,
+        subdomain: t.subdomain,
         plan: t.plan,
-        isActive: t.isActive,
+        status: t.status,
+        isActive: t.status === 'ACTIVE',
         usersCount: t._count.users,
         patientsCount: t._count.patients,
         createdAt: t.createdAt
@@ -97,18 +99,18 @@ export class SuperadminService {
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
-        { slug: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } }
+        { subdomain: { contains: search, mode: 'insensitive' } },
+        { contactEmail: { contains: search, mode: 'insensitive' } }
       ]
     }
     if (plan) where.plan = plan
-    if (status) where.isActive = status === 'active'
+    if (status) where.status = status.toUpperCase() === 'ACTIVE' ? 'ACTIVE' : status.toUpperCase()
 
     const skip = (Math.max(1, page) - 1) * limit
 
     const [total, tenants] = await Promise.all([
-      prisma.clinic.count({ where }).catch(() => 0),
-      prisma.clinic.findMany({
+      prisma.tenant.count({ where }).catch(() => 0),
+      prisma.tenant.findMany({
         where,
         skip,
         take: limit,
@@ -157,7 +159,7 @@ export class SuperadminService {
     const cleanSlug = (slug || name.toLowerCase().replace(/[^a-z0-9]/g, '-')).toLowerCase()
 
     // Check slug uniqueness
-    const existing = await prisma.clinic.findUnique({ where: { slug: cleanSlug } })
+    const existing = await prisma.tenant.findUnique({ where: { subdomain: cleanSlug } })
     if (existing) {
       throw new ConflictError(`A clinic tenant with slug "${cleanSlug}" already exists`)
     }
@@ -171,21 +173,21 @@ export class SuperadminService {
     const passwordHash = await AuthService.hashPassword(adminPassword || 'Admin@12345')
 
     // Create tenant and initial admin
-    const tenant = await prisma.clinic.create({
+    const tenant = await prisma.tenant.create({
       data: {
         name,
-        slug: cleanSlug,
-        email,
-        phone,
-        address,
-        plan
+        subdomain: cleanSlug,
+        domain: `${cleanSlug}.clinic.io`,
+        contactEmail: email,
+        plan,
+        status: 'ACTIVE'
       }
     })
 
     const adminUser = await prisma.user.create({
       data: {
-        clinicId: tenant.id,
-        name: adminName || `${name} Admin`,
+        tenantId: tenant.id,
+        fullName: adminName || `${name} Admin`,
         email: adminEmail.toLowerCase().trim(),
         passwordHash,
         phone,
@@ -198,19 +200,19 @@ export class SuperadminService {
     await AdminService.seedTenantRoles(tenant.id)
 
     await AuditService.log({
-      clinicId: tenant.id,
+      tenantId: tenant.id,
       actorId,
       action: 'TENANT_CREATED',
       entityType: 'Tenant',
       entityId: tenant.id,
-      details: { name: tenant.name, slug: tenant.slug, plan: tenant.plan, adminEmail }
+      details: { name: tenant.name, slug: tenant.subdomain, plan: tenant.plan, adminEmail }
     })
 
     return {
       tenant,
       admin: {
         id: adminUser.id,
-        name: adminUser.name,
+        name: adminUser.fullName,
         email: adminUser.email
       }
     }
@@ -230,7 +232,7 @@ export class SuperadminService {
     }
 
     const nextStatus = 'SUSPENDED'
-    const updated = await prisma.clinic.update({
+    const updated = await prisma.tenant.update({
       where: { id: tenantId },
       data: { status: nextStatus }
     })
@@ -253,7 +255,7 @@ export class SuperadminService {
    * Transactionally approve a tenant clinic and seed role templates
    */
   static async approveTenantTransaction(tenantId, actorId = null) {
-    const tenant = await prisma.clinic.findUnique({
+    const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
       include: { clinicCategory: true, users: true }
     })
@@ -532,7 +534,7 @@ export class SuperadminService {
         })
 
         await tx.user.updateMany({
-          where: { clinicId: tenantId },
+          where: { tenantId: tenantId },
           data: { status: 'ACTIVE' },
         })
 
@@ -599,10 +601,10 @@ export class SuperadminService {
    * Reject a pending tenant registration with required rejection reason
    */
   static async rejectTenant(tenantId, reason = 'Registration criteria not met', actorId = null) {
-    const tenant = await prisma.clinic.findUnique({ where: { id: tenantId } })
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
     if (!tenant) throw new NotFoundError('Tenant not found')
 
-    const updated = await prisma.clinic.update({
+    const updated = await prisma.tenant.update({
       where: { id: tenantId },
       data: {
         status: 'REJECTED',
@@ -647,13 +649,13 @@ export class SuperadminService {
    * Decommission a tenant clinic
    */
   static async decommissionTenant(tenantId, actorId = null) {
-    const tenant = await prisma.clinic.findUnique({ where: { id: tenantId } })
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
     if (!tenant) {
       throw new NotFoundError('Tenant not found')
     }
 
-    await prisma.clinic.delete({ where: { id: tenantId } }).catch(async () => {
-      await prisma.clinic.update({
+    await prisma.tenant.delete({ where: { id: tenantId } }).catch(async () => {
+      await prisma.tenant.update({
         where: { id: tenantId },
         data: { status: 'DECOMMISSIONED' }
       })
@@ -716,7 +718,7 @@ export class SuperadminService {
         id: u.id,
         name: u.fullName,
         email: u.email,
-        clinicId: u.tenantId,
+        tenantId: u.tenantId,
         clinicName: u.tenant ? u.tenant.name : 'Aura Health Memorial',
         role: 'ADMIN',
         status: (u.status || 'ACTIVE').toLowerCase(),
@@ -732,7 +734,7 @@ export class SuperadminService {
             id: 'admin-1',
             name: 'Dr. Sarah Lin',
             email: 'admin@aurahealth.com',
-            clinicId: 'clinic-1',
+            tenantId: 'clinic-1',
             clinicName: 'Aura Health Memorial',
             role: 'ADMIN',
             status: 'active',
@@ -749,12 +751,12 @@ export class SuperadminService {
    * Create new clinic admin account
    */
   static async createAdmin(data) {
-    const { name, email, clinicId, password = 'ClinicAdmin@123' } = data
+    const { name, email, tenantId, password = 'ClinicAdmin@123' } = data
     try {
       const hash = await AuthService.hashPassword(password)
       const user = await prisma.user.create({
         data: {
-          tenantId: clinicId,
+          tenantId: tenantId,
           email: (email || '').toLowerCase().trim(),
           passwordHash: hash,
           fullName: name,
@@ -767,7 +769,7 @@ export class SuperadminService {
         id: user.id,
         name: user.fullName,
         email: user.email,
-        clinicId: user.tenantId,
+        tenantId: user.tenantId,
         clinicName: user.tenant?.name || 'Assigned Clinic',
         role: 'ADMIN',
         status: 'active',
@@ -779,7 +781,7 @@ export class SuperadminService {
         id: 'admin-' + Date.now(),
         name,
         email,
-        clinicId,
+        tenantId,
         clinicName: 'Assigned Clinic',
         role: 'ADMIN',
         status: 'active',

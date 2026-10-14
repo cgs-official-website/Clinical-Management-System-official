@@ -132,7 +132,7 @@ export class RegistrationService {
     try {
       const dbCheckPromise = Promise.all([
         prisma.user.findUnique({ where: { email: normalizedEmail } }),
-        prisma.clinic.findUnique({ where: { subdomain: cleanSubdomain } }),
+        prisma.tenant.findUnique({ where: { subdomain: cleanSubdomain } }),
       ])
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('DB_TIMEOUT')), 8000)
@@ -176,7 +176,7 @@ export class RegistrationService {
     // 5. Insert into database (Prisma / PostgreSQL) if reachable
     if (dbConnected) {
       try {
-        const tenant = await prisma.clinic.create({
+        const tenant = await prisma.tenant.create({
           data: {
             name: clinicName,
             subdomain: cleanSubdomain,
@@ -191,7 +191,7 @@ export class RegistrationService {
 
         await prisma.user.create({
           data: {
-            clinicId: tenant.id,
+            tenantId: tenant.id,
             email: normalizedEmail,
             passwordHash,
             fullName: adminName,
@@ -281,7 +281,7 @@ export class RegistrationService {
       const targetSubdomain = matchedReg?.subdomain || cleanId
       const targetEmail = matchedReg?.email ? matchedReg.email.toLowerCase() : cleanId.toLowerCase()
 
-      const tenant = await prisma.clinic.findFirst({
+      const tenant = await prisma.tenant.findFirst({
         where: {
           OR: [
             { id: targetTenantId },
@@ -316,7 +316,7 @@ export class RegistrationService {
               userType: 'ADMIN',
               isAdmin: true,
               isSuperadmin: false,
-              clinicId: tenant.id,
+              tenantId: tenant.id,
               clinicName: tenant.name,
               tenant: { id: tenant.id, name: tenant.name, subdomain: tenant.subdomain },
               roles,
@@ -329,7 +329,7 @@ export class RegistrationService {
             status: 'approved',
             registration: {
               id: cleanId,
-              clinicId: tenant.id,
+              tenantId: tenant.id,
               clinicName: tenant.name,
               subdomain: tenant.subdomain,
               adminName: adminUser?.fullName || 'Clinic Administrator',
@@ -353,7 +353,7 @@ export class RegistrationService {
             rejectedAt: tenant.updatedAt || new Date().toISOString(),
             registration: {
               id: cleanId,
-              clinicId: tenant.id,
+              tenantId: tenant.id,
               clinicName: tenant.name,
               subdomain: tenant.subdomain,
               adminName: adminUser?.fullName || 'Clinic Administrator',
@@ -368,7 +368,7 @@ export class RegistrationService {
             status: 'pending',
             registration: {
               id: cleanId,
-              clinicId: tenant.id,
+              tenantId: tenant.id,
               clinicName: tenant.name,
               subdomain: tenant.subdomain,
               adminName: adminUser?.fullName || 'Clinic Administrator',
@@ -463,7 +463,7 @@ export class RegistrationService {
     const pending = [...(registry.pending || [])]
 
     try {
-      const pendingTenants = await prisma.clinic.findMany({
+      const pendingTenants = await prisma.tenant.findMany({
         where: { status: { in: ['PENDING', 'SUSPENDED'] } },
         include: { users: true, clinicCategory: true },
         take: 50,
@@ -540,56 +540,6 @@ export class RegistrationService {
     const targetTenantId = reg?.tenantId || id
     const existingTenant = await prisma.tenant.findUnique({ where: { id: targetTenantId } })
 
-<<<<<<< HEAD
-      registry.pending.splice(regIndex, 1)
-      if (!registry.approved) registry.approved = []
-      registry.approved.unshift(reg)
-      writeLocalRegistry(registry)
-    }
-
-    // Synchronize or activate in PostgreSQL via transaction
-    try {
-      const targetTenantId = reg?.tenantId || id
-      const existingTenant = await prisma.clinic.findUnique({
-        where: { id: targetTenantId },
-      })
-
-      if (existingTenant) {
-        await SuperadminService.approveTenantTransaction(targetTenantId)
-      } else if (reg) {
-        // Provision directly into PostgreSQL if not yet created
-        const newTenant = await prisma.clinic.create({
-          data: {
-            name: reg.clinicName,
-            subdomain: reg.subdomain,
-            domain: `${reg.subdomain}.clinic.io`,
-            plan: reg.plan || 'Professional',
-            status: 'PENDING',
-            region: reg.region || 'Asia / India (INR ₹)',
-            contactEmail: reg.email,
-            clinicCategoryId: reg.clinicCategoryId || null,
-          },
-        })
-
-        await prisma.user.create({
-          data: {
-            clinicId: newTenant.id,
-            email: reg.email,
-            passwordHash: reg.passwordHash,
-            fullName: reg.adminName,
-            phone: reg.phone,
-            status: 'INVITED',
-            userType: 'ADMIN',
-          },
-        })
-
-        reg.tenantId = newTenant.id
-        writeLocalRegistry(registry)
-        await SuperadminService.approveTenantTransaction(newTenant.id)
-      }
-    } catch (e) {
-      logger.warn('Could not update PostgreSQL tenant status upon approval:', e.message)
-=======
     if (existingTenant) {
       await SuperadminService.approveTenantTransaction(targetTenantId)
     } else if (reg) {
@@ -624,7 +574,6 @@ export class RegistrationService {
       await SuperadminService.approveTenantTransaction(newTenant.id)
     } else {
       throw new NotFoundError('Registration request not found')
->>>>>>> 94d3869 (approval changes)
     }
 
     // 2. Only after DB success, move the entry pending -> approved in the local registry
@@ -728,7 +677,7 @@ export class RegistrationService {
       })
     } else {
       // Find tenant if clinicName or default
-      const tenant = await prisma.clinic.findFirst({
+      const tenant = await prisma.tenant.findFirst({
         where: clinicName ? { name: { contains: clinicName, mode: 'insensitive' } } : {}
       })
       user = await prisma.user.create({
