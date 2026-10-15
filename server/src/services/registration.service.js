@@ -1,6 +1,3 @@
-import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import { z } from 'zod'
 import bcrypt from 'bcryptjs'
 import { prisma } from '../config/prisma.js'
@@ -12,42 +9,11 @@ import { RbacService } from './rbac.service.js'
 import { NotificationService } from './notification.service.js'
 import { ConflictError, ValidationError, NotFoundError, DatabaseConnectionError } from '../utils/errors.js'
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const DATA_DIR = path.join(__dirname, '../../data')
-const REG_FILE = path.join(DATA_DIR, 'registrations.json')
-
-// Ensure data directory exists
-try {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true })
-  }
-  if (!fs.existsSync(REG_FILE)) {
-    fs.writeFileSync(REG_FILE, JSON.stringify({ pending: [], approved: [] }, null, 2))
-  }
-} catch (e) {
-  logger.warn('Could not initialize local registration registry directory', e)
-}
-
-const readLocalRegistry = () => {
-  try {
-    if (fs.existsSync(REG_FILE)) {
-      const content = fs.readFileSync(REG_FILE, 'utf-8')
-      return JSON.parse(content)
-    }
-  } catch (e) {
-    logger.warn('Failed to read local registration registry', e)
-  }
-  return { pending: [], approved: [] }
-}
-
-const writeLocalRegistry = (data) => {
-  try {
-    fs.writeFileSync(REG_FILE, JSON.stringify(data, null, 2))
-  } catch (e) {
-    logger.error('Failed to write local registration registry', e)
-  }
-}
+/**
+ * All clinic registrations are stored ONLY in PostgreSQL
+ * (tenants table = clinic, users table = admin with status INVITED).
+ * No JSON file is used any more.
+ */
 
 export const registerClinicSchema = z
   .object({
@@ -71,12 +37,30 @@ export const registerClinicSchema = z
     path: ['clinic_category_id'],
   })
 
+const toRegistrationDto = (tenant, adminUser, status) => ({
+  id: tenant.id,
+  tenantId: tenant.id,
+  clinicName: tenant.name,
+  subdomain: tenant.subdomain,
+  adminName: adminUser?.fullName || 'Clinic Administrator',
+  email: adminUser?.email || tenant.contactEmail || '',
+  phone: adminUser?.phone || '',
+  specialty: tenant.clinicCategory?.name || 'Multispecialty & General Care',
+  clinicCategoryId: tenant.clinicCategoryId || null,
+  clinicCategoryName: tenant.clinicCategory?.name || null,
+  region: tenant.region || 'Asia / India (INR ₹)',
+  plan: tenant.plan || 'Professional',
+  status,
+  submittedAt: tenant.createdAt,
+  ...(status === 'rejected' ? { rejectedAt: tenant.updatedAt, rejectionReason: tenant.rejectionReason } : {}),
+  ...(status === 'approved' ? { approvedAt: tenant.updatedAt } : {}),
+})
+
 export class RegistrationService {
   /**
-   * Register a new clinic tenant and administrator
+   * Register a new clinic tenant and administrator (PostgreSQL only)
    */
   static async registerClinic(input) {
-    // 1. Validate input fields
     const parsed = registerClinicSchema.safeParse(input)
     if (!parsed.success) {
       const details = parsed.error.errors.map((e) => ({
@@ -91,92 +75,35 @@ export class RegistrationService {
     const normalizedEmail = email.toLowerCase().trim()
     const cleanSubdomain = subdomain.toLowerCase().trim()
 
-    // Verify clinic category exists if DB reachable
-    let verifiedCategory = null
+    let tenant
     try {
-      if (selectedCategoryId) {
-        verifiedCategory = await prisma.clinicCategory.findFirst({
-          where: { id: selectedCategoryId, isActive: true }
-        })
+      const category = await prisma.clinicCategory.findFirst({
+        where: { id: selectedCategoryId, isActive: true },
+      })
+      if (!category) {
+        throw new ValidationError('Selected clinic category is not available. Please choose another.')
       }
-    } catch {}
 
-    // 2. Check duplicate entry in local registry
-    const registry = readLocalRegistry()
-    const isEmailInPending = (registry.pending || []).some(
-      (r) => (r.email || '').toLowerCase().trim() === normalizedEmail
-    )
-    const isEmailInApproved = (registry.approved || []).some(
-      (r) => (r.email || '').toLowerCase().trim() === normalizedEmail
-    )
-    if (isEmailInPending || isEmailInApproved) {
-      throw new ConflictError(
-        `An account with email "${normalizedEmail}" already exists. If your registration is pending, please await administrator approval.`
-      )
-    }
-
-    const isSubdomainInPending = (registry.pending || []).some(
-      (r) => (r.subdomain || '').toLowerCase().trim() === cleanSubdomain
-    )
-    const isSubdomainInApproved = (registry.approved || []).some(
-      (r) => (r.subdomain || '').toLowerCase().trim() === cleanSubdomain
-    )
-    if (isSubdomainInPending || isSubdomainInApproved) {
-      throw new ConflictError(
-        `The clinic subdomain "${cleanSubdomain}" is already in use. Please select a different subdomain.`
-      )
-    }
-
-    // 3. Duplicate checks against PostgreSQL if database is reachable
-    let dbConnected = false
-    try {
-      const dbCheckPromise = Promise.all([
+      const [existingUser, existingTenant] = await Promise.all([
         prisma.user.findUnique({ where: { email: normalizedEmail } }),
-        prisma.clinic.findUnique({ where: { subdomain: cleanSubdomain } }),
+        prisma.tenant.findUnique({ where: { subdomain: cleanSubdomain } }),
       ])
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('DB_TIMEOUT')), 8000)
-      )
-
-      const [existingUser, existingTenant] = await Promise.race([dbCheckPromise, timeoutPromise])
-      dbConnected = true
-
       if (existingUser) {
-        throw new ConflictError(`An account with email "${normalizedEmail}" already exists. Please log in or use a different email.`)
+        throw new ConflictError(
+          `An account with email "${normalizedEmail}" already exists. If your registration is pending, please await administrator approval.`
+        )
       }
       if (existingTenant) {
-        throw new ConflictError(`The clinic subdomain "${cleanSubdomain}" is already registered. Please choose another.`)
+        throw new ConflictError(
+          `The clinic subdomain "${cleanSubdomain}" is already in use. Please select a different subdomain.`
+        )
       }
-    } catch (err) {
-      if (err instanceof ConflictError) throw err
-      logger.warn(`PostgreSQL duplicate check skipped or timed out: ${err.message}`)
-    }
 
-    // 4. Hash password
-    const passwordHash = await bcrypt.hash(password, 12)
-    const regId = 'reg-' + Date.now()
+      const passwordHash = await bcrypt.hash(password, 12)
 
-    const registrationRecord = {
-      id: regId,
-      clinicName,
-      subdomain: cleanSubdomain,
-      adminName,
-      email: normalizedEmail,
-      passwordHash,
-      phone,
-      specialty: verifiedCategory?.name || specialty,
-      clinicCategoryId: verifiedCategory?.id || selectedCategoryId || null,
-      clinicCategoryName: verifiedCategory?.name || null,
-      region,
-      plan,
-      status: 'pending',
-      submittedAt: new Date().toISOString(),
-    }
-
-    // 5. Insert into database (Prisma / PostgreSQL) if reachable
-    if (dbConnected) {
-      try {
-        const tenant = await prisma.clinic.create({
+      // Tenant + admin user are created together or not at all
+      tenant = await prisma.$transaction(async (tx) => {
+        const t = await tx.tenant.create({
           data: {
             name: clinicName,
             subdomain: cleanSubdomain,
@@ -185,13 +112,12 @@ export class RegistrationService {
             status: 'PENDING',
             region,
             contactEmail: normalizedEmail,
-            clinicCategoryId: verifiedCategory?.id || selectedCategoryId || null,
+            clinicCategoryId: category.id,
           },
         })
-
-        await prisma.user.create({
+        await tx.user.create({
           data: {
-            clinicId: tenant.id,
+            tenantId: t.id,
             email: normalizedEmail,
             passwordHash,
             fullName: adminName,
@@ -200,53 +126,48 @@ export class RegistrationService {
             userType: 'ADMIN',
           },
         })
-
-        registrationRecord.tenantId = tenant.id
-        logger.info(`✅ Successfully inserted clinic registration into PostgreSQL database: ${tenant.id}`)
-      } catch (dbErr) {
-        logger.error(`Failed to insert into PostgreSQL: ${dbErr.message}`)
-        if (dbErr.code === 'P2002') {
-          throw new ConflictError('A record with this email or subdomain already exists in the database.')
-        }
+        return t
+      })
+      logger.info(`✅ Clinic registration saved to PostgreSQL: ${tenant.id}`)
+    } catch (err) {
+      if (err instanceof ConflictError || err instanceof ValidationError) throw err
+      if (err.code === 'P2002') {
+        throw new ConflictError('A record with this email or subdomain already exists.')
       }
+      logger.error(`Registration failed (PostgreSQL): ${err.message}`)
+      throw new DatabaseConnectionError(
+        'Could not save your registration to the database. Please try again shortly.'
+      )
     }
 
-    // 6. Persist to local registry
-    if (!registry.pending) registry.pending = []
-    registry.pending.unshift(registrationRecord)
-    writeLocalRegistry(registry)
-
-    // 7. Create persistent PostgreSQL notification for Superadmin
     try {
       await NotificationService.createNotification({
         notificationType: 'CLINIC_REGISTRATION_PENDING',
         title: `New Clinic Registration: ${clinicName}`,
         message: `${adminName} submitted a new clinic registration for "${clinicName}" (${cleanSubdomain}.clinic.io).`,
         entityType: 'REGISTRATION',
-        entityId: registrationRecord.tenantId || regId,
+        entityId: tenant.id,
         data: {
-          id: regId,
-          tenantId: registrationRecord.tenantId || null,
+          id: tenant.id,
+          tenantId: tenant.id,
           clinicName,
           subdomain: cleanSubdomain,
           adminName,
           email: normalizedEmail,
           phone,
-          submittedAt: registrationRecord.submittedAt,
+          submittedAt: tenant.createdAt,
         },
       })
     } catch (notifErr) {
       logger.warn('Failed to create DB notification during registration:', notifErr.message)
     }
 
-    logger.info(`✅ Registration record stored successfully. ID: ${regId}`)
-
     return {
       success: true,
       message: 'Clinic registration submitted successfully and is awaiting Super Admin verification.',
-      registrationId: regId,
+      registrationId: tenant.id,
       registration: {
-        id: regId,
+        id: tenant.id,
         clinicName,
         subdomain: cleanSubdomain,
         adminName,
@@ -255,274 +176,100 @@ export class RegistrationService {
         region,
         plan,
         status: 'pending',
-        submittedAt: registrationRecord.submittedAt,
+        submittedAt: tenant.createdAt,
       },
     }
   }
 
   /**
-   * Get public registration status by ID (supports pending, approved, and rejected)
+   * Public registration status by registration ID (tenant id), subdomain or email
    */
   static async getRegistrationStatus(id) {
     if (!id) throw new ValidationError('Registration ID is required')
-
     const cleanId = String(id).trim()
-    const registry = readLocalRegistry()
 
-    // 1. Try PostgreSQL lookup first for real-time status updates
-    try {
-      // Find tenant matching ID directly, or via registration tenantId, or subdomain, or contactEmail
-      const matchedReg =
-        (registry.pending || []).find((r) => r.id === cleanId || r.tenantId === cleanId) ||
-        (registry.approved || []).find((r) => r.id === cleanId || r.tenantId === cleanId) ||
-        (registry.rejected || []).find((r) => r.id === cleanId || r.tenantId === cleanId)
+    const tenant = await prisma.tenant.findFirst({
+      where: {
+        OR: [
+          { id: cleanId },
+          { subdomain: cleanId.toLowerCase() },
+          { contactEmail: cleanId.toLowerCase() },
+        ],
+      },
+      include: { users: true, clinicCategory: true },
+    })
+    if (!tenant) throw new NotFoundError('Registration request not found')
 
-      const targetTenantId = matchedReg?.tenantId || cleanId
-      const targetSubdomain = matchedReg?.subdomain || cleanId
-      const targetEmail = matchedReg?.email ? matchedReg.email.toLowerCase() : cleanId.toLowerCase()
-
-      const tenant = await prisma.clinic.findFirst({
-        where: {
-          OR: [
-            { id: targetTenantId },
-            { subdomain: targetSubdomain },
-            { contactEmail: targetEmail },
-          ],
-        },
-        include: {
-          users: true,
-          clinicCategory: true,
-        },
-      })
-
-      if (tenant) {
-        const adminUser = tenant.users?.find((u) => u.userType === 'ADMIN') || tenant.users?.[0]
-
-        if (tenant.status === 'ACTIVE') {
-          let tokens = null
-          let userProfile = null
-
-          if (adminUser) {
-            const accessToken = AuthService.generateAccessToken(adminUser)
-            const { rawToken: refreshToken } = await AuthService.generateRefreshToken(adminUser)
-            tokens = { accessToken, refreshToken, expiresIn: 900 }
-            const { permissions, roles } = await RbacService.getEffectivePermissions(adminUser.id)
-            userProfile = {
-              id: adminUser.id,
-              name: adminUser.fullName,
-              fullName: adminUser.fullName,
-              email: adminUser.email,
-              role: 'ADMIN',
-              userType: 'ADMIN',
-              isAdmin: true,
-              isSuperadmin: false,
-              clinicId: tenant.id,
-              clinicName: tenant.name,
-              tenant: { id: tenant.id, name: tenant.name, subdomain: tenant.subdomain },
-              roles,
-              permissions,
-              effectivePermissions: permissions,
-            }
-          }
-
-          return {
-            status: 'approved',
-            registration: {
-              id: cleanId,
-              clinicId: tenant.id,
-              clinicName: tenant.name,
-              subdomain: tenant.subdomain,
-              adminName: adminUser?.fullName || 'Clinic Administrator',
-              email: adminUser?.email || tenant.contactEmail,
-              submittedAt: tenant.createdAt,
-            },
-            clinic: {
-              id: tenant.id,
-              name: tenant.name,
-              slug: tenant.subdomain,
-            },
-            user: userProfile,
-            tokens,
-          }
-        }
-
-        if (tenant.status === 'REJECTED') {
-          return {
-            status: 'rejected',
-            rejectionReason: tenant.rejectionReason || 'Registration criteria not met',
-            rejectedAt: tenant.updatedAt || new Date().toISOString(),
-            registration: {
-              id: cleanId,
-              clinicId: tenant.id,
-              clinicName: tenant.name,
-              subdomain: tenant.subdomain,
-              adminName: adminUser?.fullName || 'Clinic Administrator',
-              email: adminUser?.email || tenant.contactEmail,
-              submittedAt: tenant.createdAt,
-            },
-          }
-        }
-
-        if (tenant.status === 'PENDING') {
-          return {
-            status: 'pending',
-            registration: {
-              id: cleanId,
-              clinicId: tenant.id,
-              clinicName: tenant.name,
-              subdomain: tenant.subdomain,
-              adminName: adminUser?.fullName || 'Clinic Administrator',
-              email: adminUser?.email || tenant.contactEmail,
-              submittedAt: tenant.createdAt,
-            },
-          }
-        }
-      }
-    } catch (e) {
-      logger.warn(`PostgreSQL registration status check fallback: ${e.message}`)
+    const adminUser = tenant.users?.find((u) => u.userType === 'ADMIN') || tenant.users?.[0]
+    const registration = {
+      ...toRegistrationDto(tenant, adminUser, tenant.status.toLowerCase()),
+      clinicId: tenant.id,
     }
 
-    // 2. Check local registry (offline / fallback)
-    const approved = (registry.approved || []).find(
-      (r) => r.id === cleanId || r.tenantId === cleanId || r.subdomain === cleanId || r.email?.toLowerCase() === cleanId.toLowerCase()
-    )
-    if (approved) {
-      const mockTokens = approved.tokens || {
-        accessToken: `jwt_token_admin_${Date.now()}`,
-        refreshToken: `refresh_token_admin_${Date.now()}`,
-        expiresIn: 900,
-      }
-      const mockUser = approved.user || {
-        id: approved.tenantId || approved.id,
-        email: approved.email,
-        name: approved.adminName || 'Clinic Administrator',
-        role: 'ADMIN',
-        tenantId: approved.tenantId,
+    if (tenant.status === 'ACTIVE') {
+      let tokens = null
+      let userProfile = null
+      if (adminUser) {
+        const accessToken = AuthService.generateAccessToken(adminUser)
+        const { rawToken: refreshToken } = await AuthService.generateRefreshToken(adminUser)
+        tokens = { accessToken, refreshToken, expiresIn: 900 }
+        const { permissions, roles } = await RbacService.getEffectivePermissions(adminUser.id)
+        userProfile = {
+          id: adminUser.id,
+          name: adminUser.fullName,
+          fullName: adminUser.fullName,
+          email: adminUser.email,
+          role: 'ADMIN',
+          userType: 'ADMIN',
+          isAdmin: true,
+          isSuperadmin: false,
+          tenantId: tenant.id,
+          clinicId: tenant.id,
+          clinicName: tenant.name,
+          tenant: { id: tenant.id, name: tenant.name, subdomain: tenant.subdomain },
+          roles,
+          permissions,
+          effectivePermissions: permissions,
+        }
       }
       return {
         status: 'approved',
-        registration: approved,
-        tokens: mockTokens,
-        user: mockUser,
-        clinic: {
-          id: approved.tenantId || approved.id,
-          name: approved.clinicName,
-          slug: approved.subdomain,
-        },
+        registration,
+        clinic: { id: tenant.id, name: tenant.name, slug: tenant.subdomain },
+        user: userProfile,
+        tokens,
       }
     }
 
-    const rejected = (registry.rejected || []).find(
-      (r) => r.id === cleanId || r.tenantId === cleanId || r.subdomain === cleanId || r.email?.toLowerCase() === cleanId.toLowerCase()
-    )
-    if (rejected) {
+    if (tenant.status === 'REJECTED') {
       return {
         status: 'rejected',
-        rejectionReason: rejected.rejectionReason || 'Registration criteria not met',
-        rejectedAt: rejected.rejectedAt || new Date().toISOString(),
-        registration: {
-          id: rejected.id,
-          tenantId: rejected.tenantId,
-          clinicName: rejected.clinicName,
-          subdomain: rejected.subdomain,
-          adminName: rejected.adminName,
-          email: rejected.email,
-          status: 'rejected',
-          submittedAt: rejected.submittedAt,
-        },
+        rejectionReason: tenant.rejectionReason || 'Registration criteria not met',
+        rejectedAt: tenant.updatedAt,
+        registration,
       }
     }
 
-    const pending = (registry.pending || []).find(
-      (r) => r.id === cleanId || r.tenantId === cleanId || r.subdomain === cleanId || r.email?.toLowerCase() === cleanId.toLowerCase()
-    )
-    if (pending) {
-      return {
-        status: 'pending',
-        registration: {
-          id: pending.id,
-          tenantId: pending.tenantId,
-          clinicName: pending.clinicName,
-          subdomain: pending.subdomain,
-          adminName: pending.adminName,
-          email: pending.email,
-          status: 'pending',
-          submittedAt: pending.submittedAt,
-        },
-      }
-    }
-
-    throw new NotFoundError('Registration request not found')
+    return { status: 'pending', registration }
   }
 
   /**
-   * Get all pending registrations for Super Admin review (both local registry and PostgreSQL)
+   * All pending registrations for Super Admin review (from PostgreSQL)
    */
   static async getPendingRegistrations() {
-    const registry = readLocalRegistry()
-    const pending = [...(registry.pending || [])]
+    const tenants = await prisma.tenant.findMany({
+      where: { status: 'PENDING' },
+      include: { users: true, clinicCategory: true },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    })
 
-    try {
-      const pendingTenants = await prisma.clinic.findMany({
-        where: { status: { in: ['PENDING', 'SUSPENDED'] } },
-        include: { users: true, clinicCategory: true },
-        take: 50,
-      })
+    const pending = tenants.map((t) => {
+      const adminUser = t.users.find((u) => u.userType === 'ADMIN') || t.users[0]
+      return toRegistrationDto(t, adminUser, 'pending')
+    })
 
-      for (const t of pendingTenants) {
-        const adminUser = t.users.find((u) => u.userType === 'ADMIN') || t.users[0]
-        const existsInLocal = pending.some((p) => p.subdomain === t.subdomain || p.tenantId === t.id || p.id === t.id)
-        if (!existsInLocal) {
-          pending.push({
-            id: t.id,
-            tenantId: t.id,
-            clinicName: t.name,
-            subdomain: t.subdomain,
-            adminName: adminUser ? adminUser.fullName : 'Clinic Administrator',
-            email: adminUser ? adminUser.email : (t.contactEmail || ''),
-            phone: adminUser?.phone || '',
-            specialty: t.clinicCategory?.name || 'Multispecialty & General Care',
-            clinicCategoryName: t.clinicCategory?.name || null,
-            clinicCategoryId: t.clinicCategoryId || null,
-            region: t.region || 'Asia / India (INR ₹)',
-            plan: t.plan || 'Professional',
-            status: 'pending',
-            submittedAt: t.createdAt ? t.createdAt.toISOString() : new Date().toISOString(),
-          })
-        }
-      }
-    } catch (e) {
-      logger.warn('Could not query PostgreSQL for pending tenants:', e.message)
-    }
-
-    // Also sync pending registrations into PostgreSQL notifications table
-    try {
-      for (const item of pending) {
-        const entityId = item.tenantId || item.id
-        if (entityId) {
-          const existingNotif = await prisma.notification.findFirst({
-            where: { entityId },
-          })
-          if (!existingNotif) {
-            await NotificationService.createNotification({
-              notificationType: 'CLINIC_REGISTRATION_PENDING',
-              title: `New Clinic Registration: ${item.clinicName}`,
-              message: `${item.adminName} submitted a new clinic registration for "${item.clinicName}" (${item.subdomain}.clinic.io).`,
-              entityType: 'REGISTRATION',
-              entityId,
-              data: item,
-            })
-          }
-        }
-      }
-    } catch (syncErr) {
-      logger.warn('Could not sync pending registrations into PostgreSQL notifications:', syncErr.message)
-    }
-
-    return {
-      registrations: pending,
-      total: pending.length,
-    }
+    return { registrations: pending, total: pending.length }
   }
 
   /**
@@ -531,70 +278,15 @@ export class RegistrationService {
   static async approveRegistration(id) {
     if (!id) throw new ValidationError('Registration ID is required')
 
-    const registry = readLocalRegistry()
-    const regIndex = (registry.pending || []).findIndex((r) => r.id === id || r.tenantId === id)
+    const tenant = await prisma.tenant.findUnique({ where: { id } })
+    if (!tenant) throw new NotFoundError('Registration not found')
 
-    let reg = null
-    if (regIndex !== -1) {
-      reg = registry.pending[regIndex]
-      reg.status = 'approved'
-      reg.approvedAt = new Date().toISOString()
+    await SuperadminService.approveTenantTransaction(id)
 
-      registry.pending.splice(regIndex, 1)
-      if (!registry.approved) registry.approved = []
-      registry.approved.unshift(reg)
-      writeLocalRegistry(registry)
-    }
-
-    // Synchronize or activate in PostgreSQL via transaction
-    try {
-      const targetTenantId = reg?.tenantId || id
-      const existingTenant = await prisma.clinic.findUnique({
-        where: { id: targetTenantId },
-      })
-
-      if (existingTenant) {
-        await SuperadminService.approveTenantTransaction(targetTenantId)
-      } else if (reg) {
-        // Provision directly into PostgreSQL if not yet created
-        const newTenant = await prisma.clinic.create({
-          data: {
-            name: reg.clinicName,
-            subdomain: reg.subdomain,
-            domain: `${reg.subdomain}.clinic.io`,
-            plan: reg.plan || 'Professional',
-            status: 'PENDING',
-            region: reg.region || 'Asia / India (INR ₹)',
-            contactEmail: reg.email,
-            clinicCategoryId: reg.clinicCategoryId || null,
-          },
-        })
-
-        await prisma.user.create({
-          data: {
-            clinicId: newTenant.id,
-            email: reg.email,
-            passwordHash: reg.passwordHash,
-            fullName: reg.adminName,
-            phone: reg.phone,
-            status: 'INVITED',
-            userType: 'ADMIN',
-          },
-        })
-
-        reg.tenantId = newTenant.id
-        writeLocalRegistry(registry)
-        await SuperadminService.approveTenantTransaction(newTenant.id)
-      }
-    } catch (e) {
-      logger.warn('Could not update PostgreSQL tenant status upon approval:', e.message)
-    }
-
-    const clinicName = reg ? reg.clinicName : 'Clinic'
     return {
       success: true,
-      message: `Registration for "${clinicName}" approved and workspace activated!`,
-      registration: reg || { id, status: 'approved' },
+      message: `Registration for "${tenant.name}" approved and workspace activated!`,
+      registration: { id, tenantId: id, clinicName: tenant.name, status: 'approved' },
     }
   }
 
@@ -604,34 +296,15 @@ export class RegistrationService {
   static async rejectRegistration(id, reason = 'Registration criteria not met') {
     if (!id) throw new ValidationError('Registration ID is required')
 
-    const registry = readLocalRegistry()
-    const regIndex = (registry.pending || []).findIndex((r) => r.id === id || r.tenantId === id)
+    const tenant = await prisma.tenant.findUnique({ where: { id } })
+    if (!tenant) throw new NotFoundError('Registration not found')
 
-    let reg = null
-    if (regIndex !== -1) {
-      reg = registry.pending[regIndex]
-      reg.status = 'rejected'
-      reg.rejectedAt = new Date().toISOString()
-      reg.rejectionReason = reason
+    await SuperadminService.rejectTenant(id, reason)
 
-      registry.pending.splice(regIndex, 1)
-      if (!registry.rejected) registry.rejected = []
-      registry.rejected.unshift(reg)
-      writeLocalRegistry(registry)
-    }
-
-    try {
-      const targetTenantId = reg?.tenantId || id
-      await SuperadminService.rejectTenant(targetTenantId, reason)
-    } catch (e) {
-      logger.warn('Could not update PostgreSQL tenant status upon rejection:', e.message)
-    }
-
-    const clinicName = reg ? reg.clinicName : 'Clinic'
     return {
       success: true,
-      message: `Registration for "${clinicName}" has been rejected.`,
-      registration: reg || { id, status: 'rejected', rejectionReason: reason },
+      message: `Registration for "${tenant.name}" has been rejected.`,
+      registration: { id, tenantId: id, clinicName: tenant.name, status: 'rejected', rejectionReason: reason },
     }
   }
 
@@ -677,7 +350,7 @@ export class RegistrationService {
       })
     } else {
       // Find tenant if clinicName or default
-      const tenant = await prisma.clinic.findFirst({
+      const tenant = await prisma.tenant.findFirst({
         where: clinicName ? { name: { contains: clinicName, mode: 'insensitive' } } : {}
       })
       user = await prisma.user.create({
@@ -707,7 +380,7 @@ export class RegistrationService {
         if (!hasRole) {
           await prisma.userRoleAssignment.create({
             data: { userId: user.id, roleId: resolvedRole.id }
-          }).catch(() => {})
+          }).catch(() => { })
         }
       }
     }

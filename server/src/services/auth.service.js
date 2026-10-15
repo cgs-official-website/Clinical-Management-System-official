@@ -96,43 +96,6 @@ export class AuthService {
       normalizedEmail = 'muzzimuzzi007@gmail.com'
     }
 
-    // 0. Check if this account is pending Super Admin approval or rejected in the local registry
-    try {
-      if (fs.existsSync(REG_FILE)) {
-        const registry = JSON.parse(fs.readFileSync(REG_FILE, 'utf-8'))
-        const rejectedItem = (registry.rejected || []).find(
-          (r) => (r.email || '').toLowerCase().trim() === normalizedEmail
-        )
-        if (rejectedItem) {
-          throw new TenantRejectedError(
-            rejectedItem.rejectionReason || 'Your clinic registration was not approved.',
-            {
-              rejectionReason: rejectedItem.rejectionReason || 'Registration criteria not met',
-              clinicName: rejectedItem.clinicName,
-              email: rejectedItem.email,
-              subdomain: rejectedItem.subdomain,
-              queueReferenceId: rejectedItem.id || rejectedItem.tenantId,
-              rejectedAt: rejectedItem.rejectedAt || null,
-            }
-          )
-        }
-        const pendingItem = (registry.pending || []).find(
-          (r) => (r.email || '').toLowerCase().trim() === normalizedEmail
-        )
-        if (pendingItem) {
-          throw new TenantPendingApprovalError('Your clinic registration is still under review.', {
-            clinicName: pendingItem.clinicName,
-            email: pendingItem.email,
-            subdomain: pendingItem.subdomain,
-            queueReferenceId: pendingItem.id || pendingItem.tenantId,
-            submittedAt: pendingItem.submittedAt || null,
-          })
-        }
-      }
-    } catch (e) {
-      if (e instanceof TenantPendingApprovalError || e instanceof TenantRejectedError || e instanceof UnauthorizedError) throw e
-    }
-
     let dbUser = null
 
     // 1. Query PostgreSQL via Prisma with 8000ms timeout
@@ -243,26 +206,26 @@ export class AuthService {
         clinicCategoryName: dbUser.tenant?.clinicCategory?.name || null,
         clinicCategory: dbUser.tenant?.clinicCategory
           ? {
-              id: dbUser.tenant.clinicCategory.id,
-              name: dbUser.tenant.clinicCategory.name,
-              description: dbUser.tenant.clinicCategory.description,
-            }
+            id: dbUser.tenant.clinicCategory.id,
+            name: dbUser.tenant.clinicCategory.name,
+            description: dbUser.tenant.clinicCategory.description,
+          }
           : null,
         tenant: dbUser.tenant
           ? {
-              id: dbUser.tenant.id,
-              name: dbUser.tenant.name,
-              subdomain: dbUser.tenant.subdomain,
-              clinicCategoryId: dbUser.tenant.clinicCategoryId,
-              clinicCategoryName: dbUser.tenant.clinicCategory?.name,
-              clinicCategory: dbUser.tenant.clinicCategory
-                ? {
-                    id: dbUser.tenant.clinicCategory.id,
-                    name: dbUser.tenant.clinicCategory.name,
-                    description: dbUser.tenant.clinicCategory.description,
-                  }
-                : null,
-            }
+            id: dbUser.tenant.id,
+            name: dbUser.tenant.name,
+            subdomain: dbUser.tenant.subdomain,
+            clinicCategoryId: dbUser.tenant.clinicCategoryId,
+            clinicCategoryName: dbUser.tenant.clinicCategory?.name,
+            clinicCategory: dbUser.tenant.clinicCategory
+              ? {
+                id: dbUser.tenant.clinicCategory.id,
+                name: dbUser.tenant.clinicCategory.name,
+                description: dbUser.tenant.clinicCategory.description,
+              }
+              : null,
+          }
           : null,
         roles,
         permissions,
@@ -367,7 +330,7 @@ export class AuthService {
           if (meta.email) targetEmail = meta.email.toLowerCase().trim()
           if (meta.isSuperadmin) targetIsSuper = true
         }
-      } catch {}
+      } catch { }
     }
 
     // If target indicates superadmin or no specific email, check superadmin
@@ -391,7 +354,7 @@ export class AuthService {
             expiresIn: 900,
           }
         }
-      } catch {}
+      } catch { }
 
       // 2. Check demo accounts
       const demoUser = DEMO_ACCOUNTS[targetEmail] || (targetIsSuper ? DEMO_ACCOUNTS['admin@zuna.com'] : null)
@@ -489,26 +452,26 @@ export class AuthService {
           clinicCategoryName: user.tenant?.clinicCategory?.name || null,
           clinicCategory: user.tenant?.clinicCategory
             ? {
-                id: user.tenant.clinicCategory.id,
-                name: user.tenant.clinicCategory.name,
-                description: user.tenant.clinicCategory.description,
-              }
+              id: user.tenant.clinicCategory.id,
+              name: user.tenant.clinicCategory.name,
+              description: user.tenant.clinicCategory.description,
+            }
             : null,
           tenant: user.tenant
             ? {
-                id: user.tenant.id,
-                name: user.tenant.name,
-                subdomain: user.tenant.subdomain,
-                clinicCategoryId: user.tenant.clinicCategoryId,
-                clinicCategoryName: user.tenant.clinicCategory?.name,
-                clinicCategory: user.tenant.clinicCategory
-                  ? {
-                      id: user.tenant.clinicCategory.id,
-                      name: user.tenant.clinicCategory.name,
-                      description: user.tenant.clinicCategory.description,
-                    }
-                  : null,
-              }
+              id: user.tenant.id,
+              name: user.tenant.name,
+              subdomain: user.tenant.subdomain,
+              clinicCategoryId: user.tenant.clinicCategoryId,
+              clinicCategoryName: user.tenant.clinicCategory?.name,
+              clinicCategory: user.tenant.clinicCategory
+                ? {
+                  id: user.tenant.clinicCategory.id,
+                  name: user.tenant.clinicCategory.name,
+                  description: user.tenant.clinicCategory.description,
+                }
+                : null,
+            }
             : null,
           userType: user.userType,
           role: primaryRole,

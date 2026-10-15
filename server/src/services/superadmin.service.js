@@ -1,6 +1,3 @@
-import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import { prisma, checkDatabaseHealth } from '../config/prisma.js'
 import { redis, pubsub } from '../config/redis.js'
 import { logger } from '../utils/logger.js'
@@ -8,10 +5,6 @@ import { AuthService } from './auth.service.js'
 import { AdminService } from './admin.service.js'
 import { AuditService } from './audit.service.js'
 import { ConflictError, NotFoundError, ValidationError } from '../utils/errors.js'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const REG_FILE = path.join(__dirname, '../../data/registrations.json')
 
 export class SuperadminService {
   /**
@@ -23,47 +16,41 @@ export class SuperadminService {
       activeTenants,
       totalUsers,
       totalPatients,
-      totalInvoices,
-      recentTenants
+      paidInvoices,
+      recentTenants,
+      activeTenantsList
     ] = await Promise.all([
-      prisma.clinic.count().catch(() => 0),
-      prisma.clinic.count({ where: { isActive: true } }).catch(() => 0),
+      prisma.tenant.count().catch(() => 0),
+      prisma.tenant.count({ where: { status: 'ACTIVE' } }).catch(() => 0),
       prisma.user.count().catch(() => 0),
       prisma.patient.count().catch(() => 0),
       prisma.invoice.findMany({
         where: { status: 'PAID' },
-        select: { totalAmount: true }
+        select: { amount: true }
       }).catch(() => []),
-      prisma.clinic.findMany({
+      prisma.tenant.findMany({
         take: 5,
         orderBy: { createdAt: 'desc' },
-        include: {
-          _count: {
-            select: { users: true, patients: true }
-          }
-        }
+        include: { _count: { select: { users: true, patients: true } } }
+      }).catch(() => []),
+      prisma.tenant.findMany({
+        where: { status: 'ACTIVE' },
+        select: { plan: true }
       }).catch(() => [])
     ])
 
-    // Calculate total revenue in INR
-    const totalRevenueInINR = totalInvoices.reduce((acc, inv) => acc + (inv.amount || 0), 0)
+    const totalRevenueInINR = paidInvoices.reduce((acc, inv) => acc + (inv.amount || 0), 0)
 
-    // Calculate calculated MRR estimate from active tenants (Tiered: Starter ₹12,000, Pro ₹28,000, Enterprise ₹65,000)
-    const activeTenantsList = await prisma.clinic.findMany({
-      where: { isActive: true },
-      select: { plan: true }
-    }).catch(() => [])
-
-    const planPricesINR = {
-      STARTER: 12500,
-      PRO: 28500,
-      ENTERPRISE: 65001,
-      TRIAL: 0
+    // Tiered MRR estimate (Starter / Professional / Enterprise)
+    const planPriceFor = (plan = '') => {
+      const p = String(plan).toUpperCase()
+      if (p.includes('ENTERPRISE')) return 65000
+      if (p.includes('PRO')) return 28500
+      if (p.includes('STARTER')) return 12500
+      if (p.includes('TRIAL')) return 0
+      return 15000
     }
-
-    const calculatedMRR = activeTenantsList.reduce((sum, t) => {
-      return sum + (planPricesINR[t.plan] || 15001)
-    }, 0)
+    const calculatedMRR = activeTenantsList.reduce((sum, t) => sum + planPriceFor(t.plan), 0)
 
     return {
       kpis: {
@@ -79,11 +66,12 @@ export class SuperadminService {
       recentTenants: recentTenants.map(t => ({
         id: t.id,
         name: t.name,
-        slug: t.slug,
+        slug: t.subdomain,
         plan: t.plan,
-        isActive: t.isActive,
-        usersCount: t._count.users,
-        patientsCount: t._count.patients,
+        status: t.status,
+        isActive: t.status === 'ACTIVE',
+        usersCount: t._count?.users || 0,
+        patientsCount: t._count?.patients || 0,
         createdAt: t.createdAt
       }))
     }
@@ -97,18 +85,18 @@ export class SuperadminService {
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },
-        { slug: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } }
+        { subdomain: { contains: search, mode: 'insensitive' } },
+        { contactEmail: { contains: search, mode: 'insensitive' } }
       ]
     }
     if (plan) where.plan = plan
-    if (status) where.isActive = status === 'active'
+    if (status) where.status = String(status).toUpperCase()
 
     const skip = (Math.max(1, page) - 1) * limit
 
     const [total, tenants] = await Promise.all([
-      prisma.clinic.count({ where }).catch(() => 0),
-      prisma.clinic.findMany({
+      prisma.tenant.count({ where }).catch(() => 0),
+      prisma.tenant.findMany({
         where,
         skip,
         take: limit,
@@ -157,7 +145,7 @@ export class SuperadminService {
     const cleanSlug = (slug || name.toLowerCase().replace(/[^a-z0-9]/g, '-')).toLowerCase()
 
     // Check slug uniqueness
-    const existing = await prisma.clinic.findUnique({ where: { slug: cleanSlug } })
+    const existing = await prisma.tenant.findUnique({ where: { subdomain: cleanSlug } })
     if (existing) {
       throw new ConflictError(`A clinic tenant with slug "${cleanSlug}" already exists`)
     }
@@ -171,21 +159,21 @@ export class SuperadminService {
     const passwordHash = await AuthService.hashPassword(adminPassword || 'Admin@12345')
 
     // Create tenant and initial admin
-    const tenant = await prisma.clinic.create({
+    const tenant = await prisma.tenant.create({
       data: {
         name,
-        slug: cleanSlug,
-        email,
-        phone,
-        address,
-        plan
+        subdomain: cleanSlug,
+        domain: `${cleanSlug}.clinic.io`,
+        contactEmail: email,
+        plan,
+        status: 'ACTIVE'
       }
     })
 
     const adminUser = await prisma.user.create({
       data: {
-        clinicId: tenant.id,
-        name: adminName || `${name} Admin`,
+        tenantId: tenant.id,
+        fullName: adminName || `${name} Admin`,
         email: adminEmail.toLowerCase().trim(),
         passwordHash,
         phone,
@@ -198,19 +186,19 @@ export class SuperadminService {
     await AdminService.seedTenantRoles(tenant.id)
 
     await AuditService.log({
-      clinicId: tenant.id,
+      tenantId: tenant.id,
       actorId,
       action: 'TENANT_CREATED',
       entityType: 'Tenant',
       entityId: tenant.id,
-      details: { name: tenant.name, slug: tenant.slug, plan: tenant.plan, adminEmail }
+      details: { name: tenant.name, slug: tenant.subdomain, plan: tenant.plan, adminEmail }
     })
 
     return {
       tenant,
       admin: {
         id: adminUser.id,
-        name: adminUser.name,
+        name: adminUser.fullName,
         email: adminUser.email
       }
     }
@@ -230,7 +218,7 @@ export class SuperadminService {
     }
 
     const nextStatus = 'SUSPENDED'
-    const updated = await prisma.clinic.update({
+    const updated = await prisma.tenant.update({
       where: { id: tenantId },
       data: { status: nextStatus }
     })
@@ -253,7 +241,7 @@ export class SuperadminService {
    * Transactionally approve a tenant clinic and seed role templates
    */
   static async approveTenantTransaction(tenantId, actorId = null) {
-    const tenant = await prisma.clinic.findUnique({
+    const tenant = await prisma.tenant.findUnique({
       where: { id: tenantId },
       include: { clinicCategory: true, users: true }
     })
@@ -525,7 +513,7 @@ export class SuperadminService {
         })
 
         await tx.user.updateMany({
-          where: { clinicId: tenantId },
+          where: { tenantId },
           data: { status: 'ACTIVE' },
         })
 
@@ -537,21 +525,6 @@ export class SuperadminService {
       }
     )
 
-    // Sync local registry if present
-    try {
-      if (fs.existsSync(REG_FILE)) {
-        const registry = JSON.parse(fs.readFileSync(REG_FILE, 'utf-8'))
-        const idx = (registry.pending || []).findIndex(r => r.tenantId === tenantId || r.id === tenantId)
-        if (idx !== -1) {
-          const item = registry.pending.splice(idx, 1)[0]
-          item.status = 'approved'
-          item.approvedAt = new Date().toISOString()
-          if (!registry.approved) registry.approved = []
-          registry.approved.unshift(item)
-          fs.writeFileSync(REG_FILE, JSON.stringify(registry, null, 2))
-        }
-      }
-    } catch { }
 
     await AuditService.log({
       tenantId,
@@ -592,10 +565,10 @@ export class SuperadminService {
    * Reject a pending tenant registration with required rejection reason
    */
   static async rejectTenant(tenantId, reason = 'Registration criteria not met', actorId = null) {
-    const tenant = await prisma.clinic.findUnique({ where: { id: tenantId } })
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
     if (!tenant) throw new NotFoundError('Tenant not found')
 
-    const updated = await prisma.clinic.update({
+    const updated = await prisma.tenant.update({
       where: { id: tenantId },
       data: {
         status: 'REJECTED',
@@ -603,22 +576,6 @@ export class SuperadminService {
       }
     })
 
-    // Sync local registry if present
-    try {
-      if (fs.existsSync(REG_FILE)) {
-        const registry = JSON.parse(fs.readFileSync(REG_FILE, 'utf-8'))
-        const idx = (registry.pending || []).findIndex(r => r.tenantId === tenantId || r.id === tenantId)
-        if (idx !== -1) {
-          const item = registry.pending.splice(idx, 1)[0]
-          item.status = 'rejected'
-          item.rejectedAt = new Date().toISOString()
-          item.rejectionReason = reason
-          if (!registry.rejected) registry.rejected = []
-          registry.rejected.unshift(item)
-          fs.writeFileSync(REG_FILE, JSON.stringify(registry, null, 2))
-        }
-      }
-    } catch { }
 
     await AuditService.log({
       tenantId,
@@ -640,13 +597,13 @@ export class SuperadminService {
    * Decommission a tenant clinic
    */
   static async decommissionTenant(tenantId, actorId = null) {
-    const tenant = await prisma.clinic.findUnique({ where: { id: tenantId } })
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } })
     if (!tenant) {
       throw new NotFoundError('Tenant not found')
     }
 
-    await prisma.clinic.delete({ where: { id: tenantId } }).catch(async () => {
-      await prisma.clinic.update({
+    await prisma.tenant.delete({ where: { id: tenantId } }).catch(async () => {
+      await prisma.tenant.update({
         where: { id: tenantId },
         data: { status: 'DECOMMISSIONED' }
       })

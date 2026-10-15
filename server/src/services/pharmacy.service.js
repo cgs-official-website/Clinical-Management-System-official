@@ -116,7 +116,7 @@ export class PharmacyService {
   static async resolveTenantId(tenantId) {
     let targetTenantId = tenantId
     if (!targetTenantId || targetTenantId.startsWith('clinic-')) {
-      const firstTenant = await prisma.clinic.findFirst({ select: { id: true } })
+      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     return targetTenantId
@@ -281,7 +281,7 @@ export class PharmacyService {
     for (let i = 0; i < Math.min(rawRows.length, 25); i++) {
       const row = rawRows[i]
       if (Array.isArray(row)) {
-        const hasDrugName = row.some(cell => 
+        const hasDrugName = row.some(cell =>
           typeof cell === 'string' && cell.toLowerCase().includes('drug name')
         )
         if (hasDrugName) {
@@ -309,7 +309,7 @@ export class PharmacyService {
 
     // Fetch existing inventory for duplicate checks in this tenant
     const existingItems = await prisma.inventoryItem.findMany({
-      where: targetTenantId ? { clinicId: targetTenantId } : {},
+      where: targetTenantId ? { tenantId: targetTenantId } : {},
       select: {
         id: true,
         itemCode: true,
@@ -618,7 +618,7 @@ export class PharmacyService {
             // Create Stock Movement Log Entry
             await tx.inventoryStockMovement.create({
               data: {
-                clinicId: targetTenantId,
+                tenantId: targetTenantId,
                 inventoryItemId: updated.id,
                 movementType: 'Bulk Import',
                 quantityIn: data.stockQuantity || 0,
@@ -644,7 +644,7 @@ export class PharmacyService {
 
         const newItem = await tx.inventoryItem.create({
           data: {
-            clinicId: targetTenantId,
+            tenantId: targetTenantId,
             itemCode,
             name: data.name,
             brandName: data.brandName,
@@ -679,7 +679,7 @@ export class PharmacyService {
         // Initial Stock Movement Log entry
         await tx.inventoryStockMovement.create({
           data: {
-            clinicId: targetTenantId,
+            tenantId: targetTenantId,
             inventoryItemId: newItem.id,
             movementType: 'Bulk Import',
             quantityIn: data.stockQuantity || 0,
@@ -698,7 +698,7 @@ export class PharmacyService {
 
     // Audit Log for compliance traceability
     await AuditService.log({
-      clinicId: targetTenantId,
+      tenantId: targetTenantId,
       actorUserId: actorId || null,
       action: 'PHARMACY_INVENTORY_BULK_IMPORT',
       entityType: 'InventoryItem',
@@ -783,3 +783,6 @@ export class PharmacyService {
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
   }
 }
+
+
+
