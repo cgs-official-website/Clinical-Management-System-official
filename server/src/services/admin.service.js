@@ -67,11 +67,11 @@ export class AdminService {
       prisma.user.count({ where: { ...(tenantId ? { tenantId: tenantId } : {}), status: 'ACTIVE' } }).catch(() => 0),
       prisma.invoice.findMany({
         where: { ...(tenantId ? { tenantId: tenantId } : {}), status: 'PAID' },
-        select: { totalAmount: true }
+        select: { amount: true }
       }).catch(() => []),
       prisma.invoice.findMany({
         where: { ...(tenantId ? { tenantId: tenantId } : {}), status: 'PENDING' },
-        select: { totalAmount: true }
+        select: { amount: true }
       }).catch(() => []),
       prisma.patient.findMany({
         where: {
@@ -94,8 +94,8 @@ export class AdminService {
       }).catch(() => [])
     ])
 
-    const totalRevenueINR = paidInvoices.reduce((sum, i) => sum + (i.totalAmount ?? i.amount ?? 0), 0)
-    const pendingRevenueINR = pendingInvoices.reduce((sum, i) => sum + (i.totalAmount ?? i.amount ?? 0), 0)
+    const totalRevenueINR = paidInvoices.reduce((sum, i) => sum + (i.amount ?? 0), 0)
+    const pendingRevenueINR = pendingInvoices.reduce((sum, i) => sum + (i.amount ?? 0), 0)
 
     // Build 7-day trend series (dynamically from real database records)
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
