@@ -162,7 +162,7 @@ export class ClinicalService {
       action: 'PATIENT_CREATED',
       entityType: 'Patient',
       entityId: patient.id,
-      details: { fullName: patient.fullName, mrn: patient.medicalRecordNumber: mrn, phone: patient.phone }
+      details: { fullName: patient.fullName, mrn: patient.medicalRecordNumber || patient.mrn || mrn, phone: patient.phoneNumber || patient.phone || phone }
     }).catch(() => {})
 
     const birthYear = (patient.dateOfBirth || patient.dob) ? new Date(patient.dob).getFullYear() : 1990
@@ -632,8 +632,8 @@ export class ClinicalService {
       patient: {
         id: updatedPatient.id,
         fullName: updatedPatient.fullName,
-        mrn: updatedPatient.medicalRecordNumber: mrn,
-        phone: updatedPatient.phoneNumber: phone,
+        mrn: updatedPatient.medicalRecordNumber || updatedPatient.mrn,
+        phone: updatedPatient.phoneNumber || updatedPatient.phone,
         gender: updatedPatient.gender,
         latestVitals: triageReport
       }
@@ -702,8 +702,8 @@ export class ClinicalService {
           tokenNumber: latest.tokenNumber,
           patientId: p.id,
           patientName: p.fullName,
-          patientMrn: p.medicalRecordNumber: mrn,
-          patientPhone: p.phoneNumber: phone,
+          patientMrn: p.medicalRecordNumber || p.mrn,
+          patientPhone: p.phoneNumber || p.phone,
           patientGender: p.gender,
           weight: latest.weight,
           bp: latest.bp,

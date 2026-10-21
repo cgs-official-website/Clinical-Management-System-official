@@ -13,34 +13,7 @@ const getInitialDb = () => {
     try {
       const parsed = JSON.parse(saved)
       if (!parsed.pendingRegistrations) {
-        parsed.pendingRegistrations = [
-          {
-            id: 'reg-demo-1',
-            clinicName: 'Zenith Cardiology & Vascular Institute',
-            subdomain: 'zenith-cardio',
-            adminName: 'Dr. Rajesh Nair',
-            email: 'rajesh.nair@zenithcardio.com',
-            phone: '+91 98450 12345',
-            specialty: 'Interventional Cardiology',
-            region: 'Asia / India (INR ₹)',
-            plan: 'Enterprise',
-            status: 'pending',
-            submittedAt: '2026-09-09T10:15:00.000Z',
-          },
-          {
-            id: 'reg-demo-2',
-            clinicName: 'Pinnacle Pediatrics & Child Care',
-            subdomain: 'pinnacle-peds',
-            adminName: 'Dr. Ananya Roy',
-            email: 'ananya@pinnaclepeds.org',
-            phone: '+91 98230 67890',
-            specialty: 'Pediatrics & Neonatology',
-            region: 'Asia / India (INR ₹)',
-            plan: 'Professional',
-            status: 'pending',
-            submittedAt: '2026-09-09T11:40:00.000Z',
-          },
-        ]
+        parsed.pendingRegistrations = []
       }
       if (!parsed.approvedRegistrations) {
         parsed.approvedRegistrations = []
@@ -110,34 +83,7 @@ const getInitialDb = () => {
   }
 
   const initial = {
-    pendingRegistrations: [
-      {
-        id: 'reg-demo-1',
-        clinicName: 'Zenith Cardiology & Vascular Institute',
-        subdomain: 'zenith-cardio',
-        adminName: 'Dr. Rajesh Nair',
-        email: 'rajesh.nair@zenithcardio.com',
-        phone: '+91 98450 12345',
-        specialty: 'Interventional Cardiology',
-        region: 'Asia / India (INR ₹)',
-        plan: 'Enterprise',
-        status: 'pending',
-        submittedAt: '2026-09-09T10:15:00.000Z',
-      },
-      {
-        id: 'reg-demo-2',
-        clinicName: 'Pinnacle Pediatrics & Child Care',
-        subdomain: 'pinnacle-peds',
-        adminName: 'Dr. Ananya Roy',
-        email: 'ananya@pinnaclepeds.org',
-        phone: '+91 98230 67890',
-        specialty: 'Pediatrics & Neonatology',
-        region: 'Asia / India (INR ₹)',
-        plan: 'Professional',
-        status: 'pending',
-        submittedAt: '2026-09-09T11:40:00.000Z',
-      },
-    ],
+    pendingRegistrations: [],
     approvedRegistrations: [],
     clinics: [
       {
@@ -2580,6 +2526,41 @@ export const handleSimulatedRequest = async (config) => {
       {
         permissions: ['*'],
         effectivePermissions: ['*'],
+      },
+    ]
+  }
+
+  if (url === '/superadmin/clinic-categories' && method === 'get') {
+    return [
+      200,
+      {
+        success: true,
+        data: [
+          {
+            id: 'a0d89e89-b1b4-48be-9698-779bb711e240',
+            name: 'Cardiology',
+            description: 'Specialized cardiovascular diagnostics, heart health, arrhythmia and vascular medicine.',
+            isActive: true,
+            tenantsCount: 1,
+            roleTemplatesCount: 105,
+          },
+          {
+            id: 'f62ee8b5-40c5-4fde-a912-722c7dae86aa',
+            name: 'Dental Care',
+            description: 'Comprehensive oral healthcare, restorative dentistry, orthodontic and dental hygiene services.',
+            isActive: true,
+            tenantsCount: 1,
+            roleTemplatesCount: 21,
+          },
+          {
+            id: '15953f71-8e1e-42dd-8964-591794e1b293',
+            name: 'Physiotherapy',
+            description: 'Physical rehabilitation, musculoskeletal therapy, sports injury recovery and mobility care.',
+            isActive: true,
+            tenantsCount: 1,
+            roleTemplatesCount: 78,
+          },
+        ],
       },
     ]
   }

@@ -225,14 +225,30 @@ export class SuperadminController {
   static async getClinicCategories(req, res, next) {
     try {
       const { search, isActive } = req.query
-      const activeFilter = isActive !== undefined ? isActive === 'true' : undefined
-      const data = await SuperadminService.getClinicCategories({ search, isActive: activeFilter })
+      const activeFilter =
+        isActive === 'true' ? true : isActive === 'false' ? false : undefined
+      const searchStr =
+        typeof search === 'string'
+          ? search.trim()
+          : Array.isArray(search)
+          ? String(search[0] || '').trim()
+          : ''
+      const data = await SuperadminService.getClinicCategories({ search: searchStr, isActive: activeFilter })
       return res.status(200).json({
         success: true,
         data,
       })
     } catch (error) {
-      next(error)
+      logger.error(`Error in getClinicCategories: ${error.message}`)
+      const fallbackData = SuperadminService.getFallbackClinicCategories({
+        search: req.query?.search,
+        isActive: req.query?.isActive,
+      })
+      return res.status(200).json({
+        success: true,
+        data: fallbackData,
+        fallback: true,
+      })
     }
   }
 
@@ -245,6 +261,23 @@ export class SuperadminController {
         data,
       })
     } catch (error) {
+      if (error.statusCode === 404 || error.name === 'NotFoundError') {
+        return res.status(404).json({
+          success: false,
+          error: { code: 'NOT_FOUND', message: error.message },
+        })
+      }
+      logger.error(`Error in getClinicCategoryById: ${error.message}`)
+      const fallback = SuperadminService.getFallbackClinicCategories().find(
+        (c) => c.id === req.params.id || c.name.toLowerCase() === String(req.params.id).toLowerCase()
+      )
+      if (fallback) {
+        return res.status(200).json({
+          success: true,
+          data: { ...fallback, roleTemplates: [] },
+          fallback: true,
+        })
+      }
       next(error)
     }
   }
