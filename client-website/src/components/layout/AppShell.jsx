@@ -236,14 +236,16 @@ export const AppShell = () => {
 
   // Clinic Category resolution: dynamically identify chosen category
   const resolvedCategoryName =
-    user?.clinicCategoryName ||
-    user?.clinicCategory?.name ||
-    user?.tenant?.clinicCategoryName ||
-    user?.tenant?.clinicCategory?.name ||
-    (permittedModules.some((m) => m.route?.includes('/dental/')) ? 'Dentist' :
-     permittedModules.some((m) => m.route?.includes('/cardio/')) ? 'Cardiology' :
-     permittedModules.some((m) => m.route?.includes('/physio/')) ? 'Physiotherapy' :
-     (user?.clinicName ? 'General Care' : null))
+    (isSuperadmin || isRbacSuper)
+      ? 'SUPER ADMIN'
+      : user?.clinicCategoryName ||
+        user?.clinicCategory?.name ||
+        user?.tenant?.clinicCategoryName ||
+        user?.tenant?.clinicCategory?.name ||
+        (permittedModules.some((m) => m.route?.includes('/dental/')) ? 'Dental Care' :
+         permittedModules.some((m) => m.route?.includes('/cardio/')) ? 'Cardiology' :
+         permittedModules.some((m) => m.route?.includes('/physio/')) ? 'Physiotherapy' :
+         (user?.clinicName ? 'General Care' : null))
 
   // Dynamic Navigation: Render sidebar/menu ONLY for modules with can_view = true from the Permission API
   let navItems = []
@@ -363,7 +365,11 @@ export const AppShell = () => {
         {/* Tenant/Clinic info pill */}
         {!sidebarCollapsed && user?.clinicName && (
           <div className="p-3 mx-3 my-3 rounded-xl bg-primary/5 border border-primary/15 flex items-center gap-2.5 shrink-0">
-            <Building2 className="w-4 h-4 text-primary shrink-0" />
+            {isSuperadmin || isRbacSuper ? (
+              <ShieldAlert className="w-4 h-4 text-primary shrink-0" />
+            ) : (
+              <Building2 className="w-4 h-4 text-primary shrink-0" />
+            )}
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-semibold text-text-primary truncate" title={user.clinicName}>
                 {user.clinicName}
@@ -371,9 +377,9 @@ export const AppShell = () => {
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span
                   className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-primary/15 text-primary border border-primary/20 truncate uppercase tracking-wider"
-                  title={`Clinic Specialty: ${resolvedCategoryName || 'Active Workspace'}`}
+                  title={(isSuperadmin || isRbacSuper) ? 'Global Super Administrator' : `Clinic Specialty: ${resolvedCategoryName || 'Active Workspace'}`}
                 >
-                  {resolvedCategoryName || 'Active Workspace'}
+                  {(isSuperadmin || isRbacSuper) ? 'SUPER ADMIN' : (resolvedCategoryName || 'Active Workspace')}
                 </span>
               </div>
             </div>

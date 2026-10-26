@@ -440,6 +440,10 @@ export const PatientsPage = () => {
         <form
           onSubmit={(e) => {
             e.preventDefault()
+            if (!/^\d{10}$/.test(formData.phone)) {
+              notify.error('Please enter a valid 10-digit numeric phone number.')
+              return
+            }
             createMutation.mutate(formData)
           }}
           className="space-y-4"
@@ -490,10 +494,30 @@ export const PatientsPage = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label="Phone Number"
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
               required
-              placeholder="+1 (555) 012-3456"
+              placeholder="9876543210"
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              onChange={(e) => {
+                let val = e.target.value.replace(/\D/g, '')
+                if (val.length === 12 && val.startsWith('91')) val = val.slice(2)
+                else if (val.length === 11 && val.startsWith('0')) val = val.slice(1)
+                setFormData({ ...formData, phone: val.slice(0, 10) })
+              }}
+              onKeyDown={(e) => {
+                if (
+                  ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'Home', 'End'].includes(e.key) ||
+                  e.ctrlKey ||
+                  e.metaKey
+                ) {
+                  return
+                }
+                if (!/^[0-9]$/.test(e.key)) {
+                  e.preventDefault()
+                }
+              }}
             />
             <Input
               label="Email Address"

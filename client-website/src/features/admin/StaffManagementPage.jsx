@@ -42,7 +42,7 @@ export const StaffManagementPage = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'staff', tenantId],
     queryFn: async () => {
-      const res = await api.get('/api/admin/staff')
+      const res = await api.get(`/api/admin/staff${tenantId ? `?tenantId=${tenantId}` : ''}`)
       return res.data
     },
     refetchOnMount: 'always',
@@ -129,7 +129,10 @@ export const StaffManagementPage = () => {
 
   const inviteMutation = useMutation({
     mutationFn: async (payload) => {
-      const res = await api.post('/api/admin/staff', payload)
+      const res = await api.post('/api/admin/staff', {
+        ...payload,
+        tenantId: payload.tenantId || tenantId
+      })
       return res.data
     },
     onSuccess: (newStaff) => {
@@ -138,7 +141,7 @@ export const StaffManagementPage = () => {
       notify.success(`Invitation dispatched to ${newStaff.email}!`)
     },
     onError: (err) => {
-      const msg = err.response?.data?.message || err.response?.data?.error?.message || 'Failed to send staff invitation.'
+      const msg = err.response?.data?.message || err.response?.data?.error?.message || err.message || 'Failed to send staff invitation.'
       notify.error(msg)
     },
   })
@@ -511,10 +514,30 @@ export const StaffManagementPage = () => {
             />
             <Input
               label="Contact Phone"
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
               required
-              placeholder="+1 (555) 019-2834"
+              placeholder="9876543210"
               value={formData.phone}
-              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              onChange={(e) => {
+                let val = e.target.value.replace(/\D/g, '')
+                if (val.length === 12 && val.startsWith('91')) val = val.slice(2)
+                else if (val.length === 11 && val.startsWith('0')) val = val.slice(1)
+                setFormData({ ...formData, phone: val.slice(0, 10) })
+              }}
+              onKeyDown={(e) => {
+                if (
+                  ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'Home', 'End'].includes(e.key) ||
+                  e.ctrlKey ||
+                  e.metaKey
+                ) {
+                  return
+                }
+                if (!/^[0-9]$/.test(e.key)) {
+                  e.preventDefault()
+                }
+              }}
             />
           </div>
 

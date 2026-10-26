@@ -17,6 +17,7 @@ import {
   Eye,
   Phone,
   Globe,
+  FolderTree,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { DataTable } from '../../components/ui/DataTable'
@@ -45,9 +46,23 @@ export const ClinicsManagement = () => {
     slug: '',
     plan: 'Professional',
     region: 'North America (East)',
+    clinicCategoryId: '',
     contactEmail: '',
     domain: '',
   })
+
+  // Fetch clinic categories for category badges & provisioning
+  const { data: categoriesData } = useQuery({
+    queryKey: ['superadmin', 'clinic-categories'],
+    queryFn: async () => {
+      const res = await api.get('/api/superadmin/clinic-categories').catch(async () => {
+        return api.get('/api/public/clinic-categories')
+      })
+      return res.data?.data || res.data?.categories || res.data || []
+    },
+    enabled: !!isSuperadmin,
+  })
+  const categoriesList = Array.isArray(categoriesData) ? categoriesData : []
 
   // Fetch clinics
   const { data, isLoading } = useQuery({
@@ -229,6 +244,7 @@ export const ClinicsManagement = () => {
         slug: '',
         plan: 'Professional',
         region: 'North America (East)',
+        clinicCategoryId: '',
         contactEmail: '',
         domain: '',
       })
@@ -268,9 +284,13 @@ export const ClinicsManagement = () => {
   const clinics = data?.clinics || []
   const filteredClinics = clinics.filter(
     (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      c.name?.toLowerCase().includes(search.toLowerCase()) ||
       c.contactEmail?.toLowerCase().includes(search.toLowerCase()) ||
-      c.region?.toLowerCase().includes(search.toLowerCase())
+      c.region?.toLowerCase().includes(search.toLowerCase()) ||
+      c.domain?.toLowerCase().includes(search.toLowerCase()) ||
+      (c.category && c.category.toLowerCase().includes(search.toLowerCase())) ||
+      (c.clinicCategory?.name && c.clinicCategory.name.toLowerCase().includes(search.toLowerCase())) ||
+      (c.specialty && c.specialty.toLowerCase().includes(search.toLowerCase()))
   )
 
   const columns = [
@@ -284,6 +304,20 @@ export const ClinicsManagement = () => {
           <div className="text-[11px] text-text-secondary">{row.domain}</div>
         </div>
       ),
+    },
+    {
+      key: 'category',
+      label: 'Category',
+      sortable: true,
+      render: (val, row) => {
+        const cat = val || row.clinicCategory?.name || row.specialty || 'General Care'
+        return (
+          <Badge variant="neutral" size="sm">
+            <FolderTree className="w-3 h-3 opacity-80" />
+            <span>{cat}</span>
+          </Badge>
+        )
+      },
     },
     {
       key: 'plan',
@@ -405,8 +439,8 @@ export const ClinicsManagement = () => {
         <button
           onClick={() => setActiveTab('active')}
           className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 ${activeTab === 'active'
-              ? 'bg-primary text-white shadow-sm'
-              : 'bg-surface text-text-secondary hover:text-text-primary border border-border/80'
+            ? 'bg-primary text-white shadow-sm'
+            : 'bg-surface text-text-secondary hover:text-text-primary border border-border/80'
             }`}
         >
           <Building2 className="w-3.5 h-3.5" />
@@ -419,8 +453,8 @@ export const ClinicsManagement = () => {
         <button
           onClick={() => setActiveTab('pending')}
           className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 relative ${activeTab === 'pending'
-              ? 'bg-amber-500 text-white shadow-sm'
-              : 'bg-surface text-text-secondary hover:text-text-primary border border-border/80'
+            ? 'bg-amber-500 text-white shadow-sm'
+            : 'bg-surface text-text-secondary hover:text-text-primary border border-border/80'
             }`}
         >
           <Clock className="w-3.5 h-3.5" />
@@ -428,8 +462,8 @@ export const ClinicsManagement = () => {
           {pendingList.length > 0 && (
             <span
               className={`ml-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${activeTab === 'pending'
-                  ? 'bg-white text-amber-600'
-                  : 'bg-amber-500 text-white animate-pulse'
+                ? 'bg-white text-amber-600'
+                : 'bg-amber-500 text-white animate-pulse'
                 }`}
             >
               {pendingList.length}
@@ -444,7 +478,7 @@ export const ClinicsManagement = () => {
           columns={columns}
           data={filteredClinics}
           isLoading={isLoading}
-          searchPlaceholder="Filter clinics by name, region or email..."
+          searchPlaceholder="Filter clinics by name, category, region or email..."
           searchValue={search}
           onSearchChange={setSearch}
           emptyTitle="No clinic tenants found"
@@ -584,27 +618,41 @@ export const ClinicsManagement = () => {
           }}
           className="space-y-4"
         >
-          <Input
-            label="Clinic / Hospital Name"
-            required
-            placeholder="Mount Sinai Health Center"
-            value={formData.name}
-            onChange={(e) =>
-              setFormData({
-                ...formData,
-                name: e.target.value,
-                slug: e.target.value.toLowerCase().replace(/\s+/g, '-'),
-                domain: `${e.target.value.toLowerCase().replace(/\s+/g, '')}.clinic.io`,
-              })
-            }
-          />
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Clinic / Hospital Name"
+              required
+              placeholder="Mount Sinai Health Center"
+              value={formData.name}
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  name: e.target.value,
+                  slug: e.target.value.toLowerCase().replace(/\s+/g, '-'),
+                  domain: `${e.target.value.toLowerCase().replace(/\s+/g, '')}.clinic.io`,
+                })
+              }
+            />
             <Input
               label="Tenant Slug"
               required
               value={formData.slug}
               onChange={(e) => setFormData({ ...formData, slug: e.target.value })}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Select
+              label="Clinic Category"
+              value={formData.clinicCategoryId}
+              onChange={(e) => setFormData({ ...formData, clinicCategoryId: e.target.value })}
+              options={[
+                { value: '', label: '-- Select Category (Optional) --' },
+                ...categoriesList.map((c) => ({
+                  value: c.id,
+                  label: c.name ? c.name.charAt(0).toUpperCase() + c.name.slice(1) : c.id,
+                })),
+              ]}
             />
             <Select
               label="Subscription Tier"

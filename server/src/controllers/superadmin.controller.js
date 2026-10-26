@@ -31,6 +31,15 @@ export class SuperadminController {
         status: (t.status || 'active').toLowerCase(),
         region: t.region || 'North America (East)',
         contactEmail: t.contactEmail || t.email || '',
+        category: t.clinicCategory?.name || t.category || t.specialty || 'General Care',
+        clinicCategoryId: t.clinicCategoryId || t.clinicCategory?.id || null,
+        clinicCategory: t.clinicCategory
+          ? {
+              id: t.clinicCategory.id,
+              name: t.clinicCategory.name,
+              description: t.clinicCategory.description,
+            }
+          : null,
         patientsCount: t.stats?.patients || 0,
         staffCount: t.stats?.users || 0,
         createdAt: t.createdAt,

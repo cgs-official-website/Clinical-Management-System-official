@@ -355,7 +355,7 @@ export class RegistrationService {
       })
       user = await prisma.user.create({
         data: {
-          tenantId: tenant?.id || null,
+          ...(tenant?.id ? { tenant: { connect: { id: tenant.id } } } : {}),
           fullName: name ? name.trim() : 'Staff Member',
           email: cleanEmail,
           passwordHash,
@@ -374,11 +374,11 @@ export class RegistrationService {
     if (role && user.tenantId) {
       const resolvedRole = await AdminService.resolveRoleForTenant(role, user.tenantId)
       if (resolvedRole) {
-        const hasRole = await prisma.userRoleAssignment.findFirst({
+        const hasRole = await prisma.userRole.findFirst({
           where: { userId: user.id, roleId: resolvedRole.id }
         })
         if (!hasRole) {
-          await prisma.userRoleAssignment.create({
+          await prisma.userRole.create({
             data: { userId: user.id, roleId: resolvedRole.id }
           }).catch(() => { })
         }

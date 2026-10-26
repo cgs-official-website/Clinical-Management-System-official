@@ -192,7 +192,7 @@ export class AdminService {
    */
   static async getModulesAndPermissions() {
     const [modules, actions, permissions] = await Promise.all([
-      prisma.systemModule.findMany({
+      prisma.module.findMany({
         orderBy: { name: 'asc' }
       }),
       prisma.permissionAction.findMany({
@@ -200,13 +200,13 @@ export class AdminService {
       }),
       prisma.permission.findMany({
         include: {
-          systemModule: true,
-          permissionAction: true
+          module: true,
+          action: true
         }
       }).then(perms => perms.map(p => ({
         ...p,
-        module: p.systemModule,
-        action: p.permissionAction
+        module: p.module,
+        action: p.action
       })))
     ])
 
@@ -236,14 +236,23 @@ export class AdminService {
    * Helper: Resolve tenant UUID handling demo aliases
    */
   static async resolveTenantUuid(tenantId) {
-    if (!tenantId) return null
+    if (!tenantId) {
+      const first = await prisma.tenant.findFirst({ where: { status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } }).catch(() => null)
+      return first?.id || null
+    }
     const clean = String(tenantId).trim()
-    if (clean === 'clinic-1') {
+    if (clean === 'clinic-1' || clean === 'tenant-1' || clean === 'demo-tenant') {
       const demoTenant = await prisma.tenant.findFirst({
         where: { OR: [{ name: { contains: 'Aura', mode: 'insensitive' } }, { subdomain: 'aura-health' }] }
-      })
-      return demoTenant?.id || null
+      }).catch(() => null)
+      if (demoTenant) return demoTenant.id
+      const firstTenant = await prisma.tenant.findFirst({ where: { status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } }).catch(() => null)
+      return firstTenant?.id || null
     }
+    const existing = await prisma.tenant.findUnique({ where: { id: clean } }).catch(() => null)
+    if (existing) return existing.id
+    const bySubdomain = await prisma.tenant.findUnique({ where: { subdomain: clean.toLowerCase() } }).catch(() => null)
+    if (bySubdomain) return bySubdomain.id
     return clean
   }
 
@@ -310,7 +319,7 @@ export class AdminService {
               isSystemRole: true
             }
           })
-          await prisma.rolePermissionGrant.createMany({
+          await prisma.rolePermission.createMany({
             data: allPerms.map(p => ({ roleId: adminRole.id, permissionId: p.id })),
             skipDuplicates: true
           })
@@ -347,7 +356,7 @@ export class AdminService {
             }
             const pIds = tpls.map(t => permMap.get(`${t.moduleKey || t.module}.${t.actionKey || t.action}`)).filter(Boolean)
             if (pIds.length > 0) {
-              await prisma.rolePermissionGrant.createMany({
+              await prisma.rolePermission.createMany({
                 data: pIds.map(permissionId => ({ roleId: role.id, permissionId })),
                 skipDuplicates: true
               })
@@ -365,11 +374,11 @@ export class AdminService {
           where: { tenantId: resolvedTenantId, userType: 'ADMIN' }
         })
         for (const u of adminUsers) {
-          const hasRole = await prisma.userRoleAssignment.findFirst({
+          const hasRole = await prisma.userRole.findFirst({
             where: { userId: u.id, roleId: adminRole.id }
           })
           if (!hasRole) {
-            await prisma.userRoleAssignment.create({
+            await prisma.userRole.create({
               data: { userId: u.id, roleId: adminRole.id }
             }).catch(() => { })
           }
@@ -511,7 +520,7 @@ export class AdminService {
       })
 
       if (perms.length > 0) {
-        await prisma.rolePermissionGrant.createMany({
+        await prisma.rolePermission.createMany({
           data: perms.map(p => ({
             roleId: role.id,
             permissionId: p.id
@@ -655,8 +664,8 @@ export class AdminService {
 
     // Transaction: delete existing role permissions, create new ones
     await prisma.$transaction([
-      prisma.rolePermissionGrant.deleteMany({ where: { roleId: role.id } }),
-      prisma.rolePermissionGrant.createMany({
+      prisma.rolePermission.deleteMany({ where: { roleId: role.id } }),
+      prisma.rolePermission.createMany({
         data: perms.map(p => ({
           roleId: role.id,
           permissionId: p.id
@@ -697,8 +706,8 @@ export class AdminService {
     await RbacService.invalidateRolePermissions(roleId)
 
     await prisma.$transaction([
-      prisma.rolePermissionGrant.deleteMany({ where: { roleId } }),
-      prisma.userRoleAssignment.deleteMany({ where: { roleId } }),
+      prisma.rolePermission.deleteMany({ where: { roleId } }),
+      prisma.userRole.deleteMany({ where: { roleId } }),
       prisma.role.delete({ where: { id: roleId } })
     ])
 
@@ -724,14 +733,14 @@ export class AdminService {
     const role = await this.resolveRoleForTenant(roleId, tenantId)
     if (!role) throw new NotFoundError('Role not found')
 
-    const existing = await prisma.userRoleAssignment.findUnique({
+    const existing = await prisma.userRole.findUnique({
       where: {
         userId_roleId: { userId, roleId: role.id }
       }
     })
 
     if (!existing) {
-      await prisma.userRoleAssignment.create({
+      await prisma.userRole.create({
         data: { userId, roleId: role.id }
       })
     }
@@ -760,7 +769,7 @@ export class AdminService {
     const role = await this.resolveRoleForTenant(roleId, tenantId)
     const targetRoleId = role ? role.id : roleId
 
-    await prisma.userRoleAssignment.deleteMany({
+    await prisma.userRole.deleteMany({
       where: { userId, roleId: targetRoleId }
     })
 
@@ -796,10 +805,10 @@ export class AdminService {
     }
 
     await prisma.$transaction([
-      prisma.userRoleAssignment.deleteMany({ where: { userId: staffId } }),
+      prisma.userRole.deleteMany({ where: { userId: staffId } }),
       ...(resolvedRoleIds.length > 0
         ? [
-          prisma.userRoleAssignment.createMany({
+          prisma.userRole.createMany({
             data: resolvedRoleIds.map((roleId) => ({
               userId: staffId,
               roleId
@@ -833,21 +842,10 @@ export class AdminService {
    * List staff users with roles and effective permissions
    */
   static async getStaff({ tenantId, page = 1, limit = 50, search = '' }) {
-    if (!tenantId) {
-      return {
-        staff: [],
-        data: [],
-        pagination: {
-          page: 1,
-          limit,
-          total: 0,
-          totalPages: 0
-        }
-      }
-    }
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId)
 
     const where = {
-      tenantId,
+      ...(resolvedTenantId ? { tenantId: resolvedTenantId } : {}),
       userType: { in: ['STAFF', 'ADMIN'] }
     }
 
@@ -896,16 +894,16 @@ export class AdminService {
           email: u.email,
           phone: u.phone,
           avatar: u.avatar,
-          status: u.status.toLowerCase(),
+          status: (u.status || 'ACTIVE').toLowerCase(),
           isActive: u.status === 'ACTIVE',
           department: u.staffProfile?.department?.name || 'General Clinic',
           specialty: u.staffProfile?.specialty || null,
           specialization: u.staffProfile?.specialty || null,
           designation: u.staffProfile?.specialty || (u.userType === 'ADMIN' ? 'Clinic Administrator' : 'Medical Staff'),
           clinicName: u.tenant?.name || 'Clinical Practice',
-          roles: u.userRoles.map((ur) => ur.role.id),
-          roleNames: u.userRoles.map((ur) => ur.role.name),
-          effectivePermissions: permissions
+          roles: (u.userRoles || []).map((ur) => ur.role?.id).filter(Boolean),
+          roleNames: (u.userRoles || []).map((ur) => ur.role?.name).filter(Boolean),
+          effectivePermissions: permissions || []
         }
       })
     )
@@ -926,10 +924,11 @@ export class AdminService {
    * Get single staff member by ID
    */
   static async getStaffMemberById(staffId, tenantId) {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId)
     const where = {
       id: staffId,
       userType: { in: ['STAFF', 'ADMIN'] },
-      ...(tenantId ? { tenantId: tenantId } : {})
+      ...(resolvedTenantId ? { tenantId: resolvedTenantId } : {})
     }
 
     const u = await prisma.user.findFirst({
@@ -954,16 +953,16 @@ export class AdminService {
       email: u.email,
       phone: u.phone,
       avatar: u.avatar,
-      status: u.status.toLowerCase(),
+      status: (u.status || 'ACTIVE').toLowerCase(),
       isActive: u.status === 'ACTIVE',
       department: u.staffProfile?.department?.name || 'General Clinic',
       specialty: u.staffProfile?.specialty || null,
       specialization: u.staffProfile?.specialty || null,
       designation: u.staffProfile?.specialty || (u.userType === 'ADMIN' ? 'Clinic Administrator' : 'Medical Staff'),
       clinicName: u.tenant?.name || 'Clinical Practice',
-      roles: u.userRoles.map((ur) => ur.role.id),
-      roleNames: u.userRoles.map((ur) => ur.role.name),
-      effectivePermissions: permissions
+      roles: (u.userRoles || []).map((ur) => ur.role?.id).filter(Boolean),
+      roleNames: (u.userRoles || []).map((ur) => ur.role?.name).filter(Boolean),
+      effectivePermissions: permissions || []
     }
   }
 
@@ -1004,20 +1003,9 @@ export class AdminService {
     }
 
     // Defense-in-depth: Validate department belongs to tenant's clinic_category
-    if (department && tenant.clinicCategoryId) {
-      let allowedNames = new Set()
-      try {
-        const catDepts = await prisma.$queryRaw`
-          SELECT name FROM clinic_category_departments
-          WHERE clinic_category_id = ${tenant.clinicCategoryId}
-        `
-        catDepts.forEach(d => allowedNames.add(d.name.toLowerCase().trim()))
-      } catch { }
-
-      const fallbackList = CATEGORY_DEPARTMENTS[tenant.clinicCategory?.name] || []
-      fallbackList.forEach(n => allowedNames.add(n.toLowerCase().trim()))
-
-      if (allowedNames.size > 0 && !allowedNames.has(department.toLowerCase().trim())) {
+    if (department && tenant.clinicCategory?.name) {
+      const allowedDepts = (CATEGORY_DEPARTMENTS[tenant.clinicCategory.name] || []).map(d => d.toLowerCase().trim())
+      if (allowedDepts.length > 0 && !allowedDepts.includes(department.toLowerCase().trim())) {
         throw new BadRequestError('Invalid department for this clinic category')
       }
     }
@@ -1027,7 +1015,13 @@ export class AdminService {
       where: { email: cleanEmail }
     })
     if (existing) {
-      throw new ConflictError(`A staff member or user with email "${cleanEmail}" already exists`)
+      if (existing.tenantId === resolvedTenantId) {
+        if (existing.status === 'INVITED') {
+          throw new ConflictError(`A staff invitation for "${cleanEmail}" is already pending.`)
+        }
+        throw new ConflictError(`A staff member with email "${cleanEmail}" already exists in this clinic.`)
+      }
+      throw new ConflictError(`A user with email "${cleanEmail}" already exists on the platform.`)
     }
 
     await this.seedTenantRoles(resolvedTenantId)
@@ -1037,10 +1031,10 @@ export class AdminService {
 
     const user = await prisma.user.create({
       data: {
-        tenantId: resolvedTenantId,
+        ...(resolvedTenantId ? { tenant: { connect: { id: resolvedTenantId } } } : {}),
         fullName: cleanName,
         email: cleanEmail,
-        phoneNumber: phone || null,
+        phone: phone || null,
         passwordHash,
         status: 'INVITED',
         userType: 'STAFF'
@@ -1076,7 +1070,7 @@ export class AdminService {
         const role = await this.resolveRoleForTenant(rId, resolvedTenantId)
         if (role && !assignedRoleIds.has(role.id)) {
           assignedRoleIds.add(role.id)
-          await prisma.userRoleAssignment.create({
+          await prisma.userRole.create({
             data: { userId: user.id, roleId: role.id }
           }).catch(() => { })
         }
@@ -1127,20 +1121,9 @@ export class AdminService {
         where: { id: resolvedTenantId },
         include: { clinicCategory: true }
       })
-      if (tenant?.clinicCategoryId) {
-        let allowedNames = new Set()
-        try {
-          const catDepts = await prisma.$queryRaw`
-            SELECT name FROM clinic_category_departments
-            WHERE clinic_category_id = ${tenant.clinicCategoryId}
-          `
-          catDepts.forEach(d => allowedNames.add(d.name.toLowerCase().trim()))
-        } catch { }
-
-        const fallbackList = CATEGORY_DEPARTMENTS[tenant.clinicCategory?.name] || []
-        fallbackList.forEach(n => allowedNames.add(n.toLowerCase().trim()))
-
-        if (allowedNames.size > 0 && !allowedNames.has(data.department.toLowerCase().trim())) {
+      if (tenant?.clinicCategory?.name) {
+        const allowedDepts = (CATEGORY_DEPARTMENTS[tenant.clinicCategory.name] || []).map(d => d.toLowerCase().trim())
+        if (allowedDepts.length > 0 && !allowedDepts.includes(data.department.toLowerCase().trim())) {
           throw new BadRequestError('Invalid department for this clinic category')
         }
       }
@@ -1148,7 +1131,7 @@ export class AdminService {
 
     const updateUserData = {}
     if (data.name) updateUserData.fullName = data.name.trim()
-    if (data.phone !== undefined) updateUserData.phoneNumber = data.phone
+    if (data.phone !== undefined) updateUserData.phone = data.phone
     if (data.status) {
       const s = data.status.toUpperCase()
       if (s === 'ACTIVE') updateUserData.status = 'ACTIVE'
@@ -1194,13 +1177,13 @@ export class AdminService {
 
     // Update roles if provided
     if (Array.isArray(data.roles)) {
-      await prisma.userRoleAssignment.deleteMany({ where: { userId: staffId } })
+      await prisma.userRole.deleteMany({ where: { userId: staffId } })
       const assignedRoleIds = new Set()
       for (const rId of data.roles) {
         const role = await this.resolveRoleForTenant(rId, resolvedTenantId)
         if (role && !assignedRoleIds.has(role.id)) {
           assignedRoleIds.add(role.id)
-          await prisma.userRoleAssignment.create({
+          await prisma.userRole.create({
             data: { userId: staffId, roleId: role.id }
           }).catch(() => { })
         }
@@ -1232,7 +1215,7 @@ export class AdminService {
     if (user.userType === 'ADMIN') throw new ForbiddenError('Cannot delete clinic administrator')
 
     await prisma.$transaction([
-      prisma.userRoleAssignment.deleteMany({ where: { userId: staffId } }),
+      prisma.userRole.deleteMany({ where: { userId: staffId } }),
       prisma.staffProfile.deleteMany({ where: { userId: staffId } }),
       prisma.refreshToken.deleteMany({ where: { userId: staffId } }),
       prisma.user.delete({ where: { id: staffId } })
@@ -1270,17 +1253,7 @@ export class AdminService {
 
     // 1. If tenant has clinicCategory, query category departments
     let categoryDepts = []
-    if (tenant.clinicCategoryId) {
-      try {
-        categoryDepts = await prisma.$queryRaw`
-          SELECT id, name FROM clinic_category_departments
-          WHERE clinic_category_id = ${tenant.clinicCategoryId}
-          ORDER BY name ASC
-        `
-      } catch { }
-    }
-
-    if (categoryDepts.length === 0 && tenant.clinicCategory?.name) {
+    if (tenant.clinicCategory?.name) {
       const fallbackNames = CATEGORY_DEPARTMENTS[tenant.clinicCategory.name] || []
       categoryDepts = fallbackNames.map(name => ({
         id: `catdept-${tenant.clinicCategoryId?.slice(0, 8) || 'dept'}-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,

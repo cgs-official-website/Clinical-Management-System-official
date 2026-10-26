@@ -102,6 +102,7 @@ export class SuperadminService {
         take: limit,
         orderBy: { createdAt: 'desc' },
         include: {
+          clinicCategory: true,
           _count: {
             select: { users: true, patients: true, appointments: true }
           }
@@ -137,6 +138,8 @@ export class SuperadminService {
     phone,
     address,
     plan = 'PRO',
+    region = 'Asia / India (INR ₹)',
+    clinicCategoryId = null,
     adminName,
     adminEmail,
     adminPassword,
@@ -166,13 +169,15 @@ export class SuperadminService {
         domain: `${cleanSlug}.clinic.io`,
         contactEmail: email,
         plan,
+        region,
+        clinicCategoryId: clinicCategoryId || null,
         status: 'ACTIVE'
       }
     })
 
     const adminUser = await prisma.user.create({
       data: {
-        tenantId: tenant.id,
+        tenant: { connect: { id: tenant.id } },
         fullName: adminName || `${name} Admin`,
         email: adminEmail.toLowerCase().trim(),
         passwordHash,
@@ -710,7 +715,7 @@ export class SuperadminService {
       const hash = await AuthService.hashPassword(password)
       const user = await prisma.user.create({
         data: {
-          tenantId: clinicId,
+          ...(clinicId ? { tenant: { connect: { id: clinicId } } } : {}),
           email: (email || '').toLowerCase().trim(),
           passwordHash: hash,
           fullName: name,

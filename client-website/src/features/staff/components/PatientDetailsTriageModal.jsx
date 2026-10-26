@@ -258,10 +258,30 @@ export const PatientDetailsTriageModal = ({
               />
               <Input
                 label="Contact Phone"
+                type="tel"
+                inputMode="numeric"
+                maxLength={10}
                 required
-                placeholder="e.g. +91 98765 43210"
+                placeholder="9876543210"
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                onChange={(e) => {
+                  let val = e.target.value.replace(/\D/g, '')
+                  if (val.length === 12 && val.startsWith('91')) val = val.slice(2)
+                  else if (val.length === 11 && val.startsWith('0')) val = val.slice(1)
+                  setFormData({ ...formData, phone: val.slice(0, 10) })
+                }}
+                onKeyDown={(e) => {
+                  if (
+                    ['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'Home', 'End'].includes(e.key) ||
+                    e.ctrlKey ||
+                    e.metaKey
+                  ) {
+                    return
+                  }
+                  if (!/^[0-9]$/.test(e.key)) {
+                    e.preventDefault()
+                  }
+                }}
               />
               <Select
                 label="Gender"

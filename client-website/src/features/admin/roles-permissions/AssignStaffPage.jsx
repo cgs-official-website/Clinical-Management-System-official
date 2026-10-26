@@ -26,9 +26,10 @@ export const AssignStaffPage = () => {
     error: staffError,
     refetch: refetchStaff,
   } = useQuery({
-    queryKey: ['admin', 'staff', user?.tenantId || user?.id],
+    queryKey: ['admin', 'staff', user?.tenantId || user?.tenant?.id || user?.id],
     queryFn: async () => {
-      const res = await api.get('/api/admin/staff')
+      const tId = user?.tenantId || user?.tenant?.id || user?.id
+      const res = await api.get(`/api/admin/staff${tId ? `?tenantId=${tId}` : ''}`)
       return res.data
     },
     retry: 2,
