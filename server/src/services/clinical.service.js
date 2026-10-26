@@ -738,19 +738,52 @@ export class ClinicalService {
     // Create or link a Checked-In appointment for Doctor's queue
     let appointment = null
     try {
-      appointment = await prisma.appointment.create({
-        data: {
-          tenantId: targetTenantId,
-          patientId: patient.id,
-          scheduledAt: new Date(),
-          durationMinutes: 30,
-          status: 'CHECKED_IN',
-          type: 'In-Person Consultation',
-          room: data.room || 'Consultation Room 1',
-          reason: data.notes ? `[Token: ${tokenNumber}] ${data.notes}` : `[Token: ${tokenNumber}] Outpatient Consultation`,
-          notes: JSON.stringify(triageReport)
-        }
-      })
+      if (data.appointmentId) {
+        appointment = await prisma.appointment.findFirst({
+          where: { id: data.appointmentId, tenantId: targetTenantId }
+        })
+      }
+
+      if (!appointment) {
+        // Find existing scheduled appointment for this patient to prevent duplicate cards
+        appointment = await prisma.appointment.findFirst({
+          where: {
+            tenantId: targetTenantId,
+            patientId: patient.id,
+            status: { in: ['SCHEDULED', 'CONFIRMED'] }
+          },
+          orderBy: { scheduledAt: 'asc' }
+        })
+      }
+
+      if (appointment) {
+        // Update existing appointment to CHECKED_IN
+        appointment = await prisma.appointment.update({
+          where: { id: appointment.id },
+          data: {
+            status: 'CHECKED_IN',
+            notes: JSON.stringify(triageReport),
+            reason: appointment.reason && !appointment.reason.includes('[Token:')
+              ? `[Token: ${tokenNumber}] ${appointment.reason}`
+              : appointment.reason || `[Token: ${tokenNumber}] Outpatient Consultation`
+          }
+        })
+      } else {
+        // Only create new appointment if patient has no existing scheduled appointment
+        appointment = await prisma.appointment.create({
+          data: {
+            tenantId: targetTenantId,
+            patientId: patient.id,
+            scheduledAt: new Date(),
+            durationMinutes: 30,
+            status: 'CHECKED_IN',
+            type: 'In-Person Consultation',
+            room: data.room || 'Consultation Room 1',
+            reason: data.notes ? `[Token: ${tokenNumber}] ${data.notes}` : `[Token: ${tokenNumber}] Outpatient Consultation`,
+            notes: JSON.stringify(triageReport)
+          }
+        })
+      }
     } catch (e) {
       // Non-blocking if appointment table has constraints
     }

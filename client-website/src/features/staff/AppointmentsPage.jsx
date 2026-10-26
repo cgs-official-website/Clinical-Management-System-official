@@ -56,7 +56,36 @@ export const AppointmentsPage = () => {
     },
   })
 
+  const { data: patientsData } = useQuery({
+    queryKey: ['staff', 'patients'],
+    queryFn: async () => {
+      const res = await api.get('/api/staff/patients')
+      return res.data?.patients || res.data?.data || []
+    },
+  })
+
   const triageList = Array.isArray(triageData) ? triageData : []
+
+  // Ensure unique patient list for triage modal, preventing duplicate patient entries
+  const triagePatientsList = React.useMemo(() => {
+    const rawPatients = Array.isArray(patientsData) ? patientsData : []
+    if (rawPatients.length > 0) {
+      return rawPatients
+    }
+    const map = new Map()
+    const appts = Array.isArray(data) ? data : data?.appointments || data?.data || []
+    appts.forEach((a) => {
+      if (a.patientId && !map.has(a.patientId)) {
+        map.set(a.patientId, {
+          id: a.patientId,
+          fullName: a.patientName,
+          phone: a.patientPhone,
+          mrn: a.patientMrn
+        })
+      }
+    })
+    return Array.from(map.values())
+  }, [patientsData, data])
 
   const bookMutation = useMutation({
     mutationFn: async (payload) => {
@@ -396,7 +425,7 @@ export const AppointmentsPage = () => {
           <PatientDetailsTriageModal
             isOpen={isTriageOpen}
             onClose={() => setIsTriageOpen(false)}
-            patientsList={appointments.map((a) => ({ id: a.patientId, fullName: a.patientName, phone: a.patientPhone }))}
+            patientsList={triagePatientsList}
             onSuccess={() => {
               queryClient.invalidateQueries({ queryKey: ['staff', 'appointments'] })
               queryClient.invalidateQueries({ queryKey: ['staff', 'triage'] })

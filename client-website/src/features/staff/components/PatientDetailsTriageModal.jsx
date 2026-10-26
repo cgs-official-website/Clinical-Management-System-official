@@ -77,9 +77,22 @@ export const PatientDetailsTriageModal = ({
     }
   }, [initialPatient, isOpen])
 
+  // Deduplicate patients by ID or name+phone to avoid duplicate entries in records
+  const uniquePatients = React.useMemo(() => {
+    const list = Array.isArray(patientsList) ? patientsList : []
+    const map = new Map()
+    list.forEach((p) => {
+      const key = p.id || `${(p.fullName || p.name || '').trim().toLowerCase()}-${p.phone || ''}`
+      if (key && !map.has(key)) {
+        map.set(key, p)
+      }
+    })
+    return Array.from(map.values())
+  }, [patientsList])
+
   const handlePatientSelect = (patId) => {
     setSelectedPatientId(patId)
-    const pat = patientsList.find((p) => p.id === patId)
+    const pat = uniquePatients.find((p) => p.id === patId)
     if (pat) {
       setFormData((prev) => ({
         ...prev,
@@ -240,10 +253,15 @@ export const PatientDetailsTriageModal = ({
                 onChange={(e) => handlePatientSelect(e.target.value)}
                 options={[
                   { value: '', label: '-- Choose patient from records --' },
-                  ...patientsList.map((p) => ({
-                    value: p.id,
-                    label: `${p.fullName || p.name} (${p.mrn || 'MRN'} • ${p.phone || 'No phone'})`
-                  }))
+                  ...uniquePatients.map((p) => {
+                    const name = p.fullName || p.name || 'Patient'
+                    const identifier = p.mrn && p.mrn !== 'MRN' ? `MRN: ${p.mrn}` : (p.phone ? p.phone : '')
+                    const labelText = identifier ? `${name} (${identifier})` : name
+                    return {
+                      value: p.id,
+                      label: labelText
+                    }
+                  })
                 ]}
               />
             </div>
