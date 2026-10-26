@@ -387,26 +387,93 @@ export class ClinicalService {
     }
 
     let scheduledAt
-    if (data.dateTime) {
-      scheduledAt = new Date(data.dateTime)
-    } else if (data.scheduledAt) {
-      scheduledAt = new Date(data.scheduledAt)
+    if (data.dateTime || data.scheduledAt) {
+      const rawDate = data.dateTime || data.scheduledAt
+      let parsed = new Date(rawDate)
+      if (isNaN(parsed.getTime()) && typeof rawDate === 'string') {
+        const match = rawDate.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[T\s](\d{1,2}):(\d{1,2}))?/)
+        if (match) {
+          const [, day, month, year, hours = '0', minutes = '0'] = match
+          parsed = new Date(year, month - 1, day, hours, minutes)
+        }
+      }
+      scheduledAt = isNaN(parsed.getTime()) ? new Date(Date.now() + 86400000) : parsed
     } else {
       scheduledAt = new Date(Date.now() + 86400000)
     }
-    if (isNaN(scheduledAt.getTime())) {
-      scheduledAt = new Date(Date.now() + 86400000)
+
+    let staffId = null
+    const rawStaffIdentifier = data.staffId || data.doctorId || null
+
+    if (rawStaffIdentifier) {
+      const profileById = await prisma.staffProfile.findUnique({
+        where: { id: rawStaffIdentifier }
+      }).catch(() => null)
+
+      if (profileById) {
+        staffId = profileById.id
+      } else {
+        const profileByUserId = await prisma.staffProfile.findUnique({
+          where: { userId: rawStaffIdentifier }
+        }).catch(() => null)
+        if (profileByUserId) {
+          staffId = profileByUserId.id
+        }
+      }
     }
 
-    let staffId = data.staffId || data.doctorId || null
+    let departmentId = data.departmentId || null
+    if (departmentId) {
+      const deptExists = await prisma.department.findFirst({
+        where: { id: departmentId, tenantId: targetTenantId }
+      }).catch(() => null)
+      if (!deptExists) departmentId = null
+    }
+    if (!departmentId && data.department) {
+      let dept = await prisma.department.findFirst({
+        where: {
+          tenantId: targetTenantId,
+          name: { equals: data.department, mode: 'insensitive' }
+        }
+      }).catch(() => null)
+
+      if (!dept) {
+        dept = await prisma.department.create({
+          data: {
+            tenantId: targetTenantId,
+            name: data.department
+          }
+        }).catch(() => null)
+      }
+      departmentId = dept?.id || null
+    }
+
     if (!staffId && data.doctorName) {
       const docUser = await prisma.user.findFirst({
         where: {
           tenantId: targetTenantId,
           fullName: { equals: data.doctorName, mode: 'insensitive' }
-        }
+        },
+        include: { staffProfile: true }
       }).catch(() => null)
-      staffId = docUser?.id || null
+
+      if (docUser) {
+        if (docUser.staffProfile) {
+          staffId = docUser.staffProfile.id
+        } else {
+          // Auto-create staffProfile for this user so appointments_staff_id_fkey succeeds
+          const newProfile = await prisma.staffProfile.create({
+            data: {
+              userId: docUser.id,
+              departmentId,
+              specialty: data.department || 'General Medicine'
+            }
+          }).catch(() => null)
+          if (newProfile) {
+            staffId = newProfile.id
+          }
+        }
+      }
     }
 
     const appointment = await prisma.appointment.create({
@@ -414,6 +481,7 @@ export class ClinicalService {
         tenantId: targetTenantId,
         patientId,
         staffId,
+        departmentId,
         scheduledAt,
         durationMinutes: parseInt(data.durationMinutes, 10) || 30,
         type: data.type || data.appointmentType || 'In-Person Consultation',
@@ -423,7 +491,9 @@ export class ClinicalService {
         status: data.status || 'SCHEDULED'
       },
       include: {
-        patient: { select: { id: true, fullName: true, phone: true, mrn: true } }
+        patient: { select: { id: true, fullName: true, phone: true, mrn: true } },
+        doctor: { include: { user: { select: { id: true, fullName: true, email: true } } } },
+        department: { select: { id: true, name: true } }
       }
     })
 
@@ -441,8 +511,8 @@ export class ClinicalService {
       patientName: appointment.patient?.fullName || data.patientName || data.name || 'Registered Patient',
       patientPhone: appointment.patient?.phone || data.patientPhone || '',
       patientMrn: appointment.patient?.mrn || '',
-      doctorName: data.doctorName || 'Attending Physician',
-      department: data.department || 'General Medicine',
+      doctorName: appointment.doctor?.user?.fullName || data.doctorName || 'Attending Physician',
+      department: appointment.department?.name || data.department || 'General Medicine',
       dateTime: appointment.scheduledAt.toISOString()
     }
   }
@@ -460,22 +530,60 @@ export class ClinicalService {
     if (!existing) throw new NotFoundError('Appointment not found')
 
     const updatePayload = {}
-    if (data.scheduledAt || data.dateTime) updatePayload.scheduledAt = new Date(data.scheduledAt || data.dateTime)
+    if (data.scheduledAt || data.dateTime) {
+      const rawDate = data.scheduledAt || data.dateTime
+      let parsed = new Date(rawDate)
+      if (isNaN(parsed.getTime()) && typeof rawDate === 'string') {
+        const match = rawDate.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:[T\s](\d{1,2}):(\d{1,2}))?/)
+        if (match) {
+          const [, day, month, year, hours = '0', minutes = '0'] = match
+          parsed = new Date(year, month - 1, day, hours, minutes)
+        }
+      }
+      if (!isNaN(parsed.getTime())) updatePayload.scheduledAt = parsed
+    }
     if (data.durationMinutes !== undefined) updatePayload.durationMinutes = parseInt(data.durationMinutes, 10) || 30
     if (data.status !== undefined) updatePayload.status = data.status
     if (data.type !== undefined || data.appointmentType !== undefined) updatePayload.type = data.type || data.appointmentType
     if (data.room !== undefined) updatePayload.room = data.room
     if (data.reason !== undefined) updatePayload.reason = data.reason
     if (data.notes !== undefined) updatePayload.notes = data.notes
-    if (data.staffId !== undefined || data.doctorId !== undefined) updatePayload.staffId = data.staffId || data.doctorId || null
-    if (data.departmentId !== undefined) updatePayload.departmentId = data.departmentId || null
+
+    if (data.staffId !== undefined || data.doctorId !== undefined) {
+      const rawId = data.staffId || data.doctorId
+      if (!rawId) {
+        updatePayload.staffId = null
+      } else {
+        const pById = await prisma.staffProfile.findUnique({ where: { id: rawId } }).catch(() => null)
+        if (pById) {
+          updatePayload.staffId = pById.id
+        } else {
+          const pByUserId = await prisma.staffProfile.findUnique({ where: { userId: rawId } }).catch(() => null)
+          if (pByUserId) {
+            updatePayload.staffId = pByUserId.id
+          }
+        }
+      }
+    }
+
+    if (data.departmentId !== undefined) {
+      if (!data.departmentId) {
+        updatePayload.departmentId = null
+      } else {
+        const d = await prisma.department.findUnique({ where: { id: data.departmentId } }).catch(() => null)
+        if (d) updatePayload.departmentId = d.id
+      }
+    }
+
     if (data.patientId !== undefined) updatePayload.patientId = data.patientId
 
     const updated = await prisma.appointment.update({
       where: { id },
       data: updatePayload,
       include: {
-        patient: true
+        patient: { select: { id: true, fullName: true, phone: true, mrn: true } },
+        doctor: { include: { user: { select: { id: true, fullName: true, email: true } } } },
+        department: { select: { id: true, name: true } }
       }
     })
 
@@ -488,7 +596,15 @@ export class ClinicalService {
       details: data
     }).catch(() => { })
 
-    return updated
+    return {
+      ...updated,
+      patientName: updated.patient?.fullName || 'Registered Patient',
+      patientPhone: updated.patient?.phone || '',
+      patientMrn: updated.patient?.mrn || '',
+      doctorName: updated.doctor?.user?.fullName || 'Attending Physician',
+      department: updated.department?.name || 'General Medicine',
+      dateTime: updated.scheduledAt.toISOString()
+    }
   }
 
   /* =========================================================================
