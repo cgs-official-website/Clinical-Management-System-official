@@ -27,6 +27,30 @@ export const DEMO_PRESETS = [
     description: 'Dr. Sarah Al-Mansoor · Attending Physician',
     badge: 'Clinical MD',
   },
+  {
+    role: 'NURSE',
+    label: 'Clinical Nurse',
+    email: 'nurse@clinic.io',
+    password: 'password123',
+    description: 'James C. Rodriguez · Triage & Inpatient',
+    badge: 'Nurse',
+  },
+  {
+    role: 'RECEPTIONIST',
+    label: 'Receptionist',
+    email: 'reception@clinic.io',
+    password: 'password123',
+    description: 'Elena Rostova · Front Desk & Intake',
+    badge: 'Front Desk',
+  },
+  {
+    role: 'BILLER',
+    label: 'Billing Officer',
+    email: 'biller@clinic.io',
+    password: 'password123',
+    description: 'Amara Chen · Invoicing & Payments',
+    badge: 'Biller',
+  },
 ];
 
 export default DEMO_PRESETS;

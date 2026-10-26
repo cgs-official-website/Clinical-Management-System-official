@@ -39,7 +39,19 @@ export const SuperadminDashboard = () => {
     queryKey: ['superadmin', 'kpis', dateRange],
     queryFn: async () => {
       const res = await api.get('/api/superadmin/kpis', { params: { dateRange } })
-      return res.data
+      const body = res.data?.data ?? res.data
+      const k = body?.kpis ?? body ?? {}
+      return {
+        totalClinics: k.totalClinics ?? k.totalTenants ?? 0,
+        activeTenants: k.activeTenants ?? 0,
+        totalStaff: k.totalStaff ?? k.totalUsers ?? 0,
+        totalAdmins: k.totalAdmins ?? k.activeTenants ?? 0,
+        monthlyRecurringRevenue: k.monthlyRecurringRevenue ?? k.mrrINR ?? 0,
+        mrrGrowthPercentage: k.mrrGrowthPercentage ?? 0,
+        activeSessions: k.activeSessions ?? 0,
+        systemHealth: k.systemHealth ?? 'Operational',
+        revenueTrends: k.revenueTrends ?? [],
+      }
     },
     enabled: !!isSuperadmin,
     retry: (failureCount, error) => {
@@ -141,8 +153,8 @@ export const SuperadminDashboard = () => {
               key={range}
               onClick={() => setDateRange(range)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${dateRange === range
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'bg-surface border border-border text-text-secondary hover:text-text-primary'
+                ? 'bg-primary text-white shadow-sm'
+                : 'bg-surface border border-border text-text-secondary hover:text-text-primary'
                 }`}
             >
               {range}

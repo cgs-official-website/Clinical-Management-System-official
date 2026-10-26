@@ -43,22 +43,12 @@ export const NewPatientModal = ({ visible, onClose, onPatientCreated }) => {
       if (onPatientCreated) onPatientCreated(newPat);
       handleClose();
     } catch (err) {
-      // In offline/dev mode, simulate success
-      const simulated = {
-        id: `pat-${Date.now()}`,
-        name,
-        mrn: `MRN-2026-${Math.floor(100 + Math.random() * 900)}`,
-        phone,
-        age,
-        gender,
-        bloodGroup,
-        allergies: allergies ? allergies.split(',').map((a) => a.trim()) : ['None'],
-        status: 'Awaiting Vitals',
-        lastVisit: 'Just now',
-      };
-      if (onPatientCreated) onPatientCreated(simulated);
-      Alert.alert('Created', `Patient ${name} registered in clinical queue.`);
-      handleClose();
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to register patient record. Please verify permissions and data.';
+      Alert.alert('Registration Error', msg);
     } finally {
       setIsSubmitting(false);
     }

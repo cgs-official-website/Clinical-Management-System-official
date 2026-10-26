@@ -18,20 +18,30 @@ import { Button } from '../../components/common/Button';
 import { EmptyState } from '../../components/common/EmptyState';
 import { Loader } from '../../components/common/Loader';
 import { clinicalApi } from '../../api/clinical';
+import { useAuth } from '../../hooks/useAuth';
 import { FulfillPrescriptionModal } from '../../components/modals/FulfillPrescriptionModal';
 
 export const PrescriptionsScreen = () => {
+  const { hasPermission } = useAuth();
   const [prescriptions, setPrescriptions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedRx, setSelectedRx] = useState(null);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const fetchPrescriptions = useCallback(async () => {
+    setErrorMessage(null);
     try {
       const data = await clinicalApi.getPrescriptions();
-      setPrescriptions(data);
-    } catch {
-      // Service provides fallback
+      setPrescriptions(Array.isArray(data) ? data : []);
+    } catch (err) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to load electronic prescriptions.';
+      setErrorMessage(msg);
+      setPrescriptions([]);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -47,27 +57,41 @@ export const PrescriptionsScreen = () => {
     fetchPrescriptions();
   };
 
-  const handlePrescriptionFulfilled = (id) => {
-    setPrescriptions((prev) =>
-      prev.map((rx) => (rx.id === id ? { ...rx, status: 'Dispensed' } : rx))
-    );
+  const handlePrescriptionFulfilled = () => {
+    fetchPrescriptions();
   };
+
+  const canFulfill = hasPermission('inventory.edit') || hasPermission('prescriptions.edit');
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
       <Header
         title="Electronic Prescriptions"
-        subtitle="Doctor orders and pharmacy dispensing fulfillment"
+        subtitle={`${prescriptions.length} outpatient digital medication orders`}
       />
 
       <View style={styles.container}>
+        {errorMessage && (
+          <Card style={styles.errorBanner}>
+            <Text style={styles.errorTitle}>Error Loading Prescriptions</Text>
+            <Text style={styles.errorMessage}>{errorMessage}</Text>
+            <Button
+              title="Retry"
+              variant="outline"
+              size="sm"
+              onPress={fetchPrescriptions}
+              style={{ marginTop: 8 }}
+            />
+          </Card>
+        )}
+
         {isLoading ? (
-          <Loader message="Loading prescriptions queue..." />
+          <Loader message="Loading medication queue..." />
         ) : (
           <FlatList
             data={prescriptions}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.id || String(Math.random())}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -76,46 +100,62 @@ export const PrescriptionsScreen = () => {
               />
             }
             ListEmptyComponent={
-              <EmptyState
-                title="No active prescriptions"
-                message="All patient medications have been dispensed."
-              />
+              !errorMessage && (
+                <EmptyState
+                  title="No active prescriptions"
+                  message="There are no prescriptions currently awaiting pharmacy dispensing."
+                />
+              )
             }
             renderItem={({ item }) => {
-              const isDispensed = (item.status || '').toUpperCase() === 'DISPENSED';
+              const patName = item.patient?.fullName || item.patientName || item.name || 'Patient';
+              const docName = item.doctor?.fullName || item.doctorName || 'Attending Physician';
+              const dateStr = item.date || (item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Today');
+              const statusStr = (item.status || 'PENDING').toUpperCase();
+              const isDispensed = statusStr === 'DISPENSED' || statusStr === 'FULFILLED';
+              const medsList = Array.isArray(item.medications)
+                ? item.medications
+                : Array.isArray(item.items)
+                ? item.items
+                : [];
+
               return (
                 <Card style={styles.rxCard}>
-                  <View style={styles.rxHeader}>
-                    <View style={styles.infoCol}>
-                      <Text style={styles.patientName}>{item.patientName}</Text>
-                      <Text style={styles.mrn}>{item.mrn || 'General OPD'} · {item.date}</Text>
+                  <View style={styles.cardHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.patName}>{patName}</Text>
+                      <Text style={styles.mrn}>{item.mrn || item.patient?.mrn || 'OPD'}</Text>
+                      <Text style={styles.docName}>👨‍⚕️ Prescribed by: {docName}</Text>
+                      <Text style={styles.dateText}>📅 {dateStr}</Text>
                     </View>
-                    <Badge label={item.status} status={item.status} />
+                    <Badge label={statusStr} status={statusStr} />
                   </View>
 
-                  <Text style={styles.diagnosis}>
-                    Diagnosis: <Text style={styles.diagnosisVal}>{item.diagnosis}</Text>
-                  </Text>
-                  <Text style={styles.doctor}>Prescribed by: {item.doctorName}</Text>
+                  <View style={styles.diagBox}>
+                    <Text style={styles.diagLabel}>Diagnosis:</Text>
+                    <Text style={styles.diagText}>{item.diagnosis || 'Clinical evaluation'}</Text>
+                  </View>
 
                   {/* Medications List */}
-                  <View style={styles.medsBox}>
-                    <Text style={styles.medsTitle}>Medications Ordered:</Text>
-                    {(item.medications || []).map((m, idx) => (
-                      <View key={idx} style={styles.medRow}>
-                        <View style={styles.bullet} />
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.medName}>{m.name}</Text>
-                          <Text style={styles.medMeta}>
-                            {m.dosage} · {m.duration} {m.instructions ? `(${m.instructions})` : ''}
-                          </Text>
+                  {medsList.length > 0 && (
+                    <View style={styles.medsBox}>
+                      <Text style={styles.medsTitle}>Medications Ordered:</Text>
+                      {medsList.map((m, idx) => (
+                        <View key={idx} style={styles.medRow}>
+                          <View style={styles.bullet} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.medName}>{m.name || m.drugName || 'Medication'}</Text>
+                            <Text style={styles.medMeta}>
+                              {m.dosage || '1 tab'} · {m.duration || '5 days'} {m.instructions ? `(${m.instructions})` : ''}
+                            </Text>
+                          </View>
                         </View>
-                      </View>
-                    ))}
-                  </View>
+                      ))}
+                    </View>
+                  )}
 
                   {/* Pharmacy Fulfillment CTA */}
-                  {!isDispensed ? (
+                  {canFulfill && !isDispensed ? (
                     <Button
                       title="Dispense Medications"
                       variant="primary"
@@ -123,11 +163,11 @@ export const PrescriptionsScreen = () => {
                       onPress={() => setSelectedRx(item)}
                       style={styles.fulfillBtn}
                     />
-                  ) : (
+                  ) : isDispensed ? (
                     <View style={styles.dispensedBanner}>
-                      <Text style={styles.dispensedText}>✓ Stock Deducted & Dispensed to Patient</Text>
+                      <Text style={styles.dispensedText}>✓ Stock Deducted & Dispensed</Text>
                     </View>
-                  )}
+                  ) : null}
                 </Card>
               );
             }}
@@ -160,95 +200,112 @@ const styles = StyleSheet.create({
     paddingBottom: SPACING.xxl,
   },
   rxCard: {
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
+    marginBottom: SPACING.sm,
   },
-  rxHeader: {
+  cardHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
     marginBottom: 8,
   },
-  infoCol: {
-    flex: 1,
-  },
-  patientName: {
-    fontSize: 15,
+  patName: {
+    fontSize: 16,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: COLORS.text,
   },
   mrn: {
     fontSize: 11,
-    color: COLORS.textSecondary,
-    fontFamily: 'monospace',
-    marginTop: 1,
+    color: COLORS.textMuted,
   },
-  diagnosis: {
+  docName: {
     fontSize: 12,
-    color: COLORS.textSecondary,
-    marginBottom: 2,
+    color: COLORS.text,
+    marginTop: 2,
   },
-  diagnosisVal: {
-    color: COLORS.primary,
-    fontWeight: '700',
-  },
-  doctor: {
+  dateText: {
     fontSize: 11,
     color: COLORS.textMuted,
+  },
+  diagBox: {
+    backgroundColor: '#F8FAFC',
+    padding: 8,
+    borderRadius: RADIUS.sm,
     marginBottom: 8,
   },
+  diagLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: COLORS.textMuted,
+    textTransform: 'uppercase',
+  },
+  diagText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginTop: 1,
+  },
   medsBox: {
-    backgroundColor: COLORS.surface,
-    padding: 10,
-    borderRadius: RADIUS.md,
-    borderWidth: 1,
-    borderColor: COLORS.border,
     marginBottom: 10,
   },
   medsTitle: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.textSecondary,
+    color: COLORS.textMuted,
     textTransform: 'uppercase',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   medRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 4,
   },
   bullet: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
+    width: 6,
+    height: 6,
+    borderRadius: RADIUS.full,
     backgroundColor: COLORS.primary,
-    marginTop: 6,
-    marginRight: 6,
+    marginRight: 8,
   },
   medName: {
     fontSize: 13,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: COLORS.text,
   },
   medMeta: {
     fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 1,
+    color: COLORS.textMuted,
   },
   fulfillBtn: {
     marginTop: 4,
   },
   dispensedBanner: {
-    backgroundColor: COLORS.successLight,
+    backgroundColor: '#ECFDF5',
     paddingVertical: 6,
+    paddingHorizontal: 10,
     borderRadius: RADIUS.sm,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#86EFAC',
+    marginTop: 4,
   },
   dispensedText: {
     fontSize: 11,
     fontWeight: '700',
     color: COLORS.success,
+  },
+  errorBanner: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#F87171',
+    borderWidth: 1,
+    marginBottom: SPACING.sm,
+  },
+  errorTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.danger,
+    marginBottom: 2,
+  },
+  errorMessage: {
+    fontSize: 12,
+    color: COLORS.danger,
   },
 });
 

@@ -25,10 +25,13 @@ export const FulfillPrescriptionModal = ({ visible, prescription, onClose, onFul
       Alert.alert('Dispensed', 'Prescription marked as dispensed and inventory updated.');
       if (onFulfilled) onFulfilled(prescription.id);
       onClose();
-    } catch {
-      Alert.alert('Dispensed', 'Prescription dispensed successfully (Dev mode).');
-      if (onFulfilled) onFulfilled(prescription.id);
-      onClose();
+    } catch (err) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to fulfill prescription. Please check stock availability and permissions.';
+      Alert.alert('Fulfillment Error', msg);
     } finally {
       setIsSubmitting(false);
     }

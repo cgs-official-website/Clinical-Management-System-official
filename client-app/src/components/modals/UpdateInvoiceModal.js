@@ -25,10 +25,13 @@ export const UpdateInvoiceModal = ({ visible, invoice, onClose, onUpdated }) => 
       Alert.alert('Status Updated', `Invoice status set to ${newStatus}`);
       if (onUpdated) onUpdated(invoice.id, newStatus);
       onClose();
-    } catch {
-      Alert.alert('Updated', `Invoice status marked as ${newStatus} (Dev mode).`);
-      if (onUpdated) onUpdated(invoice.id, newStatus);
-      onClose();
+    } catch (err) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to update invoice payment status.';
+      Alert.alert('Update Error', msg);
     } finally {
       setIsSubmitting(false);
     }

@@ -783,3 +783,6 @@ export class PharmacyService {
     return XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
   }
 }
+
+
+

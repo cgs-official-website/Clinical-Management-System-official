@@ -18,21 +18,31 @@ import { EmptyState } from '../../components/common/EmptyState';
 import { Loader } from '../../components/common/Loader';
 import { Button } from '../../components/common/Button';
 import { clinicalApi } from '../../api/clinical';
+import { useAuth } from '../../hooks/useAuth';
 import { BookAppointmentModal } from '../../components/modals/BookAppointmentModal';
 
 export const AppointmentsScreen = () => {
+  const { hasPermission } = useAuth();
   const [appointments, setAppointments] = useState([]);
   const [filter, setFilter] = useState('ALL'); // 'ALL' | 'SCHEDULED' | 'IN-PERSON'
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const fetchAppointments = useCallback(async () => {
+    setErrorMessage(null);
     try {
       const data = await clinicalApi.getAppointments();
-      setAppointments(data);
-    } catch {
-      // Service provides fallback
+      setAppointments(Array.isArray(data) ? data : []);
+    } catch (err) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to load appointments from server.';
+      setErrorMessage(msg);
+      setAppointments([]);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -48,6 +58,10 @@ export const AppointmentsScreen = () => {
     fetchAppointments();
   };
 
+  const handleAppointmentBooked = () => {
+    fetchAppointments();
+  };
+
   const filtered = appointments.filter((a) => {
     if (filter === 'ALL') return true;
     return (a.status || '').toUpperCase() === filter;
@@ -58,39 +72,54 @@ export const AppointmentsScreen = () => {
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
       <Header
         title="Consultation Schedule"
-        subtitle="Daily appointment roster and exam room bookings"
+        subtitle={`${filtered.length} OPD bookings and patient sessions`}
       />
 
       <View style={styles.container}>
-        {/* Filter Pills & Add Button */}
+        {/* Filter Bar & Action */}
         <View style={styles.topRow}>
-          <View style={styles.pillsRow}>
+          <View style={styles.filterGroup}>
             {['ALL', 'SCHEDULED', 'IN-PERSON'].map((f) => (
               <TouchableOpacity
                 key={f}
-                style={[styles.pill, filter === f && styles.pillActive]}
+                style={[styles.filterChip, filter === f && styles.filterChipActive]}
                 onPress={() => setFilter(f)}
               >
-                <Text style={[styles.pillText, filter === f && styles.pillTextActive]}>
+                <Text style={[styles.filterChipText, filter === f && styles.filterChipTextActive]}>
                   {f}
                 </Text>
               </TouchableOpacity>
             ))}
           </View>
-          <Button
-            title="+ Book"
-            size="sm"
-            onPress={() => setShowModal(true)}
-            style={styles.bookBtn}
-          />
+          {hasPermission('appointments.create') && (
+            <Button
+              title="+ Book"
+              size="sm"
+              onPress={() => setShowModal(true)}
+            />
+          )}
         </View>
 
+        {errorMessage && (
+          <Card style={styles.errorBanner}>
+            <Text style={styles.errorTitle}>Error Loading Schedule</Text>
+            <Text style={styles.errorMessage}>{errorMessage}</Text>
+            <Button
+              title="Retry"
+              variant="outline"
+              size="sm"
+              onPress={fetchAppointments}
+              style={{ marginTop: 8 }}
+            />
+          </Card>
+        )}
+
         {isLoading ? (
-          <Loader message="Fetching clinic appointments..." />
+          <Loader message="Loading appointment schedule..." />
         ) : (
           <FlatList
             data={filtered}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.id || String(Math.random())}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -99,33 +128,49 @@ export const AppointmentsScreen = () => {
               />
             }
             ListEmptyComponent={
-              <EmptyState
-                title="No appointments scheduled"
-                message="Book a consultation slot for an outpatient."
-                actionLabel="Book Consultation"
-                onAction={() => setShowModal(true)}
-              />
+              !errorMessage && (
+                <EmptyState
+                  title="No appointments scheduled"
+                  message={
+                    filter === 'ALL'
+                      ? "There are no appointments on the calendar. Tap '+ Book' to schedule one."
+                      : `No appointments match status '${filter}'.`
+                  }
+                />
+              )
             }
-            renderItem={({ item }) => (
-              <Card style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.timeBadge}>
-                    <Text style={styles.timeVal}>{item.time || '10:00 AM'}</Text>
-                    <Text style={styles.dateVal}>{item.date || 'Today'}</Text>
-                  </View>
-                  <View style={styles.headerInfo}>
-                    <Text style={styles.patientName}>{item.patientName}</Text>
-                    <Text style={styles.typeText}>{item.type || 'Consultation'}</Text>
-                  </View>
-                  <Badge label={item.status} status={item.status} />
-                </View>
+            renderItem={({ item }) => {
+              const patName = item.patient?.fullName || item.patientName || item.name || 'Patient';
+              const docName = item.doctor?.fullName || item.doctorName || 'Attending Physician';
+              const timeStr = item.time || (item.scheduledAt ? new Date(item.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM');
+              const dateStr = item.date || (item.scheduledAt ? new Date(item.scheduledAt).toLocaleDateString() : 'Today');
+              const statusStr = (item.status || 'SCHEDULED').toUpperCase();
 
-                <View style={styles.footerRow}>
-                  <Text style={styles.roomText}>📍 {item.room || 'Consultation Room 1'}</Text>
-                  <Text style={styles.docText}>👨‍⚕️ {item.doctorName}</Text>
-                </View>
-              </Card>
-            )}
+              return (
+                <Card style={styles.aptCard}>
+                  <View style={styles.cardMain}>
+                    <View style={styles.timeBox}>
+                      <Text style={styles.timeText}>{timeStr}</Text>
+                      <Text style={styles.dateText}>{dateStr}</Text>
+                    </View>
+
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.patientName}>{patName}</Text>
+                      <Text style={styles.mrn}>{item.mrn || item.patient?.mrn || 'OPD'}</Text>
+                      <Text style={styles.doctorName}>👨‍⚕️ {docName}</Text>
+                      <Text style={styles.typeText}>
+                        {item.type || 'General Consultation'} · {item.room || 'Chamber 1'}
+                      </Text>
+                      {item.notes ? (
+                        <Text style={styles.notesText}>Note: {item.notes}</Text>
+                      ) : null}
+                    </View>
+
+                    <Badge label={statusStr} status={statusStr} />
+                  </View>
+                </Card>
+              );
+            }}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
           />
@@ -135,7 +180,7 @@ export const AppointmentsScreen = () => {
       <BookAppointmentModal
         visible={showModal}
         onClose={() => setShowModal(false)}
-        onAppointmentBooked={() => fetchAppointments()}
+        onAppointmentBooked={handleAppointmentBooked}
       />
     </SafeAreaView>
   );
@@ -148,99 +193,109 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    padding: SPACING.md,
+    paddingHorizontal: SPACING.md,
   },
   topRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: SPACING.md,
+    justifyContent: 'space-between',
+    marginBottom: SPACING.sm,
   },
-  pillsRow: {
+  filterGroup: {
     flexDirection: 'row',
     gap: 6,
   },
-  pill: {
+  filterChip: {
     paddingVertical: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 12,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  pillActive: {
-    backgroundColor: COLORS.primaryLight,
+  filterChipActive: {
+    backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
-  pillText: {
+  filterChipText: {
     fontSize: 11,
     fontWeight: '700',
-    color: COLORS.textSecondary,
+    color: COLORS.textMuted,
   },
-  pillTextActive: {
-    color: COLORS.primary,
-  },
-  bookBtn: {
-    paddingHorizontal: 12,
+  filterChipTextActive: {
+    color: '#FFF',
   },
   list: {
-    paddingBottom: SPACING.xxl,
+    paddingBottom: SPACING.xl,
   },
-  card: {
-    padding: SPACING.md,
+  aptCard: {
     marginBottom: SPACING.sm,
   },
-  cardHeader: {
+  cardMain: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
+    alignItems: 'flex-start',
   },
-  timeBadge: {
+  timeBox: {
     backgroundColor: COLORS.primaryLight,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    borderRadius: RADIUS.sm,
     alignItems: 'center',
-    marginRight: 10,
+    marginRight: 12,
+    minWidth: 70,
   },
-  timeVal: {
+  timeText: {
     fontSize: 12,
     fontWeight: '800',
     color: COLORS.primary,
   },
-  dateVal: {
+  dateText: {
     fontSize: 10,
-    color: COLORS.textSecondary,
-  },
-  headerInfo: {
-    flex: 1,
+    color: COLORS.textMuted,
+    marginTop: 2,
   },
   patientName: {
     fontSize: 15,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: COLORS.text,
   },
-  typeText: {
+  mrn: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+  },
+  doctorName: {
     fontSize: 12,
-    color: COLORS.textSecondary,
+    color: COLORS.text,
+    fontWeight: '600',
     marginTop: 2,
   },
-  footerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
-    paddingTop: 8,
-    marginTop: 4,
-  },
-  roomText: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-  },
-  docText: {
+  typeText: {
     fontSize: 11,
     color: COLORS.primary,
     fontWeight: '600',
+    marginTop: 2,
+  },
+  notesText: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  errorBanner: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#F87171',
+    borderWidth: 1,
+    marginBottom: SPACING.sm,
+  },
+  errorTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.danger,
+    marginBottom: 2,
+  },
+  errorMessage: {
+    fontSize: 12,
+    color: COLORS.danger,
   },
 });
 

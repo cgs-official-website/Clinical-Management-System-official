@@ -40,20 +40,13 @@ export const BookAppointmentModal = ({ visible, onClose, onAppointmentBooked }) 
       Alert.alert('Success', `Appointment booked for ${patientName}`);
       if (onAppointmentBooked) onAppointmentBooked(res);
       handleClose();
-    } catch {
-      const simulated = {
-        id: `apt-${Date.now()}`,
-        patientName,
-        doctorName,
-        time,
-        date: 'Today',
-        type,
-        status: 'Scheduled',
-        room: 'Exam Room 2',
-      };
-      if (onAppointmentBooked) onAppointmentBooked(simulated);
-      Alert.alert('Booked', `Appointment confirmed for ${patientName}`);
-      handleClose();
+    } catch (err) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to book appointment. Please verify scheduling inputs.';
+      Alert.alert('Booking Error', msg);
     } finally {
       setIsSubmitting(false);
     }

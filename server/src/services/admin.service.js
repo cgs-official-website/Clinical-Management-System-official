@@ -94,8 +94,8 @@ export class AdminService {
       }).catch(() => [])
     ])
 
-    const totalRevenueINR = paidInvoices.reduce((sum, i) => sum + (i.totalAmount ?? i.amount ?? 0), 0)
-    const pendingRevenueINR = pendingInvoices.reduce((sum, i) => sum + (i.totalAmount ?? i.amount ?? 0), 0)
+    const totalRevenueINR = paidInvoices.reduce((sum, i) => sum + (i.amount ?? 0), 0)
+    const pendingRevenueINR = pendingInvoices.reduce((sum, i) => sum + (i.amount ?? 0), 0)
 
     // Build 7-day trend series (dynamically from real database records)
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -451,7 +451,7 @@ export class AdminService {
       description: r.description || '',
       isSystem: r.isSystemRole,
       isSystemRole: r.isSystemRole,
-      tenantId: r.tenantId, tenantId: r.tenantId,
+      tenantId: r.tenantId, clinicId: r.tenantId,
       staffCount: r._count?.userRoles || 0,
       userCount: r._count?.userRoles || 0,
       permissions: (r.rolePerms || []).map(rp => rp.permission?.key).filter(Boolean),
@@ -583,7 +583,7 @@ export class AdminService {
       description: role.description || '',
       isSystem: role.isSystemRole,
       isSystemRole: role.isSystemRole,
-      tenantId: role.tenantId, tenantId: role.tenantId,
+      tenantId: role.tenantId, clinicId: role.tenantId,
       staffCount: role._count?.userRoles || 0,
       userCount: role._count?.userRoles || 0,
       permissions: (role.rolePerms || []).map(rp => rp.permission?.key).filter(Boolean),
@@ -1547,7 +1547,7 @@ export class AdminService {
       }).catch(() => []),
       prisma.invoice.findMany({
         where: whereTenant,
-        select: { id: true, amount: true, status: true, createdAt: true }
+        select: { id: true, totalAmount: true, status: true, createdAt: true }
       }).catch(() => [])
     ])
 

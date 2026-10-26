@@ -1,6 +1,3 @@
-import fs from 'fs'
-import path from 'path'
-import { fileURLToPath } from 'url'
 import { prisma, checkDatabaseHealth } from '../config/prisma.js'
 import { redis, pubsub } from '../config/redis.js'
 import { logger } from '../utils/logger.js'
@@ -8,10 +5,6 @@ import { AuthService } from './auth.service.js'
 import { AdminService } from './admin.service.js'
 import { AuditService } from './audit.service.js'
 import { ConflictError, NotFoundError, ValidationError } from '../utils/errors.js'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
-const REG_FILE = path.join(__dirname, '../../data/registrations.json')
 
 export class SuperadminService {
   /**
@@ -23,8 +16,9 @@ export class SuperadminService {
       activeTenants,
       totalUsers,
       totalPatients,
-      totalInvoices,
-      recentTenants
+      paidInvoices,
+      recentTenants,
+      activeTenantsList
     ] = await Promise.all([
       prisma.tenant.count().catch(() => 0),
       prisma.tenant.count({ where: { status: 'ACTIVE' } }).catch(() => 0),
@@ -37,33 +31,26 @@ export class SuperadminService {
       prisma.tenant.findMany({
         take: 5,
         orderBy: { createdAt: 'desc' },
-        include: {
-          _count: {
-            select: { users: true, patients: true }
-          }
-        }
+        include: { _count: { select: { users: true, patients: true } } }
+      }).catch(() => []),
+      prisma.tenant.findMany({
+        where: { status: 'ACTIVE' },
+        select: { plan: true }
       }).catch(() => [])
     ])
 
-    // Calculate total revenue in INR
-    const totalRevenueInINR = totalInvoices.reduce((acc, inv) => acc + (inv.amount || 0), 0)
+    const totalRevenueInINR = paidInvoices.reduce((acc, inv) => acc + (inv.amount || 0), 0)
 
-    // Calculate calculated MRR estimate from active tenants (Tiered: Starter ₹12,000, Pro ₹28,000, Enterprise ₹65,000)
-    const activeTenantsList = await prisma.tenant.findMany({
-      where: { status: 'ACTIVE' },
-      select: { plan: true }
-    }).catch(() => [])
-
-    const planPricesINR = {
-      STARTER: 12500,
-      PRO: 28500,
-      ENTERPRISE: 65001,
-      TRIAL: 0
+    // Tiered MRR estimate (Starter / Professional / Enterprise)
+    const planPriceFor = (plan = '') => {
+      const p = String(plan).toUpperCase()
+      if (p.includes('ENTERPRISE')) return 65000
+      if (p.includes('PRO')) return 28500
+      if (p.includes('STARTER')) return 12500
+      if (p.includes('TRIAL')) return 0
+      return 15000
     }
-
-    const calculatedMRR = activeTenantsList.reduce((sum, t) => {
-      return sum + (planPricesINR[t.plan] || 15001)
-    }, 0)
+    const calculatedMRR = activeTenantsList.reduce((sum, t) => sum + planPriceFor(t.plan), 0)
 
     return {
       kpis: {
@@ -80,12 +67,11 @@ export class SuperadminService {
         id: t.id,
         name: t.name,
         slug: t.subdomain,
-        subdomain: t.subdomain,
         plan: t.plan,
         status: t.status,
         isActive: t.status === 'ACTIVE',
-        usersCount: t._count.users,
-        patientsCount: t._count.patients,
+        usersCount: t._count?.users || 0,
+        patientsCount: t._count?.patients || 0,
         createdAt: t.createdAt
       }))
     }
@@ -104,7 +90,7 @@ export class SuperadminService {
       ]
     }
     if (plan) where.plan = plan
-    if (status) where.status = status.toUpperCase() === 'ACTIVE' ? 'ACTIVE' : status.toUpperCase()
+    if (status) where.status = String(status).toUpperCase()
 
     const skip = (Math.max(1, page) - 1) * limit
 
@@ -279,9 +265,8 @@ export class SuperadminService {
       })
       : []
 
-    // Pre-fetch category departments OUTSIDE the transaction.
-    // (A failed query inside a Postgres transaction aborts the whole transaction,
-    //  even if the error is caught in JS - that caused the 500 on approval.)
+    // Fetch category departments OUTSIDE the transaction. A failed raw query inside
+    // $transaction aborts it in Postgres (25P02) even if the JS error is caught.
     let categoryDepts = []
     if (tenant.clinicCategoryId) {
       try {
@@ -289,7 +274,7 @@ export class SuperadminService {
           SELECT name FROM clinic_category_departments WHERE clinic_category_id = ${tenant.clinicCategoryId}
         `
       } catch (e) {
-        logger.warn(`Skipping category departments (table missing? run scripts/seedCategoryDepartments.js): ${e.message}`)
+        logger.warn(`Skipping category departments: ${e.message}`)
       }
     }
 
@@ -515,7 +500,7 @@ export class SuperadminService {
           }
         }
 
-        // 3. Seed category departments into Department table for this tenant
+        // 3. Seed category departments (names were fetched BEFORE the transaction)
         for (const d of categoryDepts) {
           const existingDept = await tx.department.findFirst({
             where: { tenantId, name: d.name }
@@ -534,7 +519,7 @@ export class SuperadminService {
         })
 
         await tx.user.updateMany({
-          where: { tenantId: tenantId },
+          where: { tenantId },
           data: { status: 'ACTIVE' },
         })
 
@@ -546,21 +531,6 @@ export class SuperadminService {
       }
     )
 
-    // Sync local registry if present
-    try {
-      if (fs.existsSync(REG_FILE)) {
-        const registry = JSON.parse(fs.readFileSync(REG_FILE, 'utf-8'))
-        const idx = (registry.pending || []).findIndex(r => r.tenantId === tenantId || r.id === tenantId)
-        if (idx !== -1) {
-          const item = registry.pending.splice(idx, 1)[0]
-          item.status = 'approved'
-          item.approvedAt = new Date().toISOString()
-          if (!registry.approved) registry.approved = []
-          registry.approved.unshift(item)
-          fs.writeFileSync(REG_FILE, JSON.stringify(registry, null, 2))
-        }
-      }
-    } catch { }
 
     await AuditService.log({
       tenantId,
@@ -612,22 +582,6 @@ export class SuperadminService {
       }
     })
 
-    // Sync local registry if present
-    try {
-      if (fs.existsSync(REG_FILE)) {
-        const registry = JSON.parse(fs.readFileSync(REG_FILE, 'utf-8'))
-        const idx = (registry.pending || []).findIndex(r => r.tenantId === tenantId || r.id === tenantId)
-        if (idx !== -1) {
-          const item = registry.pending.splice(idx, 1)[0]
-          item.status = 'rejected'
-          item.rejectedAt = new Date().toISOString()
-          item.rejectionReason = reason
-          if (!registry.rejected) registry.rejected = []
-          registry.rejected.unshift(item)
-          fs.writeFileSync(REG_FILE, JSON.stringify(registry, null, 2))
-        }
-      }
-    } catch { }
 
     await AuditService.log({
       tenantId,
@@ -718,7 +672,7 @@ export class SuperadminService {
         id: u.id,
         name: u.fullName,
         email: u.email,
-        tenantId: u.tenantId,
+        clinicId: u.tenantId,
         clinicName: u.tenant ? u.tenant.name : 'Aura Health Memorial',
         role: 'ADMIN',
         status: (u.status || 'ACTIVE').toLowerCase(),
@@ -734,7 +688,7 @@ export class SuperadminService {
             id: 'admin-1',
             name: 'Dr. Sarah Lin',
             email: 'admin@aurahealth.com',
-            tenantId: 'clinic-1',
+            clinicId: 'clinic-1',
             clinicName: 'Aura Health Memorial',
             role: 'ADMIN',
             status: 'active',
@@ -751,12 +705,12 @@ export class SuperadminService {
    * Create new clinic admin account
    */
   static async createAdmin(data) {
-    const { name, email, tenantId, password = 'ClinicAdmin@123' } = data
+    const { name, email, clinicId, password = 'ClinicAdmin@123' } = data
     try {
       const hash = await AuthService.hashPassword(password)
       const user = await prisma.user.create({
         data: {
-          tenantId: tenantId,
+          tenantId: clinicId,
           email: (email || '').toLowerCase().trim(),
           passwordHash: hash,
           fullName: name,
@@ -769,7 +723,7 @@ export class SuperadminService {
         id: user.id,
         name: user.fullName,
         email: user.email,
-        tenantId: user.tenantId,
+        clinicId: user.tenantId,
         clinicName: user.tenant?.name || 'Assigned Clinic',
         role: 'ADMIN',
         status: 'active',
@@ -781,7 +735,7 @@ export class SuperadminService {
         id: 'admin-' + Date.now(),
         name,
         email,
-        tenantId,
+        clinicId,
         clinicName: 'Assigned Clinic',
         role: 'ADMIN',
         status: 'active',
