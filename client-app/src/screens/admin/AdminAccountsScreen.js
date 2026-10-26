@@ -5,9 +5,9 @@ import {
   FlatList,
   RefreshControl,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
@@ -105,8 +105,8 @@ export const AdminAccountsScreen = () => {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.adminName}>{item.name}</Text>
-                    <Text style={styles.adminClinic}>🏥 Clinic: {item.clinicName || 'Assigned Practice'}</Text>
-                    <Text style={styles.adminEmail}>✉️ {item.email}</Text>
+                    <Text style={styles.adminClinic}>Clinic: {item.clinicName || 'Assigned Practice'}</Text>
+                    <Text style={styles.adminEmail}>{item.email}</Text>
                   </View>
                   <Badge
                     label={(item.status || 'ACTIVE').toUpperCase()}
@@ -116,7 +116,7 @@ export const AdminAccountsScreen = () => {
 
                 <View style={styles.footerRow}>
                   <Text style={styles.securityText}>
-                    {item.twoFactorEnabled ? '🔒 2FA Enabled' : '🔓 Standard Auth'}
+                    {item.twoFactorEnabled ? '2FA Enabled' : 'Standard Auth'}
                   </Text>
                   <Text style={styles.loginText}>Last Login: {item.lastLogin || 'Recent'}</Text>
                 </View>

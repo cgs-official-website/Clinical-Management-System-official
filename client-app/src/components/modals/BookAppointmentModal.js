@@ -9,6 +9,7 @@ import {
   Alert,
 } from 'react-native';
 import { COLORS } from '../../constants/colors';
+import { Icon } from '../../components/common/Icon';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Input } from '../common/Input';
 import { Button } from '../common/Button';
@@ -68,7 +69,7 @@ export const BookAppointmentModal = ({ visible, onClose, onAppointmentBooked }) 
               <Text style={styles.subtitle}>Schedule OPD or Specialty Consultation</Text>
             </View>
             <TouchableOpacity onPress={handleClose} style={styles.closeBtn}>
-              <Text style={styles.closeText}>✕</Text>
+              <Icon name="X" size={18} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
 

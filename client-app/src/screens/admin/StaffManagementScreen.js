@@ -5,10 +5,10 @@ import {
   FlatList,
   RefreshControl,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
@@ -107,9 +107,9 @@ export const StaffManagementScreen = () => {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.staffName}>{item.name || item.fullName}</Text>
                     <Text style={styles.staffRole}>{item.roleTitle || item.role || 'Clinical Staff'}</Text>
-                    <Text style={styles.staffEmail}>✉️ {item.email}</Text>
+                    <Text style={styles.staffEmail}>{item.email}</Text>
                     {item.department && (
-                      <Text style={styles.staffDept}>🏥 {item.department}</Text>
+                      <Text style={styles.staffDept}>{item.department}</Text>
                     )}
                   </View>
                   <Badge

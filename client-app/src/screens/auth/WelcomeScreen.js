@@ -5,10 +5,11 @@ import {
   Image,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
+import { Icon } from '../../components/common/Icon';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Button } from '../../components/common/Button';
 
@@ -48,7 +49,7 @@ export const WelcomeScreen = ({ navigation }) => {
         <View style={styles.featuresList}>
           <View style={styles.featureCard}>
             <View style={styles.iconCircle}>
-              <Text style={styles.featureIcon}>⚡</Text>
+              <Icon name="Zap" size={22} color={COLORS.primary} />
             </View>
             <View style={styles.featureInfo}>
               <Text style={styles.featureTitle}>Real-Time Patient Flow</Text>
@@ -60,7 +61,7 @@ export const WelcomeScreen = ({ navigation }) => {
 
           <View style={styles.featureCard}>
             <View style={styles.iconCircle}>
-              <Text style={styles.featureIcon}>💊</Text>
+              <Icon name="Pill" size={22} color={COLORS.primary} />
             </View>
             <View style={styles.featureInfo}>
               <Text style={styles.featureTitle}>Compliant Pharmacy & CDSCO</Text>
@@ -72,7 +73,7 @@ export const WelcomeScreen = ({ navigation }) => {
 
           <View style={styles.featureCard}>
             <View style={styles.iconCircle}>
-              <Text style={styles.featureIcon}>🛡️</Text>
+              <Icon name="ShieldCheck" size={22} color={COLORS.primary} />
             </View>
             <View style={styles.featureInfo}>
               <Text style={styles.featureTitle}>Dynamic Zero-Hardcode RBAC</Text>

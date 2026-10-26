@@ -6,9 +6,9 @@ import {
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
@@ -116,8 +116,8 @@ export const PrescriptionsScreen = () => {
               const medsList = Array.isArray(item.medications)
                 ? item.medications
                 : Array.isArray(item.items)
-                ? item.items
-                : [];
+                  ? item.items
+                  : [];
 
               return (
                 <Card style={styles.rxCard}>
@@ -125,8 +125,8 @@ export const PrescriptionsScreen = () => {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.patName}>{patName}</Text>
                       <Text style={styles.mrn}>{item.mrn || item.patient?.mrn || 'OPD'}</Text>
-                      <Text style={styles.docName}>👨‍⚕️ Prescribed by: {docName}</Text>
-                      <Text style={styles.dateText}>📅 {dateStr}</Text>
+                      <Text style={styles.docName}>Prescribed by: {docName}</Text>
+                      <Text style={styles.dateText}>{dateStr}</Text>
                     </View>
                     <Badge label={statusStr} status={statusStr} />
                   </View>
@@ -165,7 +165,7 @@ export const PrescriptionsScreen = () => {
                     />
                   ) : isDispensed ? (
                     <View style={styles.dispensedBanner}>
-                      <Text style={styles.dispensedText}>✓ Stock Deducted & Dispensed</Text>
+                      <Text style={styles.dispensedText}>Stock Deducted & Dispensed</Text>
                     </View>
                   ) : null}
                 </Card>

@@ -6,9 +6,9 @@ import {
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
@@ -164,14 +164,14 @@ export const PatientsScreen = ({ navigation }) => {
                         <Text style={styles.patientName}>{displayName}</Text>
                         <Text style={styles.mrn}>{displayMrn}</Text>
                         <Text style={styles.demographics}>
-                          {genderStr} · {ageStr} · 🩸 {item.bloodGroup || 'O+'}
+                          {genderStr} · {ageStr} · {item.bloodGroup || 'O+'}
                         </Text>
                       </View>
                       <Badge label={statusStr} status={statusStr} />
                     </View>
 
                     <View style={styles.contactRow}>
-                      <Text style={styles.phoneText}>📞 {displayPhone}</Text>
+                      <Text style={styles.phoneText}>{displayPhone}</Text>
                       <Text style={styles.doctorText}>
                         Attending: {item.primaryDoctor || 'Primary Care'}
                       </Text>

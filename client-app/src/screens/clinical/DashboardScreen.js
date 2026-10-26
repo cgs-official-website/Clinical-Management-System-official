@@ -6,10 +6,11 @@ import {
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
+import { Icon } from '../../components/common/Icon';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
 import { StatCard } from '../../components/common/StatCard';
@@ -145,7 +146,7 @@ export const DashboardScreen = ({ navigation }) => {
                   style={styles.actionBtn}
                   onPress={() => setShowPatientModal(true)}
                 >
-                  <Text style={styles.actionIcon}>➕</Text>
+                  <Icon name="Plus" size={22} color={COLORS.primary} />
                   <Text style={styles.actionText}>New Patient</Text>
                 </TouchableOpacity>
               )}
@@ -155,16 +156,16 @@ export const DashboardScreen = ({ navigation }) => {
                   style={styles.actionBtn}
                   onPress={() => setShowAppointmentModal(true)}
                 >
-                  <Text style={styles.actionIcon}>📅</Text>
+                  <Icon name="Calendar" size={22} color={COLORS.primary} />
                   <Text style={styles.actionText}>Book Consult</Text>
                 </TouchableOpacity>
               )}
 
               <TouchableOpacity
                 style={styles.actionBtn}
-                onPress={() => navigation.navigate('PatientFlow')}
+                onPress={() => navigation.navigate('ModuleHost', { route: '/app/staff/flow' })}
               >
-                <Text style={styles.actionIcon}>⚡</Text>
+                <Icon name="Zap" size={22} color={COLORS.primary} />
                 <Text style={styles.actionText}>Triage Queue</Text>
               </TouchableOpacity>
             </View>
@@ -205,7 +206,7 @@ export const DashboardScreen = ({ navigation }) => {
             {/* Upcoming Consultations */}
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionHeading}>Upcoming Consultations</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('Appointments')}>
+              <TouchableOpacity onPress={() => navigation.navigate('ModuleHost', { route: '/app/staff/appointments' })}>
                 <Text style={styles.seeAll}>See All ({appointments.length}) →</Text>
               </TouchableOpacity>
             </View>
@@ -241,7 +242,7 @@ export const DashboardScreen = ({ navigation }) => {
             {/* Live Triage Queue */}
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionHeading}>Outpatient Triage Flow</Text>
-              <TouchableOpacity onPress={() => navigation.navigate('PatientFlow')}>
+              <TouchableOpacity onPress={() => navigation.navigate('ModuleHost', { route: '/app/staff/flow' })}>
                 <Text style={styles.seeAll}>Pipeline ({triageQueue.length}) →</Text>
               </TouchableOpacity>
             </View>

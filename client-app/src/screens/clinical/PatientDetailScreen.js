@@ -5,9 +5,9 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Card } from '../../components/common/Card';
@@ -74,7 +74,7 @@ export const PatientDetailScreen = ({ route, navigation }) => {
 
         {/* Clinical Alerts / Allergies */}
         <Card style={styles.alertCard}>
-          <Text style={styles.sectionTitle}>⚠️ Known Allergies & Contraindications</Text>
+          <Text style={styles.sectionTitle}>Known Allergies & Contraindications</Text>
           {patient.allergies && patient.allergies.length > 0 ? (
             <View style={styles.allergyChips}>
               {patient.allergies.map((a, i) => (
@@ -90,7 +90,7 @@ export const PatientDetailScreen = ({ route, navigation }) => {
 
         {/* Baseline Vitals Card */}
         <Card style={styles.vitalsCard}>
-          <Text style={styles.sectionTitle}>🩺 Recent Baseline Vitals</Text>
+          <Text style={styles.sectionTitle}>Recent Baseline Vitals</Text>
           <View style={styles.vitalsGrid}>
             <View style={styles.vitalTile}>
               <Text style={styles.vitalName}>Blood Pressure</Text>
@@ -117,7 +117,7 @@ export const PatientDetailScreen = ({ route, navigation }) => {
 
         {/* Contact Info Card */}
         <Card>
-          <Text style={styles.sectionTitle}>📞 Contact & Demographic Details</Text>
+          <Text style={styles.sectionTitle}>Contact & Demographic Details</Text>
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Mobile Phone:</Text>
             <Text style={styles.detailVal}>{patient.phone || '+91 98450 12345'}</Text>
@@ -317,3 +317,5 @@ const styles = StyleSheet.create({
 });
 
 export default PatientDetailScreen;
+
+

@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { COLORS } from '../../constants/colors';
+import { Icon } from '../../components/common/Icon';
 import { SPACING } from '../../constants/theme';
 import { Button } from './Button';
 
@@ -8,7 +9,7 @@ export const EmptyState = ({ title, message, actionLabel, onAction }) => {
   return (
     <View style={styles.container}>
       <View style={styles.iconCircle}>
-        <Text style={styles.iconText}>📋</Text>
+        <Icon name="ClipboardList" size={22} color={COLORS.primary} />
       </View>
       <Text style={styles.title}>{title || 'No records found'}</Text>
       <Text style={styles.message}>

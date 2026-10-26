@@ -5,10 +5,10 @@ import {
   FlatList,
   RefreshControl,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   TouchableOpacity,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
@@ -98,7 +98,7 @@ export const InventoryScreen = () => {
       <View style={styles.container}>
         {errorMessage && (
           <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
+            <Text style={styles.errorText}>{errorMessage}</Text>
             <TouchableOpacity onPress={fetchInventory} style={styles.retryBtn}>
               <Text style={styles.retryText}>Retry</Text>
             </TouchableOpacity>
@@ -188,7 +188,7 @@ export const InventoryScreen = () => {
                   {isLowStock && (
                     <View style={styles.lowStockWarning}>
                       <Text style={styles.warningText}>
-                        ⚠️ Stock level ({qty}) below minimum threshold ({threshold})
+                        Stock level ({qty}) below minimum threshold ({threshold})
                       </Text>
                     </View>
                   )}

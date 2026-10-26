@@ -5,11 +5,12 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
+import { Icon } from '../../components/common/Icon';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
@@ -68,7 +69,7 @@ export const ProfileScreen = ({ navigation }) => {
               <Text style={styles.roleText}>{getRoleDisplay(user)}</Text>
             </View>
             <View style={styles.specialtyTag}>
-              <Text style={styles.specialtyText}>🏥 {specialtyName}</Text>
+              <Text style={styles.specialtyText}>{specialtyName}</Text>
             </View>
           </View>
 
@@ -84,177 +85,21 @@ export const ProfileScreen = ({ navigation }) => {
         </Card>
 
         {/* Navigation Shortcuts */}
-        <Text style={styles.sectionHeading}>Quick Navigation & Services</Text>
+        <Text style={styles.sectionHeading}>Account</Text>
         <Card style={styles.linksCard}>
           <TouchableOpacity
             style={styles.linkRow}
             onPress={() => navigation.navigate('MyPermissions')}
           >
             <View style={styles.linkIconBox}>
-              <Text style={styles.linkIcon}>🛡️</Text>
+              <Icon name="ShieldCheck" size={20} color={COLORS.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.linkLabel}>My Role & Permissions</Text>
               <Text style={styles.linkDesc}>View live RBAC module privileges and actions</Text>
             </View>
-            <Text style={styles.chevron}>→</Text>
+            <Icon name="ChevronRight" size={18} color={COLORS.textMuted} />
           </TouchableOpacity>
-
-          {isSuperadmin && (
-            <>
-              <TouchableOpacity
-                style={styles.linkRow}
-                onPress={() => navigation.navigate('AdminOverview')}
-              >
-                <View style={styles.linkIconBox}>
-                  <Text style={styles.linkIcon}>📊</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.linkLabel}>Platform Telemetry & KPIs</Text>
-                  <Text style={styles.linkDesc}>Multi-tenant performance, MRR, and platform metrics</Text>
-                </View>
-                <Text style={styles.chevron}>→</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.linkRow}
-                onPress={() => navigation.navigate('ClinicsManagement')}
-              >
-                <View style={styles.linkIconBox}>
-                  <Text style={styles.linkIcon}>🏥</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.linkLabel}>Clinics Directory</Text>
-                  <Text style={styles.linkDesc}>Register and manage tenant medical centers</Text>
-                </View>
-                <Text style={styles.chevron}>→</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.linkRow}
-                onPress={() => navigation.navigate('ClinicCategories')}
-              >
-                <View style={styles.linkIconBox}>
-                  <Text style={styles.linkIcon}>🏷️</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.linkLabel}>Specialty Categories</Text>
-                  <Text style={styles.linkDesc}>Cardiology, Physiotherapy, Dental, and OPD taxonomy</Text>
-                </View>
-                <Text style={styles.chevron}>→</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.linkRow}
-                onPress={() => navigation.navigate('AdminAccounts')}
-              >
-                <View style={styles.linkIconBox}>
-                  <Text style={styles.linkIcon}>👑</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.linkLabel}>Clinic Administrators</Text>
-                  <Text style={styles.linkDesc}>Manage tenant admin credentials and access</Text>
-                </View>
-                <Text style={styles.chevron}>→</Text>
-              </TouchableOpacity>
-            </>
-          )}
-
-          {isAdmin && !isSuperadmin && (
-            <>
-              <TouchableOpacity
-                style={styles.linkRow}
-                onPress={() => navigation.navigate('AdminOverview')}
-              >
-                <View style={styles.linkIconBox}>
-                  <Text style={styles.linkIcon}>⚙️</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.linkLabel}>Clinic Operations & KPIs</Text>
-                  <Text style={styles.linkDesc}>Daily revenue, OPD traffic, and clinical audits</Text>
-                </View>
-                <Text style={styles.chevron}>→</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.linkRow}
-                onPress={() => navigation.navigate('StaffManagement')}
-              >
-                <View style={styles.linkIconBox}>
-                  <Text style={styles.linkIcon}>👨‍⚕️</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.linkLabel}>Staff Management</Text>
-                  <Text style={styles.linkDesc}>Doctors, nurses, receptionists, and billers</Text>
-                </View>
-                <Text style={styles.chevron}>→</Text>
-              </TouchableOpacity>
-            </>
-          )}
-
-          {(isCardiology || isSuperadmin) && (
-            <TouchableOpacity
-              style={styles.linkRow}
-              onPress={() => navigation.navigate('Cardiology')}
-            >
-              <View style={styles.linkIconBox}>
-                <Text style={styles.linkIcon}>❤️</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.linkLabel}>Cardiology Clinical Suite</Text>
-                <Text style={styles.linkDesc}>ECG, Echo, Cath Lab & ASCVD 10-yr risk calculator</Text>
-              </View>
-              <Text style={styles.chevron}>→</Text>
-            </TouchableOpacity>
-          )}
-
-          {(isPhysiotherapy || isSuperadmin) && (
-            <TouchableOpacity
-              style={styles.linkRow}
-              onPress={() => navigation.navigate('Physiotherapy')}
-            >
-              <View style={styles.linkIconBox}>
-                <Text style={styles.linkIcon}>🏃</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.linkLabel}>Physiotherapy Rehab Suite</Text>
-                <Text style={styles.linkDesc}>Phased rehab protocols, exercise tracking & ROM</Text>
-              </View>
-              <Text style={styles.chevron}>→</Text>
-            </TouchableOpacity>
-          )}
-
-          {(isSuperadmin || isAdmin || hasPermission('inventory.view') || hasPermission('prescriptions.view')) && (
-            <TouchableOpacity
-              style={styles.linkRow}
-              onPress={() => navigation.navigate('Inventory')}
-            >
-              <View style={styles.linkIconBox}>
-                <Text style={styles.linkIcon}>💊</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.linkLabel}>Pharmacy & Stock Inventory</Text>
-                <Text style={styles.linkDesc}>Drug schedules, stock levels, and DPCO pricing</Text>
-              </View>
-              <Text style={styles.chevron}>→</Text>
-            </TouchableOpacity>
-          )}
-
-          {(isSuperadmin || isAdmin || hasPermission('billing.view')) && (
-            <TouchableOpacity
-              style={styles.linkRow}
-              onPress={() => navigation.navigate('Billing')}
-            >
-              <View style={styles.linkIconBox}>
-                <Text style={styles.linkIcon}>💳</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.linkLabel}>Billing & Cashier</Text>
-                <Text style={styles.linkDesc}>Outpatient receipts, UPI settlement & invoices</Text>
-              </View>
-              <Text style={styles.chevron}>→</Text>
-            </TouchableOpacity>
-          )}
         </Card>
 
         {/* Security / System Info */}

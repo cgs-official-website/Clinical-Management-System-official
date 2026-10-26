@@ -45,7 +45,7 @@ export const AuthProvider = ({ children }) => {
               return updated;
             });
           }
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } catch {
       // Storage read error ignored

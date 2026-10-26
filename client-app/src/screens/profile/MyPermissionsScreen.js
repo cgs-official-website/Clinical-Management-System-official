@@ -5,10 +5,10 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   RefreshControl,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Card } from '../../components/common/Card';
@@ -84,13 +84,13 @@ export const MyPermissionsScreen = ({ navigation }) => {
               : 'Dynamic role entitlements computed via clinic OS dynamic RBAC engine.'}
           </Text>
           <View style={styles.syncBadge}>
-            <Text style={styles.syncText}>🟢 Live Permission Sync Active</Text>
+            <Text style={styles.syncText}>Live Permission Sync Active</Text>
           </View>
         </Card>
 
         {errorMessage && (
           <View style={styles.errorBanner}>
-            <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
+            <Text style={styles.errorText}>{errorMessage}</Text>
             <TouchableOpacity onPress={fetchPermissions} style={styles.retryBtn}>
               <Text style={styles.retryText}>Retry</Text>
             </TouchableOpacity>
@@ -125,25 +125,25 @@ export const MyPermissionsScreen = ({ navigation }) => {
                 <View style={styles.actionsGrid}>
                   <View style={[styles.actionChip, canView ? styles.chipAllowed : styles.chipDenied]}>
                     <Text style={[styles.actionText, canView ? styles.textAllowed : styles.textDenied]}>
-                      {canView ? '✓' : '✕'} View
+                      {canView ? 'Allowed' : 'Denied'} · View
                     </Text>
                   </View>
 
                   <View style={[styles.actionChip, canCreate ? styles.chipAllowed : styles.chipDenied]}>
                     <Text style={[styles.actionText, canCreate ? styles.textAllowed : styles.textDenied]}>
-                      {canCreate ? '✓' : '✕'} Create
+                      {canCreate ? 'Allowed' : 'Denied'} · Create
                     </Text>
                   </View>
 
                   <View style={[styles.actionChip, canEdit ? styles.chipAllowed : styles.chipDenied]}>
                     <Text style={[styles.actionText, canEdit ? styles.textAllowed : styles.textDenied]}>
-                      {canEdit ? '✓' : '✕'} Edit
+                      {canEdit ? 'Allowed' : 'Denied'} · Edit
                     </Text>
                   </View>
 
                   <View style={[styles.actionChip, canDelete ? styles.chipAllowed : styles.chipDenied]}>
                     <Text style={[styles.actionText, canDelete ? styles.textAllowed : styles.textDenied]}>
-                      {canDelete ? '✓' : '✕'} Delete
+                      {canDelete ? 'Allowed' : 'Denied'} · Delete
                     </Text>
                   </View>
                 </View>

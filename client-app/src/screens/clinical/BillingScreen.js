@@ -6,10 +6,11 @@ import {
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
+import { Icon } from '../../components/common/Icon';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
@@ -105,7 +106,7 @@ export const BillingScreen = () => {
 
         {permissionDenied ? (
           <Card style={styles.permissionCard}>
-            <Text style={styles.permissionIcon}>🔒</Text>
+            <Icon name="Lock" size={22} color={COLORS.primary} />
             <Text style={styles.permissionTitle}>Billing Access Restricted</Text>
             <Text style={styles.permissionDesc}>
               Your current role does not have 'billing.view' permissions. Please contact your Clinic Administrator to grant billing entitlements.
@@ -157,7 +158,7 @@ export const BillingScreen = () => {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.invNum}>{invoiceNum}</Text>
                       <Text style={styles.patName}>{patName}</Text>
-                      <Text style={styles.dateText}>📅 {dateStr}</Text>
+                      <Text style={styles.dateText}>{dateStr}</Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
                       <Text style={styles.amountText}>{formatCurrency(amountVal)}</Text>

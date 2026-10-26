@@ -6,9 +6,10 @@ import {
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Icon } from '../../components/common/Icon';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
@@ -20,12 +21,12 @@ import { Button } from '../../components/common/Button';
 import { clinicalApi } from '../../api/clinical';
 
 const STAGES = [
-  { id: 'ALL', label: 'All Stages', icon: '⚡' },
-  { id: 'RECEPTION', label: 'Reception', icon: '📝' },
-  { id: 'TRIAGE', label: 'Nurse Triage', icon: '🩺' },
-  { id: 'CONSULTATION', label: 'Doctor Room', icon: '👨‍⚕️' },
-  { id: 'PHARMACY', label: 'Pharmacy', icon: '💊' },
-  { id: 'BILLING', label: 'Cashier', icon: '💳' },
+  { id: 'ALL', label: 'All Stages', icon: 'Zap' },
+  { id: 'RECEPTION', label: 'Reception', icon: 'ClipboardList' },
+  { id: 'TRIAGE', label: 'Nurse Triage', icon: 'Activity' },
+  { id: 'CONSULTATION', label: 'Doctor Room', icon: 'Stethoscope' },
+  { id: 'PHARMACY', label: 'Pharmacy', icon: 'Pill' },
+  { id: 'BILLING', label: 'Cashier', icon: 'CreditCard' },
 ];
 
 export const PatientFlowScreen = () => {
@@ -85,7 +86,7 @@ export const PatientFlowScreen = () => {
               style={[styles.stageChip, activeStage === s.id && styles.stageChipActive]}
               onPress={() => setActiveStage(s.id)}
             >
-              <Text style={styles.stageIcon}>{s.icon}</Text>
+              <Icon name={s.icon} size={16} color={COLORS.primary} />
               <Text
                 style={[
                   styles.stageText,

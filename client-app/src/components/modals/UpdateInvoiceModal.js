@@ -8,6 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { COLORS } from '../../constants/colors';
+import { Icon } from '../../components/common/Icon';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Button } from '../common/Button';
 import { formatCurrency } from '../../utils/formatters';
@@ -44,7 +45,7 @@ export const UpdateInvoiceModal = ({ visible, invoice, onClose, onUpdated }) => 
           <View style={styles.header}>
             <Text style={styles.title}>Update Payment Status</Text>
             <TouchableOpacity onPress={onClose}>
-              <Text style={styles.closeText}>✕</Text>
+              <Icon name="X" size={18} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
 
@@ -60,7 +61,7 @@ export const UpdateInvoiceModal = ({ visible, invoice, onClose, onUpdated }) => 
               onPress={() => handleUpdate('PAID')}
             >
               <Text style={[styles.statusBtnText, { color: COLORS.success }]}>
-                ✓ Mark as PAID (Received)
+                Mark as PAID (Received)
               </Text>
             </TouchableOpacity>
 
@@ -69,7 +70,7 @@ export const UpdateInvoiceModal = ({ visible, invoice, onClose, onUpdated }) => 
               onPress={() => handleUpdate('PENDING')}
             >
               <Text style={[styles.statusBtnText, { color: COLORS.warning }]}>
-                ⏳ Keep PENDING
+                Keep PENDING
               </Text>
             </TouchableOpacity>
 
@@ -78,7 +79,7 @@ export const UpdateInvoiceModal = ({ visible, invoice, onClose, onUpdated }) => 
               onPress={() => handleUpdate('OVERDUE')}
             >
               <Text style={[styles.statusBtnText, { color: COLORS.danger }]}>
-                ⚠️ Mark OVERDUE
+                Mark OVERDUE
               </Text>
             </TouchableOpacity>
           </View>

@@ -5,9 +5,10 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRoute } from '@react-navigation/native';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
@@ -16,7 +17,7 @@ import { Badge } from '../../components/common/Badge';
 import { CARDIOLOGY_DATA } from '../../api/specialty';
 
 export const CardiologyScreen = () => {
-  const [activeTab, setActiveTab] = useState('ECG'); // 'ECG' | 'ECHO' | 'RISK' | 'CATH'
+  const [activeTab, setActiveTab] = useState(useRoute().params?.tab || 'ECG'); // 'ECG' | 'ECHO' | 'RISK' | 'CATH'
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -29,10 +30,10 @@ export const CardiologyScreen = () => {
       {/* Tabs */}
       <View style={styles.tabBar}>
         {[
-          { key: 'ECG', label: '🫀 ECG Records' },
-          { key: 'ECHO', label: '📊 Echo Reports' },
-          { key: 'RISK', label: '⚡ ASCVD Risk' },
-          { key: 'CATH', label: '🔬 Cath Lab' },
+          { key: 'ECG', label: 'ECG Records' },
+          { key: 'ECHO', label: 'Echo Reports' },
+          { key: 'RISK', label: 'ASCVD Risk' },
+          { key: 'CATH', label: 'Cath Lab' },
         ].map((t) => (
           <TouchableOpacity
             key={t.key}
@@ -206,10 +207,10 @@ export const CardiologyScreen = () => {
                 </View>
 
                 <View style={styles.cathDetails}>
-                  <Text style={styles.cathText}>📍 Room: {item.room}</Text>
+                  <Text style={styles.cathText}>Room: {item.room}</Text>
                   <Text style={styles.cathText}>⏰ Time: {item.scheduledTime}</Text>
-                  <Text style={styles.cathText}>🩺 Interventionist: {item.leadInterventionist}</Text>
-                  <Text style={styles.cathText}>🎯 Access: {item.accessSite}</Text>
+                  <Text style={styles.cathText}>Interventionist: {item.leadInterventionist}</Text>
+                  <Text style={styles.cathText}>Access: {item.accessSite}</Text>
                 </View>
               </Card>
             ))}

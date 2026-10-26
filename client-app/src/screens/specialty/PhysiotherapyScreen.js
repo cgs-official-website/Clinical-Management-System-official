@@ -5,9 +5,10 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRoute } from '@react-navigation/native';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
@@ -16,7 +17,7 @@ import { Badge } from '../../components/common/Badge';
 import { PHYSIOTHERAPY_DATA } from '../../api/specialty';
 
 export const PhysiotherapyScreen = () => {
-  const [activeTab, setActiveTab] = useState('PLANS'); // 'PLANS' | 'EXERCISES' | 'NOTES'
+  const [activeTab, setActiveTab] = useState(useRoute().params?.tab || 'PLANS'); // 'PLANS' | 'EXERCISES' | 'NOTES'
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -29,9 +30,9 @@ export const PhysiotherapyScreen = () => {
       {/* Segmented Control */}
       <View style={styles.tabBar}>
         {[
-          { key: 'PLANS', label: '📋 Rehab Protocols' },
-          { key: 'EXERCISES', label: '🏋️ Exercise Tracker' },
-          { key: 'NOTES', label: '📝 Recovery Notes' },
+          { key: 'PLANS', label: 'Rehab Protocols' },
+          { key: 'EXERCISES', label: 'Exercise Tracker' },
+          { key: 'NOTES', label: 'Recovery Notes' },
         ].map((t) => (
           <TouchableOpacity
             key={t.key}

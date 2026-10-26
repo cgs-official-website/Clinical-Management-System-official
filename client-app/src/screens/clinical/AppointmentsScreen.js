@@ -6,9 +6,9 @@ import {
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
@@ -157,7 +157,7 @@ export const AppointmentsScreen = () => {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.patientName}>{patName}</Text>
                       <Text style={styles.mrn}>{item.mrn || item.patient?.mrn || 'OPD'}</Text>
-                      <Text style={styles.doctorName}>👨‍⚕️ {docName}</Text>
+                      <Text style={styles.doctorName}>{docName}</Text>
                       <Text style={styles.typeText}>
                         {item.type || 'General Consultation'} · {item.room || 'Chamber 1'}
                       </Text>

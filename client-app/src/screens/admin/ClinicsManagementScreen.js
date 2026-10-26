@@ -6,10 +6,10 @@ import {
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
@@ -157,7 +157,7 @@ export const ClinicsManagementScreen = () => {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.clinicName}>{item.name}</Text>
                       <Text style={styles.subdomain}>
-                        🌐 {subdomain} · Plan: {item.plan || 'ENTERPRISE'}
+                        {subdomain} · Plan: {item.plan || 'ENTERPRISE'}
                       </Text>
                       <Text style={styles.category}>Specialty: {categoryName}</Text>
                       <Text style={styles.adminEmail}>Admin: {adminEmail}</Text>

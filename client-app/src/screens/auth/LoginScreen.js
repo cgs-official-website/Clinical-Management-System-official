@@ -6,11 +6,11 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Input } from '../../components/common/Input';
@@ -133,7 +133,7 @@ export const LoginScreen = ({ navigation }) => {
           {/* Error Banner */}
           {errorMessage && (
             <View style={styles.errorBanner}>
-              <Text style={styles.errorText}>⚠️ {errorMessage}</Text>
+              <Text style={styles.errorText}>{errorMessage}</Text>
             </View>
           )}
 
@@ -178,7 +178,7 @@ export const LoginScreen = ({ navigation }) => {
               Need practice registration? Use the clinic web portal to initiate multi-tenant onboarding.
             </Text>
             <Text style={styles.securityText}>
-              🔒 Secure End-to-End Encrypted Session
+              Secure End-to-End Encrypted Session
             </Text>
           </View>
         </ScrollView>
