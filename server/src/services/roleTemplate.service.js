@@ -223,6 +223,28 @@ export class RoleTemplateService {
   }
 
   /**
+   * Seed all global default templates into tenant templates if tenant has none yet
+   */
+  static async seedTenantTemplates(tenantId) {
+    if (!tenantId) return
+    const count = await prisma.roleTemplate.count({ where: { tenantId } })
+    if (count > 0) return
+
+    const globals = await prisma.roleTemplate.findMany({ where: { tenantId: null } })
+    if (globals && globals.length > 0) {
+      await prisma.roleTemplate.createMany({
+        data: globals.map((g) => ({
+          tenantId,
+          keyword: g.keyword,
+          module: g.module,
+          action: g.action,
+          isWildcard: g.isWildcard
+        }))
+      })
+    }
+  }
+
+  /**
    * Update a template for the tenant
    */
   static async updateTemplate(tenantId, id, data) {
@@ -234,8 +256,33 @@ export class RoleTemplateService {
       throw new Error('Role template not found')
     }
 
-    // If updating a global template, clone it as a tenant template
+    // If updating a global template, seed all templates for this tenant first so no rules are lost!
     if (!existing.tenantId) {
+      await this.seedTenantTemplates(tenantId)
+
+      // Find the corresponding tenant template by matching keyword, module, and action
+      const tenantMatch = await prisma.roleTemplate.findFirst({
+        where: {
+          tenantId,
+          keyword: existing.keyword,
+          module: existing.module,
+          action: existing.action
+        }
+      })
+
+      if (tenantMatch) {
+        return prisma.roleTemplate.update({
+          where: { id: tenantMatch.id },
+          data: {
+            keyword: data.keyword ? data.keyword.trim().toLowerCase() : undefined,
+            module: data.module ? data.module.trim().toLowerCase() : undefined,
+            action: data.action ? data.action.trim().toLowerCase() : undefined,
+            isWildcard: data.isWildcard !== undefined ? Boolean(data.isWildcard) : undefined
+          }
+        })
+      }
+
+      // If no exact match found after seed, create as new tenant template
       return prisma.roleTemplate.create({
         data: {
           tenantId,
@@ -275,8 +322,26 @@ export class RoleTemplateService {
       throw new Error('Role template not found')
     }
 
-    if (!existing.tenantId || existing.tenantId !== tenantId) {
-      throw new Error('Cannot delete global default template')
+    if (!existing.tenantId) {
+      // If deleting a global template, seed all to tenant first, then remove this one from the tenant's custom rules
+      await this.seedTenantTemplates(tenantId)
+      const tenantMatch = await prisma.roleTemplate.findFirst({
+        where: {
+          tenantId,
+          keyword: existing.keyword,
+          module: existing.module,
+          action: existing.action
+        }
+      })
+      if (tenantMatch) {
+        await prisma.roleTemplate.delete({ where: { id: tenantMatch.id } })
+        return { success: true, message: 'Template removed from clinic rules' }
+      }
+      return { success: true, message: 'Template removed' }
+    }
+
+    if (existing.tenantId !== tenantId) {
+      throw new Error('Cannot delete template of another clinic')
     }
 
     await prisma.roleTemplate.delete({
