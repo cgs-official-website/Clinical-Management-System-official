@@ -180,9 +180,80 @@ export class RbacModuleService {
   }
 
   /**
-   * Fetch all registered modules
+   * Fetch all registered modules (scoped to tenant category if tenantId supplied, or all DB modules)
    */
-  static async getModules() {
+  static async getModules(tenantId = null) {
+    try {
+      if (tenantId) {
+        // Query category-enabled tenant modules
+        const tenantModules = await prisma.tenantModule.findMany({
+          where: { tenantId, isEnabled: true },
+          include: { module: true },
+          orderBy: { createdAt: 'asc' }
+        })
+
+        if (tenantModules && tenantModules.length > 0) {
+          const tenantRecord = await prisma.tenant.findUnique({
+            where: { id: tenantId },
+            select: { clinicCategoryId: true, clinicCategory: { select: { name: true } } }
+          })
+          const categoryName = tenantRecord?.clinicCategory?.name || ''
+          let categoryModuleOrderMap = new Map()
+          if (tenantRecord?.clinicCategoryId) {
+            const cms = await prisma.clinicCategoryModule.findMany({
+              where: { clinicCategoryId: tenantRecord.clinicCategoryId },
+              select: { moduleId: true, displayOrder: true }
+            })
+            categoryModuleOrderMap = new Map(cms.map((c) => [c.moduleId, c.displayOrder]))
+          }
+
+          const modules = tenantModules.map((tm) => {
+            const m = tm.module
+            const meta = MODULE_METADATA[m.key] || {}
+            let route = meta.route || `/app/staff/${m.key}`
+            if (m.key === 'implant_registry' && categoryName?.toLowerCase().includes('cardio')) {
+              route = '/app/cardio/implants'
+            }
+            const order = categoryModuleOrderMap.get(m.id) ?? meta.defaultOrder ?? 50
+            return {
+              id: m.id,
+              key: m.key,
+              name: meta.name || m.name,
+              description: m.description,
+              icon: meta.icon || 'Boxes',
+              route,
+              displayOrder: order,
+            }
+          })
+
+          modules.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+          return modules
+        }
+      }
+
+      // If no tenantId or no tenantModules configured, fetch all modules from database
+      const dbModules = await prisma.module.findMany({
+        orderBy: { createdAt: 'asc' }
+      })
+
+      if (dbModules && dbModules.length > 0) {
+        return dbModules.map((m) => {
+          const meta = MODULE_METADATA[m.key] || {}
+          return {
+            id: m.id,
+            key: m.key,
+            name: meta.name || m.name,
+            description: m.description,
+            icon: meta.icon || 'Boxes',
+            route: meta.route || `/app/staff/${m.key}`,
+            displayOrder: meta.defaultOrder ?? 50
+          }
+        }).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+      }
+    } catch (err) {
+      logger.warn(`Error querying database in getModules: ${err.message}`)
+    }
+
     return DEFAULT_MODULES
   }
 
@@ -406,28 +477,78 @@ export class RbacModuleService {
       }
     }
 
-    // Attempt to persist to PostgreSQL
+    // Attempt to persist to PostgreSQL role_permissions
     try {
-      for (const item of permissionsList) {
-        const modId = item.moduleId || item.module_id
-        if (!modId) continue
-        const canView = Boolean(item.can_view ?? item.canView)
-        const canEdit = Boolean(item.can_edit ?? item.canEdit)
-        const canDelete = Boolean(item.can_delete ?? item.canDelete)
+      const dbRole = await prisma.role.findFirst({
+        where: {
+          OR: [
+            { id: resolvedId },
+            { name: { equals: resolvedId, mode: 'insensitive' } }
+          ]
+        }
+      })
 
-        await prisma.$executeRaw`
-          INSERT INTO permissions (role_id, module_id, can_view, can_edit, can_delete, updated_at)
-          VALUES (${resolvedId}::uuid, ${modId}::uuid, ${canView}, ${canEdit}, ${canDelete}, NOW())
-          ON CONFLICT (role_id, module_id)
-          DO UPDATE SET 
-            can_view = EXCLUDED.can_view,
-            can_edit = EXCLUDED.can_edit,
-            can_delete = EXCLUDED.can_delete,
-            updated_at = NOW();
-        `
+      if (dbRole) {
+        for (const item of permissionsList) {
+          const modId = item.moduleId || item.module_id
+          if (!modId) continue
+
+          const mod = await prisma.module.findFirst({
+            where: {
+              OR: [
+                { id: modId },
+                { key: modId }
+              ]
+            }
+          })
+
+          if (!mod) continue
+
+          const canView = Boolean(item.can_view ?? item.canView)
+          const canCreate = Boolean(item.can_create ?? item.canCreate ?? item.can_edit ?? item.canEdit)
+          const canEdit = Boolean(item.can_edit ?? item.canEdit)
+          const canDelete = Boolean(item.can_delete ?? item.canDelete)
+
+          const modulePerms = await prisma.permission.findMany({
+            where: { moduleId: mod.id },
+            include: { action: true }
+          })
+
+          for (const p of modulePerms) {
+            const actionKey = p.action?.key || p.key.split('.')[1] || ''
+            let shouldGrant = false
+            if (actionKey === 'view') shouldGrant = canView
+            else if (actionKey === 'create') shouldGrant = canCreate
+            else if (actionKey === 'edit') shouldGrant = canEdit
+            else if (actionKey === 'delete') shouldGrant = canDelete
+
+            if (shouldGrant) {
+              await prisma.rolePermission.upsert({
+                where: {
+                  roleId_permissionId: {
+                    roleId: dbRole.id,
+                    permissionId: p.id
+                  }
+                },
+                create: {
+                  roleId: dbRole.id,
+                  permissionId: p.id
+                },
+                update: {}
+              })
+            } else if (['view', 'create', 'edit', 'delete'].includes(actionKey)) {
+              await prisma.rolePermission.deleteMany({
+                where: {
+                  roleId: dbRole.id,
+                  permissionId: p.id
+                }
+              })
+            }
+          }
+        }
       }
     } catch (e) {
-      logger.warn(`PostgreSQL permissions save skipped/offline: ${e.message}`)
+      logger.warn(`PostgreSQL permissions save skipped/error: ${e.message}`)
     }
 
     // Broadcast permission invalidation event to Redis / WebSockets for live instant client update

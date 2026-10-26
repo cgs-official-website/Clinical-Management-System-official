@@ -114,9 +114,9 @@ export const PermissionMatrixPage = () => {
 
   // 2. Fetch available modules
   const { data: moduleData, isLoading: isModulesLoading } = useQuery({
-    queryKey: ['rbac', 'modules'],
+    queryKey: ['rbac', 'modules', tenantId],
     queryFn: async () => {
-      const res = await api.get('/api/modules')
+      const res = await api.get(`/api/modules${tenantId ? `?tenantId=${tenantId}` : ''}`)
       return res.data?.modules || res.data?.data || []
     }
   })
@@ -156,10 +156,10 @@ export const PermissionMatrixPage = () => {
 
   // 3. Fetch permissions for the selected role
   const { data: permData, isLoading: isPermsLoading, refetch: refetchPerms } = useQuery({
-    queryKey: ['rbac', 'role-permissions', selectedRoleId],
+    queryKey: ['rbac', 'matrix-permissions', selectedRoleId],
     queryFn: async () => {
       if (!selectedRoleId) return []
-      const res = await api.get(`/api/permissions/${encodeURIComponent(selectedRoleId)}`)
+      const res = await api.get(`/api/permissions/${encodeURIComponent(selectedRoleId)}${tenantId ? `?tenantId=${tenantId}` : ''}`)
       return res.data?.permissions || res.data?.data || []
     },
     enabled: !!selectedRoleId,
@@ -176,12 +176,21 @@ export const PermissionMatrixPage = () => {
 
       if (Array.isArray(permData)) {
         permData.forEach((p) => {
-          if (newMatrix[p.module_id]) {
-            newMatrix[p.module_id] = {
-              can_view: Boolean(p.can_view),
-              can_create: Boolean(p.can_create ?? p.can_edit), // default create to edit if unset
-              can_edit: Boolean(p.can_edit),
-              can_delete: Boolean(p.can_delete)
+          const targetMod = modules.find(
+            (m) =>
+              m.id === p.module_id ||
+              m.id === p.id ||
+              (p.module_key && m.key === p.module_key) ||
+              (p.key && m.key === p.key)
+          )
+          const targetId = targetMod ? targetMod.id : p.module_id
+
+          if (targetId && newMatrix[targetId] !== undefined) {
+            newMatrix[targetId] = {
+              can_view: Boolean(p.can_view ?? p.canView),
+              can_create: Boolean(p.can_create ?? p.canCreate ?? p.can_edit ?? p.canEdit),
+              can_edit: Boolean(p.can_edit ?? p.canEdit),
+              can_delete: Boolean(p.can_delete ?? p.canDelete)
             }
           }
         })
@@ -246,23 +255,29 @@ export const PermissionMatrixPage = () => {
     }
   })
 
-  // Bulk save mutation: saves to POST /api/admin/roles/:id/permissions
+  // Bulk save mutation: saves to PATCH /api/admin/roles/:id/permissions and /api/permissions
   const saveMutation = useMutation({
     mutationFn: async ({ roleId, permissionsPayload, permissionCodes }) => {
-      // POST to /api/admin/roles/:id/permissions
+      // First try PATCH to /api/admin/roles/:id/permissions
       try {
-        await api.post(`/api/admin/roles/${roleId}/permissions`, { permissions: permissionCodes })
+        await api.patch(`/api/admin/roles/${roleId}/permissions`, { permissions: permissionCodes })
       } catch (err) {
-        // Also fallback to PUT if needed
+        // Fallback to POST / PUT if needed
         try {
-          await api.put(`/api/admin/roles/${roleId}/permissions`, { permissions: permissionCodes })
-        } catch {}
+          await api.post(`/api/admin/roles/${roleId}/permissions`, { permissions: permissionCodes })
+        } catch {
+          try {
+            await api.put(`/api/admin/roles/${roleId}/permissions`, { permissions: permissionCodes })
+          } catch {}
+        }
       }
       // Keep in-memory / dynamic modules store in sync
       const res = await api.post('/api/permissions', { roleId, permissions: permissionsPayload })
       return res.data
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rbac', 'matrix-permissions'] })
+      queryClient.invalidateQueries({ queryKey: ['rbac', 'user-permissions'] })
       queryClient.invalidateQueries({ queryKey: ['rbac', 'role-permissions'] })
       queryClient.invalidateQueries({ queryKey: ['rbac', 'roles'] })
       queryClient.invalidateQueries({ queryKey: ['admin', 'roles'] })

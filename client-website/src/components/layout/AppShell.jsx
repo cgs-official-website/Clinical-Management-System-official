@@ -276,14 +276,32 @@ export const AppShell = () => {
       })
     })
 
-    // If Roles & Permissions is permitted and not already in permittedModules, add it
-    const hasRolesInPermitted = permittedModules.some((m) => m.route?.includes('/roles'))
-    if (!hasRolesInPermitted && hasPermission('roles.view')) {
-      navItems.push({
-        to: '/app/admin/roles',
-        label: 'Roles & Permissions',
-        icon: KeyRound,
-      })
+    // Fallback: If permittedModules happens to be empty (e.g. during initial loading or network lag),
+    // provide the standard Admin module suite so sidebar never empties out
+    if (navItems.length <= 1) {
+      const defaultAdminRoutes = [
+        { to: '/app/staff/patients', label: 'Patients', icon: Users },
+        { to: '/app/staff/appointments', label: 'Appointments', icon: Calendar },
+        { to: '/app/staff/prescriptions', label: 'Prescriptions', icon: Pill },
+        { to: '/app/staff/billing', label: 'Billing/Invoices', icon: CreditCard },
+        { to: '/app/staff/inventory', label: 'Inventory', icon: Boxes },
+        { to: '/app/admin/staff', label: 'Staff', icon: ShieldCheck },
+        { to: '/app/admin/roles', label: 'Roles & Permissions', icon: KeyRound },
+        { to: '/app/staff/reports', label: 'Reports', icon: BarChart3 },
+        { to: '/app/admin/clinical-config', label: 'Clinical Config', icon: Sliders },
+        { to: '/app/admin/settings', label: 'Global Settings', icon: Sliders },
+      ]
+      defaultAdminRoutes.forEach((r) => navItems.push(r))
+    } else {
+      // If Roles & Permissions is not already in permittedModules, ensure it's accessible
+      const hasRolesInPermitted = permittedModules.some((m) => m.route?.includes('/roles'))
+      if (!hasRolesInPermitted) {
+        navItems.push({
+          to: '/app/admin/roles',
+          label: 'Roles & Permissions',
+          icon: KeyRound,
+        })
+      }
     }
   } else {
     // Dynamic Staff Navigation strictly based on user's permitted modules (can_view = true)
@@ -408,7 +426,7 @@ export const AppShell = () => {
             )
           })}
 
-          {hasZeroPermissions && !sidebarCollapsed && (
+          {!isAdmin && hasZeroPermissions && !sidebarCollapsed && (
             <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center space-y-1">
               <AlertTriangle className="w-4 h-4 mx-auto text-amber-500" />
               <div className="text-[11px] font-bold text-amber-500">No modules assigned. Contact admin.</div>

@@ -16,6 +16,16 @@ export const useRolePermissions = () => {
     user?.email === 'superadmin@clinic.io'
   )
 
+  const isAdmin = Boolean(
+    user?.role === 'admin' ||
+    user?.role === 'ADMIN' ||
+    user?.role === 'Clinical Administrator' ||
+    user?.roleTitle === 'Clinical Administrator' ||
+    user?.userType === 'ADMIN' ||
+    user?.userType === 'CLINIC_ADMIN' ||
+    (Array.isArray(user?.roles) && user?.roles.some((r) => String(r).toLowerCase().includes('admin')))
+  )
+
   const roleIdentifier =
     user?.role_id ||
     user?.roleId ||
@@ -25,14 +35,17 @@ export const useRolePermissions = () => {
 
   // Fetch role permissions on page load/refresh (staleTime: 0 ensures fresh fetch every refresh)
   const { data: permData, isLoading, refetch } = useQuery({
-    queryKey: ['rbac', 'role-permissions', roleIdentifier],
+    queryKey: ['rbac', 'user-permissions', user?.id || 'anon', roleIdentifier],
     queryFn: async () => {
+      const tenantId = user?.tenantId || user?.tenant_id || ''
+
       // Super Admin bypass: always granted full access
       if (isSuperadmin) {
-        const modRes = await api.get('/api/modules')
+        const modRes = await api.get(`/api/modules${tenantId ? `?tenantId=${tenantId}` : ''}`)
         const mods = modRes.data?.modules || modRes.data?.data || []
         const superPerms = mods.map((m) => ({
           module_id: m.id,
+          module_key: m.key,
           module_name: m.name,
           module_icon: m.icon,
           module_route: m.route,
@@ -43,18 +56,19 @@ export const useRolePermissions = () => {
         return { permissions: superPerms, permittedModules: mods }
       }
 
-      const res = await api.get(`/api/permissions/${encodeURIComponent(roleIdentifier)}`)
+      const res = await api.get(`/api/permissions/${encodeURIComponent(roleIdentifier)}${tenantId ? `?tenantId=${tenantId}` : ''}`)
       const list = res.data?.permissions || res.data?.data || []
       const permitted = list
-        .filter((p) => p.can_view === true)
+        .filter((p) => p && (p.can_view === true || p.canView === true))
         .map((p) => ({
-          id: p.module_id,
-          name: p.module_name,
-          icon: p.module_icon,
-          route: p.module_route,
-          can_view: p.can_view,
-          can_edit: p.can_edit,
-          can_delete: p.can_delete,
+          id: p.module_id || p.id,
+          key: p.module_key || p.key,
+          name: p.module_name || p.name,
+          icon: p.module_icon || p.icon,
+          route: p.module_route || p.route,
+          can_view: true,
+          can_edit: Boolean(p.can_edit ?? p.canEdit),
+          can_delete: Boolean(p.can_delete ?? p.canDelete),
         }))
 
       return { permissions: list, permittedModules: permitted }
@@ -72,6 +86,7 @@ export const useRolePermissions = () => {
       channel = new BroadcastChannel('clinic_permissions_channel')
       channel.onmessage = (e) => {
         if (e.data?.type === 'ROLE_PERMISSIONS_UPDATED') {
+          queryClient.invalidateQueries({ queryKey: ['rbac', 'user-permissions'] })
           queryClient.invalidateQueries({ queryKey: ['rbac', 'role-permissions'] })
           refetch()
         }
@@ -80,6 +95,7 @@ export const useRolePermissions = () => {
 
     const onStorage = (e) => {
       if (e.key === 'rbac_permission_update_ts') {
+        queryClient.invalidateQueries({ queryKey: ['rbac', 'user-permissions'] })
         queryClient.invalidateQueries({ queryKey: ['rbac', 'role-permissions'] })
         refetch()
       }
@@ -92,8 +108,25 @@ export const useRolePermissions = () => {
     }
   }, [queryClient, refetch])
 
-  const permissions = permData?.permissions || []
-  const permittedModules = permData?.permittedModules || []
+  // Safely derive permissions & permittedModules whether permData is an object or a flat array
+  const permissions = Array.isArray(permData)
+    ? permData
+    : (Array.isArray(permData?.permissions) ? permData.permissions : [])
+
+  const permittedModules = Array.isArray(permData?.permittedModules)
+    ? permData.permittedModules
+    : permissions
+        .filter((p) => p && (p.can_view === true || p.canView === true))
+        .map((p) => ({
+          id: p.module_id || p.id,
+          key: p.module_key || p.key,
+          name: p.module_name || p.name,
+          icon: p.module_icon || p.icon,
+          route: p.module_route || p.route,
+          can_view: true,
+          can_edit: Boolean(p.can_edit ?? p.canEdit),
+          can_delete: Boolean(p.can_delete ?? p.canDelete),
+        }))
 
   // Check action permissions by route (normalized)
   const normalizeRoute = (r) => {
@@ -128,13 +161,14 @@ export const useRolePermissions = () => {
     return Boolean(perm?.can_delete)
   }
 
-  const hasZeroPermissions = !isSuperadmin && !isLoading && permittedModules.length === 0
+  const hasZeroPermissions = !isSuperadmin && !isAdmin && !isLoading && permittedModules.length === 0
 
   return {
     permissions,
     permittedModules,
     isLoading,
     isSuperadmin,
+    isAdmin,
     hasZeroPermissions,
     hasViewPermission,
     hasEditPermission,

@@ -64,7 +64,8 @@ export class PermissionController {
    */
   static async getModules(req, res, next) {
     try {
-      const modules = await RbacModuleService.getModules()
+      const tenantId = req.user?.tenantId || req.query?.tenantId || null
+      const modules = await RbacModuleService.getModules(tenantId)
       return res.status(200).json({
         success: true,
         count: modules.length,
