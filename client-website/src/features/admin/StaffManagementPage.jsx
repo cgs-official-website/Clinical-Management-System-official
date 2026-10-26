@@ -25,7 +25,6 @@ export const StaffManagementPage = () => {
     email: '',
     phone: '',
     department: '',
-    specialty: '',
     selectedRoleId: '',
   })
   const [formData, setFormData] = useState({
@@ -33,7 +32,6 @@ export const StaffManagementPage = () => {
     email: '',
     phone: '',
     department: '',
-    specialty: '',
     selectedRoleId: '',
     roles: [],
   })
@@ -234,7 +232,6 @@ export const StaffManagementPage = () => {
       email: staffMember.email || '',
       phone: staffMember.phone || '',
       department: staffMember.department || departments[0]?.name || '',
-      specialty: staffMember.specialty || '',
       selectedRoleId: matchedRole?.id || roles[0]?.id || '',
     })
   }
@@ -253,7 +250,6 @@ export const StaffManagementPage = () => {
         name: editFormData.name.trim(),
         phone: editFormData.phone.trim(),
         department: editFormData.department,
-        specialty: editFormData.specialty.trim(),
         roles: [editFormData.selectedRoleId],
         role: roleName,
       },
@@ -295,12 +291,11 @@ export const StaffManagementPage = () => {
     },
     {
       key: 'department',
-      label: 'Department & Specialty',
+      label: 'Department',
       sortable: true,
-      render: (val, row) => (
+      render: (val) => (
         <div>
           <div className="font-semibold text-xs text-text-primary">{val || 'General Clinic'}</div>
-          <div className="text-[11px] text-text-secondary">{row.specialty || row.designation || 'Attending Staff'}</div>
         </div>
       ),
     },
@@ -418,14 +413,12 @@ export const StaffManagementPage = () => {
     const relevantRoles = filterRolesForDepartment(roles, defaultDept)
     const defaultRole = relevantRoles.find((r) => r.name.includes('Physician') || r.name.includes('Doctor') || r.name.includes('Cardiologist') || r.name.includes('Dentist') || r.name.includes('Physiotherapist')) || relevantRoles[0] || roles[0]
     const defaultRoleId = defaultRole?.id || ''
-    const defaultSpecialty = defaultRole?.name || 'Attending Clinician'
 
     setFormData({
       name: '',
       email: '',
       phone: '',
       department: defaultDept,
-      specialty: defaultSpecialty,
       selectedRoleId: defaultRoleId,
       roles: defaultRoleId ? [defaultRoleId] : [],
     })
@@ -472,7 +465,7 @@ export const StaffManagementPage = () => {
         columns={columns}
         data={filteredStaff}
         isLoading={isLoading}
-        searchPlaceholder="Search staff by name, specialty, or email..."
+        searchPlaceholder="Search staff by name or email..."
         searchValue={search}
         onSearchChange={setSearch}
       />
@@ -541,7 +534,7 @@ export const StaffManagementPage = () => {
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
             <Select
               label="Clinical Department"
               value={formData.department}
@@ -564,13 +557,6 @@ export const StaffManagementPage = () => {
                       : [{ value: formData.department, label: formData.department }, ...departments.map((d) => ({ value: d.name, label: d.name }))].filter((o) => Boolean(o.value)))
                   : [{ value: formData.department || 'General Clinic', label: formData.department || 'General Clinic' }]
               }
-            />
-            <Input
-              label="Clinical Specialty"
-              required
-              placeholder="Attending Clinician"
-              value={formData.specialty}
-              onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
             />
           </div>
 
@@ -626,7 +612,7 @@ export const StaffManagementPage = () => {
         isOpen={!!editingStaff}
         onClose={() => setEditingStaff(null)}
         title="Edit Staff Member Profile"
-        description="Update staff profile details, department, clinical specialty, and assigned permissions. Email is tied to login identity and remains locked."
+        description="Update staff profile details, department, and assigned permissions. Email is tied to login identity and remains locked."
       >
         <form onSubmit={handleSaveEdit} className="space-y-4">
           <Input
@@ -671,7 +657,7 @@ export const StaffManagementPage = () => {
             onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
             <Select
               label="Department"
               value={editFormData.department}
@@ -693,13 +679,6 @@ export const StaffManagementPage = () => {
                       : [{ value: editFormData.department, label: editFormData.department }, ...departments.map((d) => ({ value: d.name, label: d.name }))].filter((o) => Boolean(o.value)))
                   : [{ value: editFormData.department || 'General Clinic', label: editFormData.department || 'General Clinic' }]
               }
-            />
-            <Input
-              label="Clinical Specialty"
-              required
-              placeholder="Attending Clinician"
-              value={editFormData.specialty}
-              onChange={(e) => setEditFormData({ ...editFormData, specialty: e.target.value })}
             />
           </div>
 
