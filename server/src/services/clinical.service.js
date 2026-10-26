@@ -41,19 +41,14 @@ export class ClinicalService {
     ])
 
     const formatted = patients.map(p => {
-      const normP = {
-        ...p,
-        mrn: p.medicalRecordNumber || p.mrn,
-        dob: p.dateOfBirth || p.dob,
-        phone: p.phoneNumber || p.phone,
-        tenantId: p.tenantId || p.tenantId,
-      }
-      const birthYear = (p.dateOfBirth || p.dob) ? new Date(p.dob).getFullYear() : 1990
+      const birthYear = p.dob ? new Date(p.dob).getFullYear() : 1990
       const age = Math.max(0, new Date().getFullYear() - birthYear)
       return {
         ...p,
-        ...normP,
-        name: normP.fullName,
+        mrn: p.mrn,
+        dob: p.dob,
+        phone: p.phone,
+        name: p.fullName,
         fullName: p.fullName,
         age,
         lastVisit: p.updatedAt ? new Date(p.updatedAt).toISOString().split('T')[0] : new Date(p.createdAt).toISOString().split('T')[0],
@@ -102,7 +97,7 @@ export class ClinicalService {
     })
     if (!patient) throw new NotFoundError('Patient record not found')
 
-    const birthYear = (patient.dateOfBirth || patient.dob) ? new Date(patient.dob).getFullYear() : 1990
+    const birthYear = patient.dob ? new Date(patient.dob).getFullYear() : 1990
     return {
       ...patient,
       name: patient.fullName,
@@ -121,11 +116,11 @@ export class ClinicalService {
       targetTenantId = firstTenant?.id
     }
 
-    const mrn = data.mrn || `MRN-${Math.floor(10000 + Math.random() * 90000)}`
+    const mrn = data.mrn || data.medicalRecordNumber || `MRN-${Math.floor(10000 + Math.random() * 90000)}`
     const fullName = data.fullName || data.name || 'New Patient'
-    const dob = data.dob ? new Date(data.dob) : new Date('1990-01-01')
+    const dob = data.dob ? new Date(data.dob) : data.dateOfBirth ? new Date(data.dateOfBirth) : new Date('1990-01-01')
     const gender = data.gender || 'Female'
-    const phone = data.phone || '+1 (555) 000-0000'
+    const phone = data.phone || data.phoneNumber || '+1 (555) 000-0000'
     const allergies = Array.isArray(data.allergies)
       ? data.allergies
       : typeof data.allergies === 'string'
@@ -141,18 +136,18 @@ export class ClinicalService {
     const patient = await prisma.patient.create({
       data: {
         tenantId: targetTenantId,
-        medicalRecordNumber: mrn,
+        mrn,
         fullName,
-        dateOfBirth: dob,
+        dob,
         gender,
         bloodGroup: data.bloodGroup || 'O+',
-        phoneNumber: phone,
+        phone,
         email: data.email || null,
         address: data.address || null,
         allergies,
         chronicConditions,
         medicalHistory,
-        createdByUserId: actorId || null
+        createdBy: actorId || null
       }
     })
 
@@ -162,10 +157,10 @@ export class ClinicalService {
       action: 'PATIENT_CREATED',
       entityType: 'Patient',
       entityId: patient.id,
-      details: { fullName: patient.fullName, mrn: patient.medicalRecordNumber || patient.mrn || mrn, phone: patient.phone }
+      details: { fullName: patient.fullName, mrn: patient.mrn, phone: patient.phone }
     }).catch(() => { })
 
-    const birthYear = (patient.dateOfBirth || patient.dob) ? new Date(patient.dob).getFullYear() : 1990
+    const birthYear = patient.dob ? new Date(patient.dob).getFullYear() : 1990
     return {
       ...patient,
       name: patient.fullName,
@@ -187,10 +182,30 @@ export class ClinicalService {
     const existing = await prisma.patient.findFirst({ where })
     if (!existing) throw new NotFoundError('Patient not found')
 
-    const updateData = { ...data }
-    if (data.name && !data.fullName) updateData.fullName = data.name
-    delete updateData.name
-    if (updateData.dob) updateData.dob = new Date(updateData.dob)
+    const updateData = {}
+    if (data.fullName !== undefined || data.name !== undefined) updateData.fullName = data.fullName || data.name
+    if (data.dob !== undefined || data.dateOfBirth !== undefined) updateData.dob = new Date(data.dob || data.dateOfBirth)
+    if (data.gender !== undefined) updateData.gender = data.gender
+    if (data.bloodGroup !== undefined) updateData.bloodGroup = data.bloodGroup
+    if (data.phone !== undefined || data.phoneNumber !== undefined) updateData.phone = data.phone || data.phoneNumber
+    if (data.email !== undefined) updateData.email = data.email
+    if (data.address !== undefined) updateData.address = data.address
+    if (data.mrn !== undefined || data.medicalRecordNumber !== undefined) updateData.mrn = data.mrn || data.medicalRecordNumber
+    if (data.allergies !== undefined) {
+      updateData.allergies = Array.isArray(data.allergies)
+        ? data.allergies
+        : typeof data.allergies === 'string'
+          ? data.allergies.split(',').map(s => s.trim()).filter(Boolean)
+          : []
+    }
+    if (data.chronicConditions !== undefined) {
+      updateData.chronicConditions = Array.isArray(data.chronicConditions)
+        ? data.chronicConditions
+        : typeof data.chronicConditions === 'string'
+          ? data.chronicConditions.split(',').map(s => s.trim()).filter(Boolean)
+          : []
+    }
+    if (data.medicalHistory !== undefined) updateData.medicalHistory = data.medicalHistory
 
     const updated = await prisma.patient.update({
       where: { id },
@@ -206,9 +221,11 @@ export class ClinicalService {
       details: data
     }).catch(() => { })
 
+    const birthYear = updated.dob ? new Date(updated.dob).getFullYear() : 1990
     return {
       ...updated,
-      name: updated.fullName
+      name: updated.fullName,
+      age: Math.max(0, new Date().getFullYear() - birthYear)
     }
   }
 
@@ -339,7 +356,7 @@ export class ClinicalService {
             dob: new Date('1990-01-01'),
             gender: 'Female',
             bloodGroup: 'O+',
-            createdByUserId: actorId || null
+            createdBy: actorId || null
           }
         }).catch(() => null)
       }
@@ -363,7 +380,7 @@ export class ClinicalService {
           dob: new Date('1990-01-01'),
           gender: 'Female',
           bloodGroup: 'O+',
-          createdByUserId: actorId || null
+          createdBy: actorId || null
         }
       })
       patientId = newPat.id
@@ -399,7 +416,7 @@ export class ClinicalService {
         staffId,
         scheduledAt,
         durationMinutes: parseInt(data.durationMinutes, 10) || 30,
-        appointmentType: data.type || data.appointmentType || 'In-Person Consultation',
+        type: data.type || data.appointmentType || 'In-Person Consultation',
         room: data.room || 'Exam Room 1A',
         reason: data.reason || null,
         notes: data.notes || null,
@@ -442,10 +459,17 @@ export class ClinicalService {
     const existing = await prisma.appointment.findFirst({ where })
     if (!existing) throw new NotFoundError('Appointment not found')
 
-    const updatePayload = { ...data }
-    if (updatePayload.scheduledAt) {
-      updatePayload.scheduledAt = new Date(updatePayload.scheduledAt)
-    }
+    const updatePayload = {}
+    if (data.scheduledAt || data.dateTime) updatePayload.scheduledAt = new Date(data.scheduledAt || data.dateTime)
+    if (data.durationMinutes !== undefined) updatePayload.durationMinutes = parseInt(data.durationMinutes, 10) || 30
+    if (data.status !== undefined) updatePayload.status = data.status
+    if (data.type !== undefined || data.appointmentType !== undefined) updatePayload.type = data.type || data.appointmentType
+    if (data.room !== undefined) updatePayload.room = data.room
+    if (data.reason !== undefined) updatePayload.reason = data.reason
+    if (data.notes !== undefined) updatePayload.notes = data.notes
+    if (data.staffId !== undefined || data.doctorId !== undefined) updatePayload.staffId = data.staffId || data.doctorId || null
+    if (data.departmentId !== undefined) updatePayload.departmentId = data.departmentId || null
+    if (data.patientId !== undefined) updatePayload.patientId = data.patientId
 
     const updated = await prisma.appointment.update({
       where: { id },
@@ -553,7 +577,7 @@ export class ClinicalService {
             dob: data.dob ? new Date(data.dob) : new Date('1990-01-01'),
             gender: data.gender || 'Female',
             bloodGroup: data.bloodGroup || 'O+',
-            createdByUserId: actorId || null
+            createdBy: actorId || null
           }
         })
       }
@@ -632,8 +656,8 @@ export class ClinicalService {
       patient: {
         id: updatedPatient.id,
         fullName: updatedPatient.fullName,
-        mrn: updatedPatient.medicalRecordNumber || updatedPatient.mrn,
-        phone: updatedPatient.phoneNumber || updatedPatient.phone,
+        mrn: updatedPatient.mrn,
+        phone: updatedPatient.phone,
         gender: updatedPatient.gender,
         latestVitals: triageReport
       }
@@ -702,8 +726,8 @@ export class ClinicalService {
           tokenNumber: latest.tokenNumber,
           patientId: p.id,
           patientName: p.fullName,
-          patientMrn: p.medicalRecordNumber || p.mrn,
-          patientPhone: p.phoneNumber || p.phone,
+          patientMrn: p.mrn,
+          patientPhone: p.phone,
           patientGender: p.gender,
           weight: latest.weight,
           bp: latest.bp,
@@ -762,7 +786,7 @@ export class ClinicalService {
             dob: new Date('1990-01-01'),
             gender: 'Female',
             bloodGroup: 'O+',
-            createdByUserId: actorId || null
+            createdBy: actorId || null
           }
         }).catch(() => null)
       }
@@ -1041,7 +1065,7 @@ export class ClinicalService {
             dob: new Date('1990-01-01'),
             gender: 'Female',
             bloodGroup: 'O+',
-            createdByUserId: actorId || null
+            createdBy: actorId || null
           }
         }).catch(() => null)
       }
@@ -1065,7 +1089,7 @@ export class ClinicalService {
           dob: new Date('1990-01-01'),
           gender: 'Female',
           bloodGroup: 'O+',
-          createdByUserId: actorId || null
+          createdBy: actorId || null
         }
       })
       patientId = newPat.id
@@ -1114,8 +1138,8 @@ export class ClinicalService {
             appointmentId: data.appointmentId || null,
             invoiceNumber,
             amount: totalAmount,
-            insuranceCoverageAmount: parseFloat(data.insuranceCoverage || data.insuranceCoverageAmount) || 0,
-            patientResponsibility: totalAmount - (parseFloat(data.insuranceCoverage) || 0),
+            insuranceCoverage: parseFloat(data.insuranceCoverage || data.insuranceCoverageAmount) || 0,
+            patientResponsibility: totalAmount - (parseFloat(data.insuranceCoverage || data.insuranceCoverageAmount) || 0),
             status: data.status || 'PENDING',
             paymentMethod: data.paymentMethod || null,
             dueDate: data.dueDate ? new Date(data.dueDate) : new Date(Date.now() + 30 * 86400000),
@@ -1269,7 +1293,7 @@ export class ClinicalService {
         name: data.name,
         category: data.category || 'General Supplies',
         stockQuantity: parseInt(data.quantity, 10) || parseInt(data.stockQuantity, 10) || 0,
-        unitOfMeasure: data.unitOfMeasure || data.unit || 'Units',
+        unit: data.unitOfMeasure || data.unit || 'Units',
         minReorderThreshold: parseInt(data.minThreshold, 10) || parseInt(data.minReorderThreshold, 10) || 10,
         unitCost: parseFloat(data.unitCost) || price,
         sellingPrice: price,
@@ -1303,10 +1327,22 @@ export class ClinicalService {
     if (data.quantity !== undefined) updateData.stockQuantity = parseInt(data.quantity, 10)
     if (data.minThreshold !== undefined) updateData.minReorderThreshold = parseInt(data.minThreshold, 10)
     if (data.unitPrice !== undefined) updateData.sellingPrice = parseFloat(data.unitPrice)
+    if (data.unitOfMeasure !== undefined) updateData.unit = data.unitOfMeasure
+    if (data.unitCost !== undefined) updateData.unitCost = parseFloat(data.unitCost)
+    if (data.expiryDate !== undefined) updateData.expiryDate = data.expiryDate ? new Date(data.expiryDate) : null
     delete updateData.quantity
     delete updateData.minThreshold
     delete updateData.unitPrice
+    delete updateData.unitOfMeasure
     delete updateData.sku
+    delete updateData.id
+    delete updateData.tenantId
+    delete updateData.createdAt
+    delete updateData.updatedAt
+    delete updateData._count
+    delete updateData.isLowStock
+    delete updateData.currency
+    delete updateData.currencySymbol
 
     const updated = await prisma.inventoryItem.update({
       where: { id },

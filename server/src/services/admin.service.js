@@ -1520,7 +1520,7 @@ export class AdminService {
       }).catch(() => []),
       prisma.invoice.findMany({
         where: whereTenant,
-        select: { id: true, totalAmount: true, status: true, createdAt: true }
+        select: { id: true, amount: true, status: true, createdAt: true }
       }).catch(() => [])
     ])
 
