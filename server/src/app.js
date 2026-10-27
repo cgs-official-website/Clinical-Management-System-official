@@ -8,8 +8,12 @@ import masterRouter from './routes/index.js'
 import { errorHandler } from './middlewares/error.middleware.js'
 import { standardLimiter } from './middlewares/rateLimit.middleware.js'
 import { prisma } from './config/prisma.js'
+import { requestContextMiddleware } from './utils/requestContext.js'
 
 const app = express()
+
+// Trust reverse proxies (Railway, Cloudflare, local proxy)
+app.set('trust proxy', 1)
 
 // Security HTTP headers
 app.use(helmet({
@@ -24,6 +28,9 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-user-email', 'x-user-role', 'X-User-Email', 'X-User-Role']
 }))
+
+// Request Context (AsyncLocalStorage for IP & User-Agent capture)
+app.use(requestContextMiddleware)
 
 // Gzip Compression
 app.use(compression())

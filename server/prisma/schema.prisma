@@ -225,6 +225,7 @@ model AuditLog {
   beforeState Json?    @map("before_state")
   afterState  Json?    @map("after_state")
   ip          String?
+  userAgent   String?  @map("user_agent")
   createdAt   DateTime @default(now()) @map("created_at")
 
   tenant      Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)

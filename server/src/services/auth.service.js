@@ -242,40 +242,7 @@ export class AuthService {
       }
     }
 
-    // 2. Offline / Demo Fallback authentication
-    const demoUser = DEMO_ACCOUNTS[normalizedEmail]
-    if (demoUser) {
-      const accessToken = this.generateAccessToken(demoUser)
-      const meta = Buffer.from(
-        JSON.stringify({
-          id: demoUser.id,
-          email: demoUser.email,
-          isSuperadmin: !!demoUser.isSuperadmin,
-        })
-      ).toString('base64url')
-      const refreshToken = `sim_ref_${meta}_${crypto.randomBytes(24).toString('hex')}`
-
-      const demoRoleId = demoUser.role_id || RbacModuleService.resolveRoleId(demoUser.role || demoUser.roleTitle || 'staff')
-      const isSuper = !!demoUser.isSuperadmin
-
-      return {
-        user: {
-          ...demoUser,
-          roleId: demoRoleId,
-          role_id: demoRoleId,
-          is_super_admin: isSuper,
-          isSuperadmin: isSuper,
-          effectivePermissions: demoUser.permissions,
-        },
-        tokens: {
-          accessToken,
-          refreshToken,
-          expiresIn: 900,
-        },
-      }
-    }
-
-    // Unrecognized credentials
+    // If user is not found in database or credentials don't match, reject strictly
     throw new UnauthorizedError('Invalid email or password. Please verify your clinical credentials.')
   }
 

@@ -1,6 +1,7 @@
 import { SuperadminService } from '../services/superadmin.service.js'
 import { AuditService } from '../services/audit.service.js'
 import { RegistrationService } from '../services/registration.service.js'
+import { NotFoundError } from '../utils/errors.js'
 
 export class SuperadminController {
   static async getStats(req, res, next) {
@@ -121,14 +122,110 @@ export class SuperadminController {
     try {
       const page = parseInt(req.query.page, 10) || 1
       const limit = parseInt(req.query.limit, 10) || 20
-      const { tenantId, actorId, entityType } = req.query
+      const {
+        tenantId,
+        clinicId,
+        actorId,
+        entityType,
+        module,
+        action,
+        role,
+        from,
+        to,
+        search,
+        sort
+      } = req.query
 
-      const logs = await AuditService.getLogs({ tenantId, actorId, entityType, page, limit })
+      const result = await AuditService.getLogs({
+        tenantId: tenantId || clinicId,
+        clinicId: clinicId || tenantId,
+        actorId,
+        entityType: entityType || module,
+        module: module || entityType,
+        action,
+        role,
+        from,
+        to,
+        search,
+        sort,
+        page,
+        limit
+      })
+
       return res.status(200).json({
         success: true,
-        data: logs.data,
-        pagination: logs.pagination
+        data: result.data,
+        logs: result.logs || result.data,
+        pagination: result.pagination,
+        stats: result.stats
       })
+    } catch (error) {
+      next(error)
+    }
+  }
+
+  static async getAuditLogById(req, res, next) {
+    try {
+      const { id } = req.params
+      const log = await AuditService.getLogById(id)
+      if (!log) {
+        throw new NotFoundError('Audit log record not found')
+      }
+      return res.status(200).json({
+        success: true,
+        data: log
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
+
+  static async getAuditLogFilters(req, res, next) {
+    try {
+      const filters = await AuditService.getFilterOptions()
+      return res.status(200).json({
+        success: true,
+        data: filters
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
+
+  static async exportAuditLogs(req, res, next) {
+    try {
+      const {
+        tenantId,
+        clinicId,
+        actorId,
+        entityType,
+        module,
+        action,
+        role,
+        from,
+        to,
+        search,
+        sort
+      } = req.query
+
+      const buffer = await AuditService.exportLogsToExcel({
+        tenantId: tenantId || clinicId,
+        clinicId: clinicId || tenantId,
+        actorId,
+        entityType: entityType || module,
+        module: module || entityType,
+        action,
+        role,
+        from,
+        to,
+        search,
+        sort
+      })
+
+      const dateStr = new Date().toISOString().split('T')[0]
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      res.setHeader('Content-Disposition', `attachment; filename="audit_logs_${dateStr}.xlsx"`)
+      return res.send(buffer)
     } catch (error) {
       next(error)
     }

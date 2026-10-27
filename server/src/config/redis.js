@@ -191,4 +191,30 @@ export const pubsub = {
   }
 }
 
+export const checkRedisHealth = async () => {
+  const start = Date.now()
+  if (isMemoryFallback || !redisClient || redisClient.status !== 'ready') {
+    return {
+      status: 'degraded',
+      latencyMs: Date.now() - start,
+      mode: isMemoryFallback ? 'in-memory-fallback' : (redisClient?.status || 'unavailable')
+    }
+  }
+
+  try {
+    await redisClient.ping()
+    return {
+      status: 'healthy',
+      latencyMs: Math.max(1, Date.now() - start),
+      mode: 'standalone'
+    }
+  } catch (err) {
+    return {
+      status: 'degraded',
+      latencyMs: Math.max(1, Date.now() - start),
+      error: err.message
+    }
+  }
+}
+
 export default redis

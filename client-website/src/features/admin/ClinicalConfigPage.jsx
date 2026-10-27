@@ -22,7 +22,6 @@ const DEFAULT_CONFIG = {
   slotDurationMinutes: 30,
   bufferBetweenSlotsMinutes: 5,
   allowTelehealth: true,
-  maxAdvanceBookingDays: 60,
   departments: [
     'Cardiology',
     'Diagnostic Medicine',
@@ -182,7 +181,7 @@ export const ClinicalConfigPage = () => {
           Appointment Slot & Buffer Constraints
         </h3>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <Input
             label="Default Slot Duration (Minutes)"
             type="number"
@@ -197,14 +196,6 @@ export const ClinicalConfigPage = () => {
             value={config.bufferBetweenSlotsMinutes}
             onChange={(e) =>
               setConfig({ ...config, bufferBetweenSlotsMinutes: parseInt(e.target.value) || 0 })
-            }
-          />
-          <Input
-            label="Max Advance Booking (Days)"
-            type="number"
-            value={config.maxAdvanceBookingDays}
-            onChange={(e) =>
-              setConfig({ ...config, maxAdvanceBookingDays: parseInt(e.target.value) || 30 })
             }
           />
         </div>

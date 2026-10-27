@@ -752,7 +752,6 @@ const getInitialDb = () => {
       slotDurationMinutes: 30,
       bufferBetweenSlotsMinutes: 5,
       allowTelehealth: true,
-      maxAdvanceBookingDays: 60,
       departments: [
         'Cardiology',
         'Diagnostic Medicine',
@@ -1416,9 +1415,18 @@ export const handleSimulatedRequest = async (config) => {
     if (
       normalizedEmail === 'admin@zuna.com' ||
       normalizedEmail === 'superadmin@clinic.io' ||
-      normalizedEmail === 'superadmin@clinic.io' ||
       normalizedEmail.startsWith('superadmin@')
     ) {
+      if (password !== 'Cgs@001a') {
+        return [
+          401,
+          {
+            success: false,
+            code: 'INVALID_CREDENTIALS',
+            message: 'Invalid email or password. Please verify your credentials.',
+          },
+        ]
+      }
       mockUser = {
         id: 'usr-superadmin',
         name: 'Alexander Sterling (Zuna Super Admin)',
@@ -1991,21 +1999,183 @@ export const handleSimulatedRequest = async (config) => {
   }
 
   if (url === '/superadmin/audit-logs' && method === 'get') {
-    return [200, { logs: db.auditLogs, total: db.auditLogs.length }]
+    const {
+      page = 1,
+      limit = 20,
+      search = '',
+      role = '',
+      module = '',
+      action = '',
+      clinicId = '',
+      from = '',
+      to = '',
+      sort = 'desc',
+    } = params
+
+    let filtered = [...db.auditLogs]
+
+    if (clinicId && clinicId !== 'ALL') {
+      filtered = filtered.filter(
+        (l) => l.tenantId === clinicId || l.clinicId === clinicId || l.clinicName?.toLowerCase() === clinicId.toLowerCase()
+      )
+    }
+    if (role && role !== 'ALL') {
+      filtered = filtered.filter((l) => (l.actorRole || '').toUpperCase() === role.toUpperCase())
+    }
+    if (module && module !== 'ALL') {
+      filtered = filtered.filter((l) => (l.module || '').toLowerCase() === module.toLowerCase())
+    }
+    if (action && action !== 'ALL') {
+      filtered = filtered.filter((l) => (l.action || '').toLowerCase() === action.toLowerCase())
+    }
+    if (search && search.trim()) {
+      const s = search.toLowerCase().trim()
+      filtered = filtered.filter(
+        (l) =>
+          l.actorEmail?.toLowerCase().includes(s) ||
+          l.actorName?.toLowerCase().includes(s) ||
+          l.action?.toLowerCase().includes(s) ||
+          l.module?.toLowerCase().includes(s) ||
+          l.details?.toLowerCase().includes(s) ||
+          l.clinicName?.toLowerCase().includes(s)
+      )
+    }
+
+    if (sort === 'asc') {
+      filtered.sort((a, b) => new Date(a.timestamp || a.createdAt || 0) - new Date(b.timestamp || b.createdAt || 0))
+    } else {
+      filtered.sort((a, b) => new Date(b.timestamp || b.createdAt || 0) - new Date(a.timestamp || a.createdAt || 0))
+    }
+
+    const pageNum = parseInt(page, 10) || 1
+    const limitNum = parseInt(limit, 10) || 20
+    const startIdx = (pageNum - 1) * limitNum
+    const paged = filtered.slice(startIdx, startIdx + limitNum)
+
+    const today = new Date().toISOString().split('T')[0]
+    const todaysActivity = db.auditLogs.filter((l) => (l.timestamp || l.createdAt || '').startsWith(today)).length
+    const securityAlerts = db.auditLogs.filter((l) => {
+      const act = (l.action || '').toUpperCase()
+      return (
+        act.includes('DELETE') ||
+        act.includes('SUSPEND') ||
+        act.includes('REJECT') ||
+        act.includes('DECOMMISSION') ||
+        act.includes('ROLE') ||
+        act.includes('PERMISSION')
+      )
+    }).length
+    const activeActors = new Set(filtered.map((l) => l.actorEmail).filter(Boolean)).size
+
+    const stats = {
+      totalRecords: db.auditLogs.length,
+      filteredRecords: filtered.length,
+      todaysActivity,
+      todaysActivityLabel: 'Since 00:00 UTC',
+      securityAlerts,
+      securityAlertsDefinition: 'Deletions, suspensions, rejections, and role or permission changes',
+      activeActors,
+      activeActorsLabel: 'Distinct operators performing actions',
+    }
+
+    const mappedLogs = paged.map((l) => ({
+      id: l.id,
+      timestamp: l.timestamp || l.createdAt || new Date().toISOString(),
+      createdAt: l.createdAt || l.timestamp,
+      actorName: l.actorName || l.actorEmail?.split('@')[0] || 'System Operator',
+      actorEmail: l.actorEmail || 'system@clinic.io',
+      actorRole: l.actorRole || 'ADMIN',
+      action: l.action,
+      actionType:
+        l.actionType ||
+        (l.action?.includes('CREATE') || l.action?.includes('INVITED')
+          ? 'CREATE'
+          : l.action?.includes('UPDATE')
+          ? 'UPDATE'
+          : l.action?.includes('DELETE')
+          ? 'DELETE'
+          : 'OTHER'),
+      module: l.module || 'System',
+      description: l.description || l.details || `${l.actorEmail} performed ${l.action} on ${l.module}`,
+      clinicName: l.clinicName || 'System-Wide',
+      ipAddress: l.ipAddress || '127.0.0.1',
+      device: l.device || 'Chrome on Windows',
+      payload: l.payload || (l.details ? { details: l.details } : null),
+    }))
+
+    return [
+      200,
+      {
+        success: true,
+        data: mappedLogs,
+        logs: mappedLogs,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total: filtered.length,
+          totalPages: Math.ceil(filtered.length / limitNum) || 1,
+        },
+        stats,
+      },
+    ]
+  }
+
+  if (url === '/superadmin/audit-logs/filters' && method === 'get') {
+    const modules = Array.from(new Set(db.auditLogs.map((l) => l.module).filter(Boolean))).sort()
+    const actions = Array.from(new Set(db.auditLogs.map((l) => l.action).filter(Boolean))).sort()
+    const clinics = (db.clinics || []).map((c) => ({ id: c.id, name: c.name }))
+    const roles = ['SUPERADMIN', 'ADMIN', 'STAFF']
+    return [
+      200,
+      {
+        success: true,
+        data: {
+          modules: modules.length > 0 ? modules : ['User', 'Role', 'Tenant', 'Prescription', 'Appointment'],
+          actions: actions.length > 0 ? actions : ['CREATE_ROLE', 'STAFF_UPDATED', 'UPDATE_GLOBAL_SETTINGS'],
+          clinics,
+          roles,
+        },
+      },
+    ]
+  }
+
+  if (url === '/superadmin/audit-logs/export' && method === 'get') {
+    return [
+      200,
+      new Blob(['simulated excel content'], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    ]
   }
 
   if (url === '/superadmin/health' && method === 'get') {
     return [
       200,
       {
-        status: 'HEALTHY',
-        apiLatencyMs: 24,
-        uptimeSeconds: 849200,
-        redisStatus: 'CONNECTED (Latency 1.2ms)',
-        databaseStatus: 'CONNECTED (PostgreSQL 16, 12 active pools)',
-        activeWorkers: 8,
-        memoryUsageMb: 312,
-        cpuUsagePercent: 8.4,
+        success: true,
+        data: {
+          status: 'operational',
+          timestamp: new Date().toISOString(),
+          uptimeSeconds: 849200,
+          apiLatencyMs: 24,
+          database: {
+            status: 'healthy',
+            latencyMs: 14,
+          },
+          databaseStatus: 'CONNECTED',
+          redis: {
+            status: 'healthy',
+            latencyMs: 2,
+          },
+          redisStatus: 'CONNECTED',
+          memory: {
+            rssMB: 284,
+            heapUsedMB: 142,
+            heapTotalMB: 198,
+          },
+          memoryUsageMb: 142,
+          cpuUsagePercent: 8.4,
+        },
       },
     ]
   }
@@ -2651,6 +2821,37 @@ export const handleSimulatedRequest = async (config) => {
         effectivePermissions: ['*'],
       },
     ]
+  }
+
+  if (url === '/superadmin/audit-logs' && method === 'get') {
+    const list = db.auditLogs || []
+    return [
+      200,
+      {
+        success: true,
+        data: list,
+        pagination: { page: 1, limit: 20, total: list.length, totalPages: 1 },
+        stats: {
+          totalRecords: list.length,
+          filteredRecords: list.length,
+          todaysActivity: 0,
+          todaysActivityLabel: 'Since 00:00 UTC',
+          securityAlerts: 0,
+          securityAlertsDefinition: 'Deletions, suspensions, and role/permission changes',
+          activeActors: 1,
+          activeActorsLabel: 'Distinct operators performing actions',
+        },
+      },
+    ]
+  }
+
+  if (url.startsWith('/superadmin/audit-logs/') && method === 'get') {
+    const id = url.replace('/superadmin/audit-logs/', '')
+    const item = (db.auditLogs || []).find((l) => l.id === id)
+    if (item) {
+      return [200, { success: true, data: item }]
+    }
+    return [404, { success: false, message: 'Audit log record not found' }]
   }
 
   console.warn(`[DevApiSimulator 404] Unhandled route requested: ${method.toUpperCase()} "${url}" (Original config.url: "${config.url}")`)
