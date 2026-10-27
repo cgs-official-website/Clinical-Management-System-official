@@ -16,13 +16,14 @@ export const StaffRolesListPage = () => {
   const [expandedStaffId, setExpandedStaffId] = useState(null)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['admin', 'staff', user?.tenantId || user?.id],
+    queryKey: ['admin', 'staff', user?.tenantId || user?.tenant?.id || user?.id],
     queryFn: async () => {
-      const res = await api.get('/api/admin/staff')
+      const tId = user?.tenantId || user?.tenant?.id || user?.id
+      const res = await api.get(`/api/admin/staff${tId ? `?tenantId=${tId}` : ''}`)
       return res.data
     },
-    refetchOnMount: 'always',
-    staleTime: 0,
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
   })
 
   const staff = data?.staff || (Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []))

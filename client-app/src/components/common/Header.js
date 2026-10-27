@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, Image, StyleSheet } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { Icon } from './Icon';
 import { COLORS } from '../../constants/colors';
 import { SPACING } from '../../constants/theme';
 import { useAuth } from '../../hooks/useAuth';
@@ -7,9 +9,16 @@ import { getRoleDisplay } from '../../utils/formatters';
 
 export const Header = ({ title, subtitle, rightAction }) => {
   const { user } = useAuth();
+  const navigation = useNavigation();
+  const canGoBack = navigation.canGoBack();
 
   return (
     <View style={styles.container}>
+      {canGoBack && (
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Icon name="ChevronLeft" size={22} color={COLORS.textPrimary} />
+        </TouchableOpacity>
+      )}
       <View style={styles.leftCol}>
         <View style={styles.brandRow}>
           <View style={styles.logoBadge}>
@@ -55,6 +64,17 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.bg,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+  },
+  backBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
   leftCol: {
     flex: 1,

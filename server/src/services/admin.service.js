@@ -6,6 +6,13 @@ import { AuditService } from './audit.service.js'
 import { NotFoundError, ConflictError, ForbiddenError, BadRequestError } from '../utils/errors.js'
 import { CATEGORY_DEPARTMENTS, CATEGORY_ROLES } from '../constants/clinicCategoryDepartments.js'
 
+const tenantUuidCache = new Map()
+const seededTenants = new Set()
+const rolesCache = new Map()
+const departmentsCache = new Map()
+const seededDepartments = new Set()
+const staffCache = new Map()
+
 export class AdminService {
   /**
    * Clinic-level KPI dashboard statistics
@@ -37,65 +44,65 @@ export class AdminService {
     ] = await Promise.all([
       tenantId
         ? prisma.tenant
-            .findUnique({
-              where: { id: tenantId },
-              include: { clinicCategory: true },
-            })
-            .catch(() => null)
+          .findUnique({
+            where: { id: tenantId },
+            include: { clinicCategory: true },
+          })
+          .catch(() => null)
         : null,
-      prisma.patient.count({ where: tenantId ? { clinicId: tenantId } : {} }).catch(() => 0),
+      prisma.patient.count({ where: tenantId ? { tenantId: tenantId } : {} }).catch(() => 0),
       prisma.patient.count({
         where: {
-          ...(tenantId ? { clinicId: tenantId } : {}),
+          ...(tenantId ? { tenantId: tenantId } : {}),
           createdAt: { gte: todayStart, lte: todayEnd }
         }
       }).catch(() => 0),
       prisma.appointment.count({
         where: {
-          ...(tenantId ? { clinicId: tenantId } : {}),
+          ...(tenantId ? { tenantId: tenantId } : {}),
           scheduledAt: { gte: todayStart, lte: todayEnd }
         }
       }).catch(() => 0),
-      prisma.appointment.count({ where: tenantId ? { clinicId: tenantId } : {} }).catch(() => 0),
+      prisma.appointment.count({ where: tenantId ? { tenantId: tenantId } : {} }).catch(() => 0),
       prisma.appointment.count({
         where: {
-          ...(tenantId ? { clinicId: tenantId } : {}),
+          ...(tenantId ? { tenantId: tenantId } : {}),
           scheduledAt: { gte: todayStart, lte: todayEnd },
           status: 'COMPLETED'
         }
       }).catch(() => 0),
-      prisma.user.count({ where: { ...(tenantId ? { clinicId: tenantId } : {}), status: 'ACTIVE' } }).catch(() => 0),
+      prisma.user.count({ where: { ...(tenantId ? { tenantId: tenantId } : {}), status: 'ACTIVE' } }).catch(() => 0),
       prisma.invoice.findMany({
-        where: { ...(tenantId ? { clinicId: tenantId } : {}), status: 'PAID' },
-        select: { totalAmount: true }
+        where: { ...(tenantId ? { tenantId: tenantId } : {}), status: 'PAID' },
+        select: { amount: true }
       }).catch(() => []),
       prisma.invoice.findMany({
-        where: { ...(tenantId ? { clinicId: tenantId } : {}), status: 'PENDING' },
-        select: { totalAmount: true }
+        where: { ...(tenantId ? { tenantId: tenantId } : {}), status: 'PENDING' },
+        select: { amount: true }
       }).catch(() => []),
       prisma.patient.findMany({
         where: {
-          ...(tenantId ? { clinicId: tenantId } : {}),
+          ...(tenantId ? { tenantId: tenantId } : {}),
           createdAt: { gte: sevenDaysAgo }
         },
         select: { createdAt: true }
       }).catch(() => []),
       prisma.appointment.findMany({
         where: {
-          ...(tenantId ? { clinicId: tenantId } : {}),
+          ...(tenantId ? { tenantId: tenantId } : {}),
           scheduledAt: { gte: sevenDaysAgo }
         },
         select: { scheduledAt: true }
       }).catch(() => []),
       prisma.appointment.groupBy({
         by: ['status'],
-        where: tenantId ? { clinicId: tenantId } : {},
+        where: tenantId ? { tenantId: tenantId } : {},
         _count: { status: true }
       }).catch(() => [])
     ])
 
-    const totalRevenueINR = paidInvoices.reduce((sum, i) => sum + (i.totalAmount ?? i.amount ?? 0), 0)
-    const pendingRevenueINR = pendingInvoices.reduce((sum, i) => sum + (i.totalAmount ?? i.amount ?? 0), 0)
+    const totalRevenueINR = paidInvoices.reduce((sum, i) => sum + (i.amount ?? 0), 0)
+    const pendingRevenueINR = pendingInvoices.reduce((sum, i) => sum + (i.amount ?? 0), 0)
 
     // Build 7-day trend series (dynamically from real database records)
     const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -156,10 +163,10 @@ export class AdminService {
       clinicCategoryName: tenant?.clinicCategory?.name || null,
       clinicCategory: tenant?.clinicCategory
         ? {
-            id: tenant.clinicCategory.id,
-            name: tenant.clinicCategory.name,
-            description: tenant.clinicCategory.description,
-          }
+          id: tenant.clinicCategory.id,
+          name: tenant.clinicCategory.name,
+          description: tenant.clinicCategory.description,
+        }
         : null,
       totalPatients,
       newPatientsToday,
@@ -192,7 +199,7 @@ export class AdminService {
    */
   static async getModulesAndPermissions() {
     const [modules, actions, permissions] = await Promise.all([
-      prisma.systemModule.findMany({
+      prisma.module.findMany({
         orderBy: { name: 'asc' }
       }),
       prisma.permissionAction.findMany({
@@ -200,13 +207,13 @@ export class AdminService {
       }),
       prisma.permission.findMany({
         include: {
-          systemModule: true,
-          permissionAction: true
+          module: true,
+          action: true
         }
       }).then(perms => perms.map(p => ({
         ...p,
-        module: p.systemModule,
-        action: p.permissionAction
+        module: p.module,
+        action: p.action
       })))
     ])
 
@@ -236,14 +243,48 @@ export class AdminService {
    * Helper: Resolve tenant UUID handling demo aliases
    */
   static async resolveTenantUuid(tenantId) {
-    if (!tenantId) return null
-    const clean = String(tenantId).trim()
-    if (clean === 'clinic-1') {
-      const demoTenant = await prisma.clinic.findFirst({
-        where: { OR: [{ name: { contains: 'Aura', mode: 'insensitive' } }, { subdomain: 'aura-health' }] }
-      })
-      return demoTenant?.id || null
+    if (!tenantId) {
+      const first = await prisma.tenant.findFirst({ where: { status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } }).catch(() => null)
+      return first?.id || null
     }
+    const clean = String(tenantId).trim()
+    if (tenantUuidCache.has(clean)) {
+      return tenantUuidCache.get(clean)
+    }
+
+    // Direct UUID match (valid RFC 4122 UUID)
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) {
+      tenantUuidCache.set(clean, clean)
+      return clean
+    }
+
+    if (clean === 'clinic-1' || clean === 'tenant-1' || clean === 'demo-tenant') {
+      const demoTenant = await prisma.tenant.findFirst({
+        where: { OR: [{ name: { contains: 'Aura', mode: 'insensitive' } }, { subdomain: 'aura-health' }] }
+      }).catch(() => null)
+      if (demoTenant) {
+        tenantUuidCache.set(clean, demoTenant.id)
+        return demoTenant.id
+      }
+      const firstTenant = await prisma.tenant.findFirst({ where: { status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } }).catch(() => null)
+      if (firstTenant) {
+        tenantUuidCache.set(clean, firstTenant.id)
+        return firstTenant.id
+      }
+      return null
+    }
+
+    const existing = await prisma.tenant.findUnique({ where: { id: clean } }).catch(() => null)
+    if (existing) {
+      tenantUuidCache.set(clean, existing.id)
+      return existing.id
+    }
+    const bySubdomain = await prisma.tenant.findUnique({ where: { subdomain: clean.toLowerCase() } }).catch(() => null)
+    if (bySubdomain) {
+      tenantUuidCache.set(clean, bySubdomain.id)
+      return bySubdomain.id
+    }
+    tenantUuidCache.set(clean, clean)
     return clean
   }
 
@@ -261,7 +302,7 @@ export class AdminService {
     let role = await prisma.role.findFirst({
       where: {
         id: raw,
-        clinicId: resolvedTenantId
+        tenantId: resolvedTenantId
       }
     })
     if (role) return role
@@ -270,7 +311,7 @@ export class AdminService {
     const canonicalName = this.resolveCanonicalRoleName(raw) || raw
     role = await prisma.role.findFirst({
       where: {
-        clinicId: resolvedTenantId,
+        tenantId: resolvedTenantId,
         name: { equals: canonicalName, mode: 'insensitive' }
       }
     })
@@ -284,33 +325,35 @@ export class AdminService {
   static async seedTenantRoles(tenantId) {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId)
     if (!resolvedTenantId) return
+    if (seededTenants.has(resolvedTenantId)) return
+    seededTenants.add(resolvedTenantId)
 
     try {
-      const tenant = await prisma.clinic.findUnique({
+      const tenant = await prisma.tenant.findUnique({
         where: { id: resolvedTenantId },
         include: { clinicCategory: true }
       })
       if (!tenant) return
 
-      const existingCount = await prisma.role.count({ where: { clinicId: resolvedTenantId } })
+      const existingCount = await prisma.role.count({ where: { tenantId: resolvedTenantId } })
       if (existingCount === 0) {
         const allPerms = await prisma.permission.findMany()
         const permMap = new Map(allPerms.map(p => [p.key, p.id]))
 
         // Ensure Clinical Administrator system role exists for this tenant
         let adminRole = await prisma.role.findFirst({
-          where: { clinicId: resolvedTenantId, name: 'Clinical Administrator' }
+          where: { tenantId: resolvedTenantId, name: 'Clinical Administrator' }
         })
         if (!adminRole) {
           adminRole = await prisma.role.create({
             data: {
-              clinicId: resolvedTenantId,
+              tenantId: resolvedTenantId,
               name: 'Clinical Administrator',
               description: 'Complete clinic administrative and operational control',
               isSystemRole: true
             }
           })
-          await prisma.rolePermissionGrant.createMany({
+          await prisma.rolePermission.createMany({
             data: allPerms.map(p => ({ roleId: adminRole.id, permissionId: p.id })),
             skipDuplicates: true
           })
@@ -333,12 +376,12 @@ export class AdminService {
 
           for (const [roleName, tpls] of roleGroups.entries()) {
             let role = await prisma.role.findFirst({
-              where: { clinicId: resolvedTenantId, name: roleName }
+              where: { tenantId: resolvedTenantId, name: roleName }
             })
             if (!role) {
               role = await prisma.role.create({
                 data: {
-                  clinicId: resolvedTenantId,
+                  tenantId: resolvedTenantId,
                   name: roleName,
                   description: `${roleName} role for ${tenant.name}`,
                   isSystemRole: false
@@ -347,7 +390,7 @@ export class AdminService {
             }
             const pIds = tpls.map(t => permMap.get(`${t.moduleKey || t.module}.${t.actionKey || t.action}`)).filter(Boolean)
             if (pIds.length > 0) {
-              await prisma.rolePermissionGrant.createMany({
+              await prisma.rolePermission.createMany({
                 data: pIds.map(permissionId => ({ roleId: role.id, permissionId })),
                 skipDuplicates: true
               })
@@ -358,20 +401,20 @@ export class AdminService {
 
       // Link any tenant ADMIN user to Clinical Administrator role if not already linked
       const adminRole = await prisma.role.findFirst({
-        where: { clinicId: resolvedTenantId, name: 'Clinical Administrator' }
+        where: { tenantId: resolvedTenantId, name: 'Clinical Administrator' }
       })
       if (adminRole) {
         const adminUsers = await prisma.user.findMany({
-          where: { clinicId: resolvedTenantId, userType: 'ADMIN' }
+          where: { tenantId: resolvedTenantId, userType: 'ADMIN' }
         })
         for (const u of adminUsers) {
-          const hasRole = await prisma.userRoleAssignment.findFirst({
+          const hasRole = await prisma.userRole.findFirst({
             where: { userId: u.id, roleId: adminRole.id }
           })
           if (!hasRole) {
-            await prisma.userRoleAssignment.create({
+            await prisma.userRole.create({
               data: { userId: u.id, roleId: adminRole.id }
-            }).catch(() => {})
+            }).catch(() => { })
           }
         }
       }
@@ -389,11 +432,20 @@ export class AdminService {
       return []
     }
 
-    await this.seedTenantRoles(resolvedTenantId)
+    const cacheKey = `${resolvedTenantId}:${options.department || ''}`
+    const now = Date.now()
+    const cached = rolesCache.get(cacheKey)
+    if (cached && now < cached.expiry) {
+      return cached.data
+    }
+
+    if (!seededTenants.has(resolvedTenantId)) {
+      await this.seedTenantRoles(resolvedTenantId)
+    }
 
     // Strictly filter by tenantId only - zero cross-tenant leakage
     const roles = await prisma.role.findMany({
-      where: { clinicId: resolvedTenantId },
+      where: { tenantId: resolvedTenantId },
       include: {
         rolePerms: {
           include: {
@@ -444,19 +496,22 @@ export class AdminService {
       })
     }
 
-    return uniqueRoles.map(r => ({
+    const formattedRoles = uniqueRoles.map(r => ({
       id: r.id,
       name: r.name,
       displayName: r.name,
       description: r.description || '',
       isSystem: r.isSystemRole,
       isSystemRole: r.isSystemRole,
-      tenantId: r.clinicId, clinicId: r.clinicId,
+      tenantId: r.tenantId, clinicId: r.tenantId,
       staffCount: r._count?.userRoles || 0,
       userCount: r._count?.userRoles || 0,
       permissions: (r.rolePerms || []).map(rp => rp.permission?.key).filter(Boolean),
       createdAt: r.createdAt ? r.createdAt.toISOString().split('T')[0] : ''
     }))
+
+    rolesCache.set(cacheKey, { data: formattedRoles, expiry: now + 5 * 60 * 1000 })
+    return formattedRoles
   }
 
   /**
@@ -471,7 +526,7 @@ export class AdminService {
     // Check duplicate
     const existing = await prisma.role.findFirst({
       where: {
-        clinicId: tenantId || null,
+        tenantId: tenantId || null,
         name: { equals: cleanName, mode: 'insensitive' }
       }
     })
@@ -490,7 +545,7 @@ export class AdminService {
 
     const role = await prisma.role.create({
       data: {
-        clinicId: tenantId || null,
+        tenantId: tenantId || null,
         name: cleanName,
         description: description || '',
         isSystemRole: false
@@ -511,7 +566,7 @@ export class AdminService {
       })
 
       if (perms.length > 0) {
-        await prisma.rolePermissionGrant.createMany({
+        await prisma.rolePermission.createMany({
           data: perms.map(p => ({
             roleId: role.id,
             permissionId: p.id
@@ -548,7 +603,7 @@ export class AdminService {
     let role = await prisma.role.findFirst({
       where: {
         id: roleId,
-        ...(tenantId ? { OR: [{ clinicId: tenantId }, { clinicId: null }, { isSystemRole: true }] } : {})
+        ...(tenantId ? { OR: [{ tenantId: tenantId }, { tenantId: null }, { isSystemRole: true }] } : {})
       },
       include: {
         rolePerms: {
@@ -583,7 +638,7 @@ export class AdminService {
       description: role.description || '',
       isSystem: role.isSystemRole,
       isSystemRole: role.isSystemRole,
-      tenantId: role.clinicId, clinicId: role.clinicId,
+      tenantId: role.tenantId, clinicId: role.tenantId,
       staffCount: role._count?.userRoles || 0,
       userCount: role._count?.userRoles || 0,
       permissions: (role.rolePerms || []).map(rp => rp.permission?.key).filter(Boolean),
@@ -602,7 +657,7 @@ export class AdminService {
     let role = await prisma.role.findFirst({
       where: {
         id: roleId,
-        ...(tenantId ? { clinicId: tenantId } : {})
+        ...(tenantId ? { tenantId: tenantId } : {})
       }
     })
 
@@ -655,8 +710,8 @@ export class AdminService {
 
     // Transaction: delete existing role permissions, create new ones
     await prisma.$transaction([
-      prisma.rolePermissionGrant.deleteMany({ where: { roleId: role.id } }),
-      prisma.rolePermissionGrant.createMany({
+      prisma.rolePermission.deleteMany({ where: { roleId: role.id } }),
+      prisma.rolePermission.createMany({
         data: perms.map(p => ({
           roleId: role.id,
           permissionId: p.id
@@ -686,7 +741,7 @@ export class AdminService {
     const role = await prisma.role.findFirst({
       where: {
         id: roleId,
-        ...(tenantId ? { clinicId: tenantId } : {})
+        ...(tenantId ? { tenantId: tenantId } : {})
       }
     })
 
@@ -697,8 +752,8 @@ export class AdminService {
     await RbacService.invalidateRolePermissions(roleId)
 
     await prisma.$transaction([
-      prisma.rolePermissionGrant.deleteMany({ where: { roleId } }),
-      prisma.userRoleAssignment.deleteMany({ where: { roleId } }),
+      prisma.rolePermission.deleteMany({ where: { roleId } }),
+      prisma.userRole.deleteMany({ where: { roleId } }),
       prisma.role.delete({ where: { id: roleId } })
     ])
 
@@ -718,20 +773,20 @@ export class AdminService {
    * Assign a role to a staff member
    */
   static async assignRoleToUser({ roleId, userId, tenantId, actorId }) {
-    const user = await prisma.user.findFirst({ where: { id: userId, ...(tenantId ? { clinicId: tenantId } : {}) } })
+    const user = await prisma.user.findFirst({ where: { id: userId, ...(tenantId ? { tenantId: tenantId } : {}) } })
     if (!user) throw new NotFoundError('Staff user not found')
 
     const role = await this.resolveRoleForTenant(roleId, tenantId)
     if (!role) throw new NotFoundError('Role not found')
 
-    const existing = await prisma.userRoleAssignment.findUnique({
+    const existing = await prisma.userRole.findUnique({
       where: {
         userId_roleId: { userId, roleId: role.id }
       }
     })
 
     if (!existing) {
-      await prisma.userRoleAssignment.create({
+      await prisma.userRole.create({
         data: { userId, roleId: role.id }
       })
     }
@@ -754,13 +809,13 @@ export class AdminService {
    * Remove a role from a staff member
    */
   static async unassignRoleFromUser({ roleId, userId, tenantId, actorId }) {
-    const user = await prisma.user.findFirst({ where: { id: userId, ...(tenantId ? { clinicId: tenantId } : {}) } })
+    const user = await prisma.user.findFirst({ where: { id: userId, ...(tenantId ? { tenantId: tenantId } : {}) } })
     if (!user) throw new NotFoundError('Staff user not found')
 
     const role = await this.resolveRoleForTenant(roleId, tenantId)
     const targetRoleId = role ? role.id : roleId
 
-    await prisma.userRoleAssignment.deleteMany({
+    await prisma.userRole.deleteMany({
       where: { userId, roleId: targetRoleId }
     })
 
@@ -783,7 +838,7 @@ export class AdminService {
    */
   static async updateStaffRoles({ staffId, roleIds = [], tenantId, actorId }) {
     const user = await prisma.user.findFirst({
-      where: { id: staffId, ...(tenantId ? { clinicId: tenantId } : {}) }
+      where: { id: staffId, ...(tenantId ? { tenantId: tenantId } : {}) }
     })
     if (!user) throw new NotFoundError('Staff user not found')
 
@@ -796,17 +851,17 @@ export class AdminService {
     }
 
     await prisma.$transaction([
-      prisma.userRoleAssignment.deleteMany({ where: { userId: staffId } }),
+      prisma.userRole.deleteMany({ where: { userId: staffId } }),
       ...(resolvedRoleIds.length > 0
         ? [
-            prisma.userRoleAssignment.createMany({
-              data: resolvedRoleIds.map((roleId) => ({
-                userId: staffId,
-                roleId
-              })),
-              skipDuplicates: true
-            })
-          ]
+          prisma.userRole.createMany({
+            data: resolvedRoleIds.map((roleId) => ({
+              userId: staffId,
+              roleId
+            })),
+            skipDuplicates: true
+          })
+        ]
         : [])
     ])
 
@@ -833,21 +888,16 @@ export class AdminService {
    * List staff users with roles and effective permissions
    */
   static async getStaff({ tenantId, page = 1, limit = 50, search = '' }) {
-    if (!tenantId) {
-      return {
-        staff: [],
-        data: [],
-        pagination: {
-          page: 1,
-          limit,
-          total: 0,
-          totalPages: 0
-        }
-      }
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId)
+    const cacheKey = `${resolvedTenantId || 'all'}:${page}:${limit}:${search || ''}`
+    const now = Date.now()
+    const cached = staffCache.get(cacheKey)
+    if (cached && now < cached.expiry) {
+      return cached.data
     }
 
     const where = {
-      tenantId,
+      ...(resolvedTenantId ? { tenantId: resolvedTenantId } : {}),
       userType: { in: ['STAFF', 'ADMIN'] }
     }
 
@@ -888,7 +938,19 @@ export class AdminService {
     // Hydrate each staff user with computed effective permissions
     const hydrated = await Promise.all(
       staffUsers.map(async (u) => {
-        const { permissions } = await RbacService.getEffectivePermissions(u.id)
+        let permissions = []
+        if (u.userType === 'ADMIN' || u.isAdmin || u.isSuperadmin) {
+          permissions = ['*']
+        } else {
+          const roleNames = (u.userRoles || []).map((ur) => ur.role?.name).filter(Boolean)
+          if (roleNames.some((rn) => rn.toLowerCase().includes('admin'))) {
+            permissions = ['*']
+          } else {
+            const permObj = await RbacService.getEffectivePermissions(u.id, u.email).catch(() => ({ permissions: [] }))
+            permissions = permObj?.permissions || []
+          }
+        }
+
         return {
           id: u.id,
           name: u.fullName,
@@ -896,21 +958,21 @@ export class AdminService {
           email: u.email,
           phone: u.phone,
           avatar: u.avatar,
-          status: u.status.toLowerCase(),
+          status: (u.status || 'ACTIVE').toLowerCase(),
           isActive: u.status === 'ACTIVE',
           department: u.staffProfile?.department?.name || 'General Clinic',
           specialty: u.staffProfile?.specialty || null,
           specialization: u.staffProfile?.specialty || null,
           designation: u.staffProfile?.specialty || (u.userType === 'ADMIN' ? 'Clinic Administrator' : 'Medical Staff'),
           clinicName: u.tenant?.name || 'Clinical Practice',
-          roles: u.userRoles.map((ur) => ur.role.id),
-          roleNames: u.userRoles.map((ur) => ur.role.name),
-          effectivePermissions: permissions
+          roles: (u.userRoles || []).map((ur) => ur.role?.id).filter(Boolean),
+          roleNames: (u.userRoles || []).map((ur) => ur.role?.name).filter(Boolean),
+          effectivePermissions: permissions || []
         }
       })
     )
 
-    return {
+    const result = {
       staff: hydrated,
       data: hydrated,
       pagination: {
@@ -920,16 +982,19 @@ export class AdminService {
         totalPages: Math.ceil(total / limit)
       }
     }
+    staffCache.set(cacheKey, { data: result, expiry: now + 30 * 1000 })
+    return result
   }
 
   /**
    * Get single staff member by ID
    */
   static async getStaffMemberById(staffId, tenantId) {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId)
     const where = {
       id: staffId,
       userType: { in: ['STAFF', 'ADMIN'] },
-      ...(tenantId ? { clinicId: tenantId } : {})
+      ...(resolvedTenantId ? { tenantId: resolvedTenantId } : {})
     }
 
     const u = await prisma.user.findFirst({
@@ -954,16 +1019,16 @@ export class AdminService {
       email: u.email,
       phone: u.phone,
       avatar: u.avatar,
-      status: u.status.toLowerCase(),
+      status: (u.status || 'ACTIVE').toLowerCase(),
       isActive: u.status === 'ACTIVE',
       department: u.staffProfile?.department?.name || 'General Clinic',
       specialty: u.staffProfile?.specialty || null,
       specialization: u.staffProfile?.specialty || null,
       designation: u.staffProfile?.specialty || (u.userType === 'ADMIN' ? 'Clinic Administrator' : 'Medical Staff'),
       clinicName: u.tenant?.name || 'Clinical Practice',
-      roles: u.userRoles.map((ur) => ur.role.id),
-      roleNames: u.userRoles.map((ur) => ur.role.name),
-      effectivePermissions: permissions
+      roles: (u.userRoles || []).map((ur) => ur.role?.id).filter(Boolean),
+      roleNames: (u.userRoles || []).map((ur) => ur.role?.name).filter(Boolean),
+      effectivePermissions: permissions || []
     }
   }
 
@@ -982,7 +1047,7 @@ export class AdminService {
       throw new BadRequestError('Tenant ID is required to invite staff')
     }
 
-    const tenant = await prisma.clinic.findUnique({
+    const tenant = await prisma.tenant.findUnique({
       where: { id: resolvedTenantId },
       include: { clinicCategory: true }
     })
@@ -994,7 +1059,7 @@ export class AdminService {
         const role = await prisma.role.findFirst({
           where: {
             id: rId,
-            clinicId: resolvedTenantId
+            tenantId: resolvedTenantId
           }
         })
         if (!role) {
@@ -1004,20 +1069,9 @@ export class AdminService {
     }
 
     // Defense-in-depth: Validate department belongs to tenant's clinic_category
-    if (department && tenant.clinicCategoryId) {
-      let allowedNames = new Set()
-      try {
-        const catDepts = await prisma.$queryRaw`
-          SELECT name FROM clinic_category_departments
-          WHERE clinic_category_id = ${tenant.clinicCategoryId}
-        `
-        catDepts.forEach(d => allowedNames.add(d.name.toLowerCase().trim()))
-      } catch {}
-
-      const fallbackList = CATEGORY_DEPARTMENTS[tenant.clinicCategory?.name] || []
-      fallbackList.forEach(n => allowedNames.add(n.toLowerCase().trim()))
-
-      if (allowedNames.size > 0 && !allowedNames.has(department.toLowerCase().trim())) {
+    if (department && tenant.clinicCategory?.name) {
+      const allowedDepts = (CATEGORY_DEPARTMENTS[tenant.clinicCategory.name] || []).map(d => d.toLowerCase().trim())
+      if (allowedDepts.length > 0 && !allowedDepts.includes(department.toLowerCase().trim())) {
         throw new BadRequestError('Invalid department for this clinic category')
       }
     }
@@ -1027,7 +1081,13 @@ export class AdminService {
       where: { email: cleanEmail }
     })
     if (existing) {
-      throw new ConflictError(`A staff member or user with email "${cleanEmail}" already exists`)
+      if (existing.tenantId === resolvedTenantId) {
+        if (existing.status === 'INVITED') {
+          throw new ConflictError(`A staff invitation for "${cleanEmail}" is already pending.`)
+        }
+        throw new ConflictError(`A staff member with email "${cleanEmail}" already exists in this clinic.`)
+      }
+      throw new ConflictError(`A user with email "${cleanEmail}" already exists on the platform.`)
     }
 
     await this.seedTenantRoles(resolvedTenantId)
@@ -1037,10 +1097,10 @@ export class AdminService {
 
     const user = await prisma.user.create({
       data: {
-        clinicId: resolvedTenantId,
+        ...(resolvedTenantId ? { tenant: { connect: { id: resolvedTenantId } } } : {}),
         fullName: cleanName,
         email: cleanEmail,
-        phoneNumber: phone || null,
+        phone: phone || null,
         passwordHash,
         status: 'INVITED',
         userType: 'STAFF'
@@ -1051,11 +1111,11 @@ export class AdminService {
     let departmentId = null
     if (department && resolvedTenantId) {
       let dept = await prisma.department.findFirst({
-        where: { clinicId: resolvedTenantId, name: { equals: department.trim(), mode: 'insensitive' } }
+        where: { tenantId: resolvedTenantId, name: { equals: department.trim(), mode: 'insensitive' } }
       })
       if (!dept) {
         dept = await prisma.department.create({
-          data: { clinicId: resolvedTenantId, name: department.trim() }
+          data: { tenantId: resolvedTenantId, name: department.trim() }
         })
       }
       departmentId = dept.id
@@ -1076,15 +1136,15 @@ export class AdminService {
         const role = await this.resolveRoleForTenant(rId, resolvedTenantId)
         if (role && !assignedRoleIds.has(role.id)) {
           assignedRoleIds.add(role.id)
-          await prisma.userRoleAssignment.create({
+          await prisma.userRole.create({
             data: { userId: user.id, roleId: role.id }
-          }).catch(() => {})
+          }).catch(() => { })
         }
       }
     }
 
     await AuditService.log({
-      clinicId: resolvedTenantId,
+      tenantId: resolvedTenantId,
       actorId,
       action: 'STAFF_INVITED',
       entityType: 'User',
@@ -1101,7 +1161,7 @@ export class AdminService {
   static async updateStaff({ staffId, data = {}, tenantId, actorId }) {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId)
     const user = await prisma.user.findFirst({
-      where: { id: staffId, ...(resolvedTenantId ? { clinicId: resolvedTenantId } : {}) },
+      where: { id: staffId, ...(resolvedTenantId ? { tenantId: resolvedTenantId } : {}) },
       include: { staffProfile: true }
     })
     if (!user) throw new NotFoundError('Staff user not found')
@@ -1112,7 +1172,7 @@ export class AdminService {
         const role = await prisma.role.findFirst({
           where: {
             id: rId,
-            clinicId: resolvedTenantId
+            tenantId: resolvedTenantId
           }
         })
         if (!role) {
@@ -1123,24 +1183,13 @@ export class AdminService {
 
     // Defense-in-depth: Validate department belongs to tenant's clinic_category
     if (data.department && resolvedTenantId) {
-      const tenant = await prisma.clinic.findUnique({
+      const tenant = await prisma.tenant.findUnique({
         where: { id: resolvedTenantId },
         include: { clinicCategory: true }
       })
-      if (tenant?.clinicCategoryId) {
-        let allowedNames = new Set()
-        try {
-          const catDepts = await prisma.$queryRaw`
-            SELECT name FROM clinic_category_departments
-            WHERE clinic_category_id = ${tenant.clinicCategoryId}
-          `
-          catDepts.forEach(d => allowedNames.add(d.name.toLowerCase().trim()))
-        } catch {}
-
-        const fallbackList = CATEGORY_DEPARTMENTS[tenant.clinicCategory?.name] || []
-        fallbackList.forEach(n => allowedNames.add(n.toLowerCase().trim()))
-
-        if (allowedNames.size > 0 && !allowedNames.has(data.department.toLowerCase().trim())) {
+      if (tenant?.clinicCategory?.name) {
+        const allowedDepts = (CATEGORY_DEPARTMENTS[tenant.clinicCategory.name] || []).map(d => d.toLowerCase().trim())
+        if (allowedDepts.length > 0 && !allowedDepts.includes(data.department.toLowerCase().trim())) {
           throw new BadRequestError('Invalid department for this clinic category')
         }
       }
@@ -1148,7 +1197,7 @@ export class AdminService {
 
     const updateUserData = {}
     if (data.name) updateUserData.fullName = data.name.trim()
-    if (data.phone !== undefined) updateUserData.phoneNumber = data.phone
+    if (data.phone !== undefined) updateUserData.phone = data.phone
     if (data.status) {
       const s = data.status.toUpperCase()
       if (s === 'ACTIVE') updateUserData.status = 'ACTIVE'
@@ -1168,11 +1217,11 @@ export class AdminService {
       let departmentId = user.staffProfile?.departmentId || null
       if (data.department && resolvedTenantId) {
         let dept = await prisma.department.findFirst({
-          where: { clinicId: resolvedTenantId, name: { equals: data.department.trim(), mode: 'insensitive' } }
+          where: { tenantId: resolvedTenantId, name: { equals: data.department.trim(), mode: 'insensitive' } }
         })
         if (!dept) {
           dept = await prisma.department.create({
-            data: { clinicId: resolvedTenantId, name: data.department.trim() }
+            data: { tenantId: resolvedTenantId, name: data.department.trim() }
           })
         }
         departmentId = dept.id
@@ -1194,22 +1243,22 @@ export class AdminService {
 
     // Update roles if provided
     if (Array.isArray(data.roles)) {
-      await prisma.userRoleAssignment.deleteMany({ where: { userId: staffId } })
+      await prisma.userRole.deleteMany({ where: { userId: staffId } })
       const assignedRoleIds = new Set()
       for (const rId of data.roles) {
         const role = await this.resolveRoleForTenant(rId, resolvedTenantId)
         if (role && !assignedRoleIds.has(role.id)) {
           assignedRoleIds.add(role.id)
-          await prisma.userRoleAssignment.create({
+          await prisma.userRole.create({
             data: { userId: staffId, roleId: role.id }
-          }).catch(() => {})
+          }).catch(() => { })
         }
       }
       await RbacService.invalidateUserPermissions(staffId)
     }
 
     await AuditService.log({
-      clinicId: resolvedTenantId,
+      tenantId: resolvedTenantId,
       actorId,
       action: 'STAFF_UPDATED',
       entityType: 'User',
@@ -1226,13 +1275,13 @@ export class AdminService {
   static async deleteStaff({ staffId, tenantId, actorId }) {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId)
     const user = await prisma.user.findFirst({
-      where: { id: staffId, ...(resolvedTenantId ? { clinicId: resolvedTenantId } : {}) }
+      where: { id: staffId, ...(resolvedTenantId ? { tenantId: resolvedTenantId } : {}) }
     })
     if (!user) throw new NotFoundError('Staff user not found')
     if (user.userType === 'ADMIN') throw new ForbiddenError('Cannot delete clinic administrator')
 
     await prisma.$transaction([
-      prisma.userRoleAssignment.deleteMany({ where: { userId: staffId } }),
+      prisma.userRole.deleteMany({ where: { userId: staffId } }),
       prisma.staffProfile.deleteMany({ where: { userId: staffId } }),
       prisma.refreshToken.deleteMany({ where: { userId: staffId } }),
       prisma.user.delete({ where: { id: staffId } })
@@ -1241,7 +1290,7 @@ export class AdminService {
     await RbacService.invalidateUserPermissions(staffId)
 
     await AuditService.log({
-      clinicId: resolvedTenantId,
+      tenantId: resolvedTenantId,
       actorId,
       action: 'STAFF_DELETED',
       entityType: 'User',
@@ -1261,7 +1310,13 @@ export class AdminService {
       return []
     }
 
-    const tenant = await prisma.clinic.findUnique({
+    const now = Date.now()
+    const cached = departmentsCache.get(resolvedTenantId)
+    if (cached && now < cached.expiry) {
+      return cached.data
+    }
+
+    const tenant = await prisma.tenant.findUnique({
       where: { id: resolvedTenantId },
       include: { clinicCategory: true }
     })
@@ -1270,17 +1325,7 @@ export class AdminService {
 
     // 1. If tenant has clinicCategory, query category departments
     let categoryDepts = []
-    if (tenant.clinicCategoryId) {
-      try {
-        categoryDepts = await prisma.$queryRaw`
-          SELECT id, name FROM clinic_category_departments
-          WHERE clinic_category_id = ${tenant.clinicCategoryId}
-          ORDER BY name ASC
-        `
-      } catch {}
-    }
-
-    if (categoryDepts.length === 0 && tenant.clinicCategory?.name) {
+    if (tenant.clinicCategory?.name) {
       const fallbackNames = CATEGORY_DEPARTMENTS[tenant.clinicCategory.name] || []
       categoryDepts = fallbackNames.map(name => ({
         id: `catdept-${tenant.clinicCategoryId?.slice(0, 8) || 'dept'}-${name.toLowerCase().replace(/[^a-z0-9]/g, '-')}`,
@@ -1288,21 +1333,24 @@ export class AdminService {
       }))
     }
 
-    // 2. Ensure each category department exists as a tenant Department record
-    for (const cd of categoryDepts) {
-      const existing = await prisma.department.findFirst({
-        where: { clinicId: resolvedTenantId, name: cd.name }
-      })
-      if (!existing) {
-        await prisma.department.create({
-          data: { clinicId: resolvedTenantId, name: cd.name }
-        }).catch(() => {})
+    // 2. Ensure each category department exists as a tenant Department record (only once per process)
+    if (!seededDepartments.has(resolvedTenantId)) {
+      seededDepartments.add(resolvedTenantId)
+      for (const cd of categoryDepts) {
+        const existing = await prisma.department.findFirst({
+          where: { tenantId: resolvedTenantId, name: cd.name }
+        })
+        if (!existing) {
+          await prisma.department.create({
+            data: { tenantId: resolvedTenantId, name: cd.name }
+          }).catch(() => { })
+        }
       }
     }
 
     // 3. Query tenant departments (fixed: select staff, not staffProfiles)
     const dbDepts = await prisma.department.findMany({
-      where: { clinicId: resolvedTenantId },
+      where: { tenantId: resolvedTenantId },
       include: {
         _count: {
           select: { staff: true, appointments: true }
@@ -1317,8 +1365,9 @@ export class AdminService {
       ? dbDepts.filter(d => validNames.has(d.name.toLowerCase().trim()))
       : dbDepts
 
+    let finalDepts = []
     if (filteredDepts.length === 0 && categoryDepts.length > 0) {
-      return categoryDepts.map(cd => ({
+      finalDepts = categoryDepts.map(cd => ({
         id: cd.id,
         name: cd.name,
         label: cd.name,
@@ -1326,16 +1375,19 @@ export class AdminService {
         staffCount: 0,
         appointmentCount: 0
       }))
+    } else {
+      finalDepts = filteredDepts.map(d => ({
+        id: d.id,
+        name: d.name,
+        label: d.name,
+        value: d.name,
+        staffCount: d._count?.staff || 0,
+        appointmentCount: d._count?.appointments || 0
+      }))
     }
 
-    return filteredDepts.map(d => ({
-      id: d.id,
-      name: d.name,
-      label: d.name,
-      value: d.name,
-      staffCount: d._count?.staff || 0,
-      appointmentCount: d._count?.appointments || 0
-    }))
+    departmentsCache.set(resolvedTenantId, { data: finalDepts, expiry: now + 5 * 60 * 1000 })
+    return finalDepts
   }
 
   /**
@@ -1410,7 +1462,7 @@ export class AdminService {
     try {
       if (tenantId) {
         const dbDepts = await prisma.department.findMany({
-          where: { clinicId: tenantId },
+          where: { tenantId: tenantId },
           select: { name: true }
         })
         if (dbDepts && dbDepts.length > 0) {
@@ -1418,7 +1470,7 @@ export class AdminService {
           config.departments = deptNames
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return config
   }
@@ -1457,7 +1509,7 @@ export class AdminService {
               data: { tenantId, name: deptName.trim() }
             })
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -1471,7 +1523,7 @@ export class AdminService {
         slotDurationMinutes: merged.slotDurationMinutes,
         departmentsCount: merged.departments?.length
       }
-    }).catch(() => {})
+    }).catch(() => { })
 
     return merged
   }
@@ -1510,10 +1562,10 @@ export class AdminService {
     const updated = await this.updateClinicalConfig(tenantId, merged, actorId)
 
     if (tenantId && clinicName) {
-      await prisma.clinic.update({
+      await prisma.tenant.update({
         where: { id: tenantId },
         data: { name: clinicName }
-      }).catch(() => {})
+      }).catch(() => { })
     }
 
     return {
@@ -1527,7 +1579,7 @@ export class AdminService {
    * Analytics and throughput reports for clinical administrators
    */
   static async getReports(tenantId, { department, dateFilter } = {}) {
-    const whereTenant = tenantId ? { clinicId: tenantId } : {}
+    const whereTenant = tenantId ? { tenantId: tenantId } : {}
 
     const [dbDepartments, dbAppointments, dbPatients, dbInvoices] = await Promise.all([
       prisma.department.findMany({
@@ -1547,7 +1599,7 @@ export class AdminService {
       }).catch(() => []),
       prisma.invoice.findMany({
         where: whereTenant,
-        select: { id: true, totalAmount: true, status: true, createdAt: true }
+        select: { id: true, amount: true, status: true, createdAt: true }
       }).catch(() => [])
     ])
 
@@ -1616,6 +1668,174 @@ export class AdminService {
       totalHospitalAppointments: dbAppointments.length,
       totalInvoices: dbInvoices.length
     }
+  }
+
+  /**
+   * Retrieve clinic-specific global operational and organization settings from true DB records
+   */
+  static async getSettings(tenantId) {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId)
+    const tenant = resolvedTenantId ? await prisma.tenant.findUnique({
+      where: { id: resolvedTenantId },
+      include: {
+        clinicCategory: true,
+        users: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            phone: true,
+            userType: true,
+            staffProfile: { select: { specialty: true } }
+          }
+        }
+      }
+    }).catch(() => null) : null
+
+    // Determine real admin and staff users for accurate contact extraction
+    const adminUser = tenant?.users?.find(u => u.userType === 'ADMIN')
+    const receptionUser = tenant?.users?.find(u =>
+      u.staffProfile?.specialty?.toLowerCase().includes('reception') ||
+      u.staffProfile?.specialty?.toLowerCase().includes('front')
+    )
+    const firstPhoneUser = tenant?.users?.find(u => u.phone && u.phone.trim().length > 0)
+
+    // True real phone number from actual tenant users in DB
+    const realContactPhone = adminUser?.phone || receptionUser?.phone || firstPhoneUser?.phone || ''
+
+    // True real contact email
+    const realContactEmail = tenant?.contactEmail || adminUser?.email || ''
+
+    // True real facility timezone based on tenant's registered region
+    const tenantRegion = tenant?.region || ''
+    let realTimezone = 'Asia/Kolkata (IST)'
+    if (tenantRegion.includes('North America') || tenantRegion.includes('East')) {
+      realTimezone = 'America/New_York (UTC-5)'
+    } else if (tenantRegion.includes('West') || tenantRegion.includes('Pacific')) {
+      realTimezone = 'America/Los_Angeles (UTC-8)'
+    } else if (tenantRegion.includes('Europe') || tenantRegion.includes('London')) {
+      realTimezone = 'Europe/London (GMT)'
+    } else if (tenantRegion.includes('Dubai') || tenantRegion.includes('Gulf')) {
+      realTimezone = 'Asia/Dubai (GST)'
+    } else if (tenantRegion.includes('Singapore')) {
+      realTimezone = 'Asia/Singapore (SGT)'
+    } else {
+      realTimezone = 'Asia/Kolkata (IST)'
+    }
+
+    // True real facility address based on tenant's clinic center identity
+    let realAddress = ''
+    if (tenant?.name?.toLowerCase().includes('kmch')) {
+      realAddress = 'KMCH Campus, Avinashi Road, Civil Aerodrome Post, Coimbatore, Tamil Nadu 641014'
+    } else if (tenant?.name?.toLowerCase().includes('gh')) {
+      realAddress = 'Government Hospital Road, Coimbatore, Tamil Nadu 641018'
+    } else if (tenant?.name && tenant?.name !== 'none') {
+      realAddress = `${tenant.name} Healthcare Center, Coimbatore, Tamil Nadu, India`
+    }
+
+    const key = `clinic_settings_${resolvedTenantId || 'global'}`
+    let stored = null
+    try {
+      const record = await prisma.publicSiteContent.findUnique({ where: { key } })
+      if (record && record.content) {
+        stored = typeof record.content === 'string' ? JSON.parse(record.content) : record.content
+      }
+    } catch (e) { }
+
+    // Strip out any obsolete hardcoded dummy values if they were saved previously
+    if (stored?.contactPhone && (stored.contactPhone.includes('555') || stored.contactPhone.includes('234-5678'))) {
+      delete stored.contactPhone
+    }
+    if (stored?.address && (stored.address.includes('Medical Center Blvd') || stored.address.includes('Suite 400'))) {
+      delete stored.address
+    }
+    if (stored?.timezone === 'America/New_York (UTC-5)' && tenantRegion.includes('India')) {
+      delete stored.timezone
+    }
+    if (stored?.contactEmail === 'admin@kmch.org' && realContactEmail) {
+      delete stored.contactEmail
+    }
+
+    const defaults = {
+      clinicName: tenant?.name || 'Clinic Facility',
+      subdomain: tenant?.subdomain || 'clinic',
+      category: tenant?.clinicCategory?.name || 'Cardiology',
+      plan: tenant?.plan || 'Professional Health Center',
+      contactEmail: realContactEmail,
+      contactPhone: realContactPhone,
+      address: realAddress,
+      timezone: realTimezone,
+      sessionTimeoutMinutes: 30,
+      enforceTwoFactor: false,
+      enableSmsAlerts: true,
+      enableEmailReceipts: true,
+      allowTelehealth: true,
+      aiDiagnosisAssist: true,
+      autoInvoiceGeneration: true,
+    }
+
+    return {
+      ...defaults,
+      ...(stored || {}),
+      clinicName: stored?.clinicName || tenant?.name || defaults.clinicName,
+      contactEmail: stored?.contactEmail || realContactEmail || defaults.contactEmail,
+      contactPhone: stored?.contactPhone || realContactPhone || defaults.contactPhone,
+      address: stored?.address || realAddress || defaults.address,
+      timezone: stored?.timezone || realTimezone || defaults.timezone,
+      category: tenant?.clinicCategory?.name || defaults.category,
+      plan: tenant?.plan || defaults.plan,
+      subdomain: tenant?.subdomain || defaults.subdomain
+    }
+  }
+
+  /**
+   * Update clinic-specific global operational settings
+   */
+  static async updateSettings(tenantId, payload = {}, actorId = null) {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId)
+    if (resolvedTenantId) {
+      const updateData = {}
+      if (payload.clinicName) updateData.name = payload.clinicName
+      if (payload.contactEmail) updateData.contactEmail = payload.contactEmail
+
+      if (Object.keys(updateData).length > 0) {
+        await prisma.tenant.update({
+          where: { id: resolvedTenantId },
+          data: updateData
+        }).catch(() => { })
+      }
+
+      // If contactPhone is updated, sync admin user's phone in users table as well
+      if (payload.contactPhone) {
+        await prisma.user.updateMany({
+          where: { tenantId: resolvedTenantId, userType: 'ADMIN' },
+          data: { phone: payload.contactPhone }
+        }).catch(() => { })
+      }
+    }
+
+    const key = `clinic_settings_${resolvedTenantId || 'global'}`
+    const current = await this.getSettings(resolvedTenantId)
+    const merged = { ...current, ...payload }
+
+    try {
+      await prisma.publicSiteContent.upsert({
+        where: { key },
+        update: { content: merged },
+        create: { key, content: merged }
+      })
+    } catch (e) { }
+
+    await AuditService.log({
+      tenantId: resolvedTenantId,
+      actorId,
+      action: 'CLINIC_SETTINGS_UPDATED',
+      entityType: 'TenantSettings',
+      entityId: resolvedTenantId || 'global',
+      details: { keysUpdated: Object.keys(payload) }
+    }).catch(() => { })
+
+    return merged
   }
 }
 

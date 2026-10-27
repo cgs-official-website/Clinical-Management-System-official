@@ -71,7 +71,7 @@ export const RoleTemplatesPage = () => {
   // Create or update template mutation
   const saveMutation = useMutation({
     mutationFn: async (payload) => {
-      if (editingTemplate && editingTemplate.isTenantCustom) {
+      if (editingTemplate && editingTemplate.id) {
         return api.put(`/api/admin/roles/templates/${editingTemplate.id}`, payload)
       } else {
         return api.post('/api/admin/roles/templates', payload)
@@ -145,10 +145,10 @@ export const RoleTemplatesPage = () => {
   const openEditModal = (tpl) => {
     setEditingTemplate(tpl)
     setFormData({
-      keyword: tpl.keyword,
-      module: tpl.module,
-      action: tpl.action,
-      isWildcard: Boolean(t.isWildcard)
+      keyword: tpl.keyword || '',
+      module: tpl.module || 'patients',
+      action: tpl.action || 'view',
+      isWildcard: Boolean(tpl.isWildcard)
     })
     setIsModalOpen(true)
   }

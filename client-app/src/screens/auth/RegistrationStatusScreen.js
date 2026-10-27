@@ -3,10 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
+import { Icon } from '../../components/common/Icon';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Button } from '../../components/common/Button';
 
@@ -25,7 +26,7 @@ export const RegistrationStatusScreen = ({ route, navigation }) => {
               { backgroundColor: isRejected ? COLORS.dangerLight : COLORS.warningLight },
             ]}
           >
-            <Text style={styles.iconText}>{isRejected ? '✕' : '⏳'}</Text>
+            <Text style={styles.iconText}><Icon name={isRejected ? 'XCircle' : 'Clock'} size={34} color={isRejected ? '#DC2626' : COLORS.primary} /></Text>
           </View>
 
           <Text style={styles.title}>

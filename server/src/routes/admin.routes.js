@@ -78,6 +78,10 @@ router.get('/clinical-config', requirePermission('clinical_config.view'), AdminC
 router.put('/clinical-config', requirePermission('clinical_config.edit'), AdminController.updateClinicalConfig)
 router.post('/environment-setup', AdminController.saveEnvironmentSetup)
 
+// Global Clinic Settings
+router.get('/settings', requirePermission('settings.view'), AdminController.getSettings)
+router.put('/settings', requirePermission('settings.edit'), AdminController.updateSettings)
+
 // Clinical Reports & Analytics
 router.get('/reports', requirePermission('reports.view'), AdminController.getReports)
 

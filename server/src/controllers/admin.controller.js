@@ -146,9 +146,10 @@ export class AdminController {
 
   static async createStaff(req, res, next) {
     try {
-      const { name, email, phone, department, specialty, roles } = req.body
+      const { name, email, phone, department, specialty, roles, tenantId: bodyTenantId } = req.body
+      const tenantId = req.query.tenantId || bodyTenantId || req.user?.tenantId
       const result = await AdminService.createStaff({
-        tenantId: req.user.tenantId,
+        tenantId,
         name,
         email,
         phone,
@@ -172,10 +173,11 @@ export class AdminController {
   static async updateStaff(req, res, next) {
     try {
       const { id } = req.params
+      const tenantId = req.query.tenantId || req.body?.tenantId || req.user?.tenantId
       const result = await AdminService.updateStaff({
         staffId: id,
         data: req.body,
-        tenantId: req.user.tenantId,
+        tenantId,
         actorId: req.user.id
       })
 
@@ -193,9 +195,10 @@ export class AdminController {
   static async deleteStaff(req, res, next) {
     try {
       const { id } = req.params
+      const tenantId = req.query.tenantId || req.user?.tenantId
       const result = await AdminService.deleteStaff({
         staffId: id,
-        tenantId: req.user.tenantId,
+        tenantId,
         actorId: req.user.id
       })
 
@@ -209,11 +212,12 @@ export class AdminController {
     try {
       const { id } = req.params
       const { roles } = req.body
+      const tenantId = req.query.tenantId || req.body?.tenantId || req.user?.tenantId
 
       const result = await AdminService.updateStaffRoles({
         staffId: id,
         roleIds: roles || [],
-        tenantId: req.user.tenantId,
+        tenantId,
         actorId: req.user.id
       })
 
@@ -233,9 +237,10 @@ export class AdminController {
       const page = parseInt(req.query.page, 10) || 1
       const limit = parseInt(req.query.limit, 10) || 50
       const { search } = req.query
+      const tenantId = req.query.tenantId || req.user?.tenantId
 
       const result = await AdminService.getStaff({
-        tenantId: req.user.tenantId,
+        tenantId,
         page,
         limit,
         search
@@ -243,8 +248,8 @@ export class AdminController {
 
       return res.status(200).json({
         success: true,
-        staff: result.staff || result.data,
-        data: result.data,
+        staff: result.staff || result.data || [],
+        data: result.data || result.staff || [],
         pagination: result.pagination
       })
     } catch (error) {
@@ -397,6 +402,37 @@ export class AdminController {
       const tenantId = req.user?.tenantId
       const result = await RoleTemplateService.resetToDefaults(tenantId)
       return res.status(200).json(result)
+    } catch (error) {
+      next(error)
+    }
+  }
+
+  static async getSettings(req, res, next) {
+    try {
+      const settings = await AdminService.getSettings(req.user?.tenantId)
+      return res.status(200).json({
+        success: true,
+        ...settings,
+        data: settings
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
+
+  static async updateSettings(req, res, next) {
+    try {
+      const settings = await AdminService.updateSettings(
+        req.user?.tenantId,
+        req.body,
+        req.user?.id
+      )
+      return res.status(200).json({
+        success: true,
+        message: 'Clinic settings updated successfully',
+        ...settings,
+        data: settings
+      })
     } catch (error) {
       next(error)
     }

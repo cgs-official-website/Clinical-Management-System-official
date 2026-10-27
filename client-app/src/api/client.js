@@ -24,7 +24,7 @@ const processQueue = (error, token = null) => {
   failedQueue = [];
 };
 
-// Request Interceptor: Attach JWT Bearer Token and User Context
+// Request Interceptor: Attach JWT Bearer Token, Tenant Context and User Headers
 apiClient.interceptors.request.use(
   async (config) => {
     try {
@@ -39,8 +39,11 @@ apiClient.interceptors.request.use(
       if (user?.role || user?.userType) {
         config.headers['x-user-role'] = user.role || user.userType;
       }
+      if (user?.tenantId) {
+        config.headers['x-tenant-id'] = user.tenantId;
+      }
     } catch {
-      // Non-blocking
+      // Non-blocking storage read
     }
     return config;
   },
@@ -53,7 +56,13 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // 403 Forbidden handling: do NOT attempt token refresh (refresh tokens do not alter role permissions and causes infinite retry storms)
+    if (error.response?.status === 403) {
+      return Promise.reject(error);
+    }
+
+    // 401 Unauthorized handling & automatic token refresh
+    if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
       if (
         originalRequest.url?.includes('/auth/login') ||
         originalRequest.url?.includes('/auth/refresh')
@@ -84,12 +93,24 @@ apiClient.interceptors.response.use(
       }
 
       try {
-        const res = await axios.post(`${ENV.API_BASE_URL}/api/auth/refresh`, {
-          refreshToken,
-          email: user?.email,
-          userId: user?.id,
-          isSuperadmin: !!user?.isSuperadmin,
-        });
+        const isSuper = !!(
+          user?.isSuperadmin ||
+          user?.userType === 'SUPERADMIN' ||
+          user?.role === 'SUPERADMIN' ||
+          user?.email === 'admin@zuna.com' ||
+          user?.email === 'superadmin@clinic.io'
+        );
+
+        const res = await axios.post(
+          `${apiClient.defaults.baseURL || ENV.API_BASE_URL}/api/auth/refresh`,
+          {
+            refreshToken,
+            email: user?.email,
+            userId: user?.id,
+            isSuperadmin: isSuper,
+          },
+          { timeout: 15000 }
+        );
 
         const payload = res.data?.data || res.data;
         const newToken = payload?.accessToken || payload?.token;
@@ -104,7 +125,7 @@ apiClient.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${newToken}`;
           return apiClient(originalRequest);
         }
-        throw new Error('Refresh failed');
+        throw new Error('Refresh failed: No token returned');
       } catch (refreshErr) {
         processQueue(refreshErr, null);
         await StorageService.removeItem(STORAGE_KEYS.ACCESS_TOKEN);

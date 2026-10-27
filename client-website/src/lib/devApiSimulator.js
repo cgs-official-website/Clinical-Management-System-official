@@ -2046,6 +2046,49 @@ export const handleSimulatedRequest = async (config) => {
     return [200, { success: true }]
   }
 
+  if ((url === '/staff/doctors' || url === '/api/staff/doctors') && method === 'get') {
+    let currentUser = null
+    try {
+      const authRaw = typeof localStorage !== 'undefined' ? localStorage.getItem('clinic_user') : null
+      if (authRaw) currentUser = JSON.parse(authRaw)
+    } catch (e) { }
+    const userTenantId = currentUser?.tenantId || currentUser?.clinicId
+
+    const tenantStaff = (db.staff || []).filter((s) => {
+      const email = (s.email || '').toLowerCase()
+      const isDummy =
+        email.includes('doctor@clinic.io') ||
+        email.includes('reception@clinic.io') ||
+        email.includes('james.rodriguez@clinic.io') ||
+        email.includes('amara.chen@clinic.io') ||
+        email.includes('g.house@clinic.io')
+      if (isDummy) return false
+      if (userTenantId) {
+        return s.tenantId === userTenantId || s.clinicId === userTenantId
+      }
+      return true
+    })
+
+    const doctors = tenantStaff.filter((s) => {
+      const roleStr = `${s.role || ''} ${s.specialty || ''} ${(s.roles || []).join(' ')}`.toLowerCase()
+      const isDoc = roleStr.includes('doctor') || roleStr.includes('physician') || roleStr.includes('surgeon') || /^dr[\s.]/i.test(s.name || s.fullName || '')
+      return isDoc
+    }).map((s) => ({
+      id: s.id,
+      name: s.name || s.fullName,
+      fullName: s.name || s.fullName,
+      email: s.email,
+      phone: s.phone,
+      department: s.department || 'General Medicine',
+      specialty: s.specialty || s.department || 'Doctor',
+      role: s.role || 'Doctor',
+      label: `${s.name || s.fullName} (${s.department || s.specialty || 'Doctor'})`,
+      value: s.name || s.fullName
+    }))
+
+    return [200, { success: true, doctors, data: doctors }]
+  }
+
   if (url === '/admin/staff' && method === 'get') {
     let currentUser = null
     try {
@@ -2176,6 +2219,32 @@ export const handleSimulatedRequest = async (config) => {
     db.clinicalConfig = { ...db.clinicalConfig, ...data }
     saveDb()
     return [200, db.clinicalConfig]
+  }
+
+  if ((url === '/admin/settings' || url === '/api/admin/settings') && method === 'get') {
+    return [200, db.clinicSettings || {
+      clinicName: db.user?.clinicName || 'kmch',
+      subdomain: 'kmch',
+      category: 'Cardiology',
+      plan: 'Professional Health Center',
+      contactEmail: db.user?.email || 'preethi@gmail.com',
+      contactPhone: db.user?.phone || '1234567839',
+      address: 'KMCH Campus, Avinashi Road, Civil Aerodrome Post, Coimbatore, Tamil Nadu 641014',
+      timezone: 'Asia/Kolkata (IST)',
+      sessionTimeoutMinutes: 30,
+      enforceTwoFactor: false,
+      enableSmsAlerts: true,
+      enableEmailReceipts: true,
+      allowTelehealth: true,
+      aiDiagnosisAssist: true,
+      autoInvoiceGeneration: true,
+    }]
+  }
+
+  if ((url === '/admin/settings' || url === '/api/admin/settings') && method === 'put') {
+    db.clinicSettings = { ...(db.clinicSettings || {}), ...data }
+    saveDb()
+    return [200, db.clinicSettings]
   }
 
   if (url === '/admin/environment-setup' && method === 'post') {
@@ -2336,7 +2405,7 @@ export const handleSimulatedRequest = async (config) => {
       bp: data.bp ? `${data.bp}` : '',
       sugarLevel: data.sugarLevel ? `${data.sugarLevel}` : '',
       currentMedications: data.currentMedications ? `${data.currentMedications}` : '',
-      doctorName: data.doctorName || 'Dr. Sarah Al-Mansoor',
+      doctorName: data.doctorName || 'Attending Physician',
       notes: data.notes || '',
       status: 'WAITING_FOR_DOCTOR',
       recordedAt: new Date().toISOString(),

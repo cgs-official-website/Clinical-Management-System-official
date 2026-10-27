@@ -56,7 +56,7 @@ export const StaffDashboard = () => {
     user?.clinicCategory?.name ||
     user?.tenant?.clinicCategoryName ||
     user?.tenant?.clinicCategory?.name ||
-    (permittedModules.some((m) => m.route?.includes('/dental/')) ? 'Dentist' :
+    (permittedModules.some((m) => m.route?.includes('/dental/')) ? 'Dental Care' :
      permittedModules.some((m) => m.route?.includes('/cardio/')) ? 'Cardiology' :
      permittedModules.some((m) => m.route?.includes('/physio/')) ? 'Physiotherapy' :
      'General Care')

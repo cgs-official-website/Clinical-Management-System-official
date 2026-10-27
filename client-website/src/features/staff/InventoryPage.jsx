@@ -63,6 +63,8 @@ export const InventoryPage = () => {
       const res = await api.get('/api/staff/inventory')
       return res.data
     },
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
     retry: 1,
   })
 
@@ -77,6 +79,8 @@ export const InventoryPage = () => {
         throw err
       }
     },
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
     retry: false,
   })
 

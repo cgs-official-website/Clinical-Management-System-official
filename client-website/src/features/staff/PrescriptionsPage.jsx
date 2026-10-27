@@ -37,6 +37,8 @@ export const PrescriptionsPage = () => {
       const res = await api.get('/api/staff/prescriptions')
       return res.data
     },
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
     retry: false,
   })
 

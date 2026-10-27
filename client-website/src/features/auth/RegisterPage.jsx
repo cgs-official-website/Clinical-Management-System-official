@@ -39,7 +39,11 @@ const registerSchema = z.object({
   adminName: z.string().min(2, 'Administrator name is required'),
   email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-  phone: z.string().min(8, 'Valid phone number is required'),
+  phone: z
+    .string()
+    .min(1, 'Direct contact phone is required')
+    .regex(/^\d{10}$/, 'Phone number must be exactly 10 numeric digits'),
+  address: z.string().min(5, 'Physical facility address is required'),
   specialty: z.string().optional(),
   region: z.string().min(1, 'Region is required'),
   plan: z.string().min(1, 'Please choose an operational plan'),
@@ -611,6 +615,17 @@ export const RegisterPage = () => {
                     )}
                   </div>
                 </div>
+
+                <div className="mt-4">
+                  <Input
+                    label="Physical Facility Address"
+                    required
+                    leftIcon={<MapPin className="w-4 h-4 text-primary" />}
+                    placeholder="e.g. KMCH Campus, Avinashi Road, Coimbatore, Tamil Nadu 641014"
+                    error={errors.address?.message}
+                    {...register('address')}
+                  />
+                </div>
               </div>
 
               {/* Step 2: Primary Administrator Credentials */}
@@ -654,10 +669,55 @@ export const RegisterPage = () => {
                   <Input
                     label="Direct Contact Phone"
                     type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
                     required
-                    placeholder="+91 98450 12345"
+                    placeholder="9876543210"
                     error={errors.phone?.message}
-                    {...register('phone')}
+                    {...register('phone', {
+                      onChange: (e) => {
+                        let val = e.target.value.replace(/\D/g, '')
+                        if (val.length === 12 && val.startsWith('91')) val = val.slice(2)
+                        else if (val.length === 11 && val.startsWith('0')) val = val.slice(1)
+                        val = val.slice(0, 10)
+                        e.target.value = val
+                        setValue('phone', val, { shouldValidate: true })
+                      },
+                    })}
+                    onKeyDown={(e) => {
+                      if (
+                        [
+                          'Backspace',
+                          'Delete',
+                          'ArrowLeft',
+                          'ArrowRight',
+                          'Tab',
+                          'Enter',
+                          'Home',
+                          'End',
+                        ].includes(e.key) ||
+                        e.ctrlKey ||
+                        e.metaKey
+                      ) {
+                        return
+                      }
+                      if (!/^[0-9]$/.test(e.key)) {
+                        e.preventDefault()
+                      }
+                    }}
+                    onPaste={(e) => {
+                      e.preventDefault()
+                      const pasted = (e.clipboardData || window.clipboardData)?.getData('text') || ''
+                      const currentVal = e.target.value || ''
+                      const start = e.target.selectionStart ?? currentVal.length
+                      const end = e.target.selectionEnd ?? currentVal.length
+                      let combined = (currentVal.slice(0, start) + pasted + currentVal.slice(end)).replace(/\D/g, '')
+                      if (combined.length === 12 && combined.startsWith('91')) combined = combined.slice(2)
+                      else if (combined.length === 11 && combined.startsWith('0')) combined = combined.slice(1)
+                      combined = combined.slice(0, 10)
+                      e.target.value = combined
+                      setValue('phone', combined, { shouldValidate: true })
+                    }}
                   />
                 </div>
               </div>

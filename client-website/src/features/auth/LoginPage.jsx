@@ -59,7 +59,11 @@ export const LoginPage = () => {
       const errData = err.response?.data
       const errObj = errData?.error || {}
       const errorCode = errObj.code || errData?.code || ''
-      const message = errObj.message || errData?.message || err.message || 'Authentication failed. Please check your credentials.'
+      const message =
+        errObj.message ||
+        errData?.message ||
+        (err.message === 'Network Error' ? 'Unable to connect to clinical server. Please check connection and try again.' : err.message) ||
+        'Authentication failed. Please check your credentials.'
       const details = errObj.details || errData?.details || {}
 
       if (errorCode === 'TENANT_REJECTED') {

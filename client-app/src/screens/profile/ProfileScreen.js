@@ -5,11 +5,12 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
+import { Icon } from '../../components/common/Icon';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
 import { Card } from '../../components/common/Card';
@@ -19,7 +20,16 @@ import { useAuth } from '../../hooks/useAuth';
 import { getRoleDisplay } from '../../utils/formatters';
 
 export const ProfileScreen = ({ navigation }) => {
-  const { user, logout, isSuperadmin, isAdmin } = useAuth();
+  const {
+    user,
+    logout,
+    isSuperadmin,
+    isAdmin,
+    isCardiology,
+    isPhysiotherapy,
+    isDental,
+    hasPermission,
+  } = useAuth();
 
   const handleLogout = () => {
     Alert.alert('Sign Out', 'Are you sure you want to log out of your session?', [
@@ -34,6 +44,11 @@ export const ProfileScreen = ({ navigation }) => {
     ]);
   };
 
+  const specialtyName =
+    user?.clinicCategoryName ||
+    user?.clinicCategory?.name ||
+    (isCardiology ? 'Cardiology' : isPhysiotherapy ? 'Physiotherapy' : isDental ? 'Dental Care' : 'General Medicine');
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
@@ -44,90 +59,59 @@ export const ProfileScreen = ({ navigation }) => {
         <Card style={styles.userCard}>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>
-              {(user?.name || 'U').charAt(0).toUpperCase()}
+              {(user?.name || user?.fullName || 'U').charAt(0).toUpperCase()}
             </Text>
           </View>
-          <Text style={styles.userName}>{user?.name || 'Practitioner'}</Text>
+          <Text style={styles.userName}>{user?.name || user?.fullName || 'Practitioner'}</Text>
           <Text style={styles.userEmail}>{user?.email}</Text>
-          <View style={styles.roleTag}>
-            <Text style={styles.roleText}>{getRoleDisplay(user)}</Text>
+          <View style={styles.badgeRow}>
+            <View style={styles.roleTag}>
+              <Text style={styles.roleText}>{getRoleDisplay(user)}</Text>
+            </View>
+            <View style={styles.specialtyTag}>
+              <Text style={styles.specialtyText}>{specialtyName}</Text>
+            </View>
           </View>
 
           <View style={styles.clinicInfo}>
             <Text style={styles.clinicLabel}>Active Clinic Workspace</Text>
-            <Text style={styles.clinicName}>{user?.clinicName || 'Aura Health Memorial'}</Text>
+            <Text style={styles.clinicName}>
+              {user?.clinicName || user?.tenantName || (isSuperadmin ? 'SaaS Platform Root' : 'Clinic Workspace')}
+            </Text>
+            {user?.tenantId ? (
+              <Text style={styles.tenantIdText}>Tenant ID: {user.tenantId}</Text>
+            ) : null}
           </View>
         </Card>
 
         {/* Navigation Shortcuts */}
+        <Text style={styles.sectionHeading}>Account</Text>
         <Card style={styles.linksCard}>
           <TouchableOpacity
             style={styles.linkRow}
             onPress={() => navigation.navigate('MyPermissions')}
           >
             <View style={styles.linkIconBox}>
-              <Text style={styles.linkIcon}>🛡️</Text>
+              <Icon name="ShieldCheck" size={20} color={COLORS.primary} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.linkLabel}>My Role & Permissions</Text>
-              <Text style={styles.linkDesc}>View RBAC module grants and action rights</Text>
+              <Text style={styles.linkDesc}>View live RBAC module privileges and actions</Text>
             </View>
-            <Text style={styles.chevron}>→</Text>
-          </TouchableOpacity>
-
-          {(isSuperadmin || isAdmin) && (
-            <TouchableOpacity
-              style={styles.linkRow}
-              onPress={() => navigation.navigate('AdminOverview')}
-            >
-              <View style={styles.linkIconBox}>
-                <Text style={styles.linkIcon}>⚙️</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.linkLabel}>
-                  {isSuperadmin ? 'Platform Governance' : 'Staff Administration'}
-                </Text>
-                <Text style={styles.linkDesc}>Manage clinical users and tenant health</Text>
-              </View>
-              <Text style={styles.chevron}>→</Text>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={styles.linkRow}
-            onPress={() => navigation.navigate('Inventory')}
-          >
-            <View style={styles.linkIconBox}>
-              <Text style={styles.linkIcon}>💊</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.linkLabel}>Pharmacy Inventory</Text>
-              <Text style={styles.linkDesc}>Drug schedules, stock levels, and DPCO pricing</Text>
-            </View>
-            <Text style={styles.chevron}>→</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.linkRow}
-            onPress={() => navigation.navigate('Billing')}
-          >
-            <View style={styles.linkIconBox}>
-              <Text style={styles.linkIcon}>💳</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.linkLabel}>Billing & Cashier</Text>
-              <Text style={styles.linkDesc}>Outpatient receipts and UPI settlement</Text>
-            </View>
-            <Text style={styles.chevron}>→</Text>
+            <Icon name="ChevronRight" size={18} color={COLORS.textMuted} />
           </TouchableOpacity>
         </Card>
 
         {/* Security / System Info */}
-        <Card>
-          <Text style={styles.secTitle}>System Governance</Text>
+        <Card style={styles.infoCard}>
+          <Text style={styles.secTitle}>System Governance & Environment</Text>
           <View style={styles.secRow}>
             <Text style={styles.secLabel}>Authentication Standard:</Text>
             <Text style={styles.secVal}>OAuth2 JWT + Refresh Token</Text>
+          </View>
+          <View style={styles.secRow}>
+            <Text style={styles.secLabel}>Multi-Tenancy Mode:</Text>
+            <Text style={styles.secVal}>{isSuperadmin ? 'Platform Root Superadmin' : 'Clinic Tenant Isolated'}</Text>
           </View>
           <View style={styles.secRow}>
             <Text style={styles.secLabel}>Compliance Framework:</Text>
@@ -188,12 +172,17 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 2,
   },
+  badgeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    marginTop: 8,
+  },
   roleTag: {
     backgroundColor: COLORS.primaryLight,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: RADIUS.full,
-    marginTop: 8,
     borderWidth: 1,
     borderColor: COLORS.primary + '30',
   },
@@ -202,6 +191,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: COLORS.primary,
     textTransform: 'uppercase',
+  },
+  specialtyTag: {
+    backgroundColor: '#E0F2FE',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: RADIUS.full,
+    borderWidth: 1,
+    borderColor: '#38BDF8',
+  },
+  specialtyText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0369A1',
   },
   clinicInfo: {
     marginTop: SPACING.md,
@@ -221,6 +223,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: COLORS.textPrimary,
     marginTop: 2,
+  },
+  tenantIdText: {
+    fontSize: 10,
+    color: COLORS.textMuted,
+    fontFamily: 'monospace',
+    marginTop: 2,
+  },
+  sectionHeading: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORS.textPrimary,
+    marginTop: SPACING.md,
+    marginBottom: SPACING.sm,
+  },
+  infoCard: {
+    marginTop: SPACING.md,
   },
   linksCard: {
     padding: 0,

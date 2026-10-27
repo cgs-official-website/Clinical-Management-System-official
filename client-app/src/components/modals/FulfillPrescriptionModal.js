@@ -8,6 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { COLORS } from '../../constants/colors';
+import { Icon } from '../../components/common/Icon';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Button } from '../common/Button';
 import { Badge } from '../common/Badge';
@@ -25,10 +26,13 @@ export const FulfillPrescriptionModal = ({ visible, prescription, onClose, onFul
       Alert.alert('Dispensed', 'Prescription marked as dispensed and inventory updated.');
       if (onFulfilled) onFulfilled(prescription.id);
       onClose();
-    } catch {
-      Alert.alert('Dispensed', 'Prescription dispensed successfully (Dev mode).');
-      if (onFulfilled) onFulfilled(prescription.id);
-      onClose();
+    } catch (err) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to fulfill prescription. Please check stock availability and permissions.';
+      Alert.alert('Fulfillment Error', msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -41,7 +45,7 @@ export const FulfillPrescriptionModal = ({ visible, prescription, onClose, onFul
           <View style={styles.header}>
             <Text style={styles.title}>Fulfill Prescription</Text>
             <TouchableOpacity onPress={onClose}>
-              <Text style={styles.closeText}>✕</Text>
+              <Icon name="X" size={18} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>
 

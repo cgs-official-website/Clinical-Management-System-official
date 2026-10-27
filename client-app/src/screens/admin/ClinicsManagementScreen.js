@@ -6,10 +6,10 @@ import {
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
@@ -25,13 +25,21 @@ export const ClinicsManagementScreen = () => {
   const [filter, setFilter] = useState('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const fetchClinics = useCallback(async () => {
+    setErrorMessage(null);
     try {
       const data = await adminApi.getClinics();
-      setClinics(data);
-    } catch {
-      // Handled in fallback
+      setClinics(Array.isArray(data) ? data : []);
+    } catch (err) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to load tenant clinics from server.';
+      setErrorMessage(msg);
+      setClinics([]);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -50,15 +58,17 @@ export const ClinicsManagementScreen = () => {
   const handleStatusChange = async (clinicId, newStatus) => {
     try {
       await adminApi.updateClinicStatus(clinicId, newStatus);
-      Alert.alert('Status Updated', `Clinic marked as ${newStatus}`);
+      Alert.alert('Status Updated', `Clinic successfully marked as ${newStatus}`);
       setClinics((prev) =>
         prev.map((c) => (c.id === clinicId ? { ...c, status: newStatus } : c))
       );
-    } catch {
-      setClinics((prev) =>
-        prev.map((c) => (c.id === clinicId ? { ...c, status: newStatus } : c))
-      );
-      Alert.alert('Updated', `Clinic status updated to ${newStatus} (Dev mode).`);
+    } catch (err) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        `Failed to update clinic status to ${newStatus}`;
+      Alert.alert('Operation Failed', msg);
     }
   };
 
@@ -96,6 +106,20 @@ export const ClinicsManagementScreen = () => {
           ))}
         </View>
 
+        {errorMessage && (
+          <Card style={styles.errorBanner}>
+            <Text style={styles.errorTitle}>Connection Error</Text>
+            <Text style={styles.errorMessage}>{errorMessage}</Text>
+            <Button
+              title="Retry"
+              variant="outline"
+              size="sm"
+              onPress={fetchClinics}
+              style={{ marginTop: 8 }}
+            />
+          </Card>
+        )}
+
         {isLoading ? (
           <Loader message="Loading tenant clinics..." />
         ) : (
@@ -110,25 +134,40 @@ export const ClinicsManagementScreen = () => {
               />
             }
             ListEmptyComponent={
-              <EmptyState
-                title="No clinics found"
-                message="No clinics match the selected status filter."
-              />
+              !errorMessage && (
+                <EmptyState
+                  title="No clinics found"
+                  message="No clinic tenants match the selected status filter."
+                />
+              )
             }
             renderItem={({ item }) => {
-              const isPending = (item.status || '').toUpperCase() === 'PENDING';
+              const statusStr = (item.status || 'ACTIVE').toUpperCase();
+              const isPending = statusStr === 'PENDING';
+              const categoryName =
+                item.clinicCategory?.name ||
+                item.category ||
+                'General Multi-Specialty';
+              const adminEmail = item.contactEmail || item.adminEmail || 'admin@clinic.io';
+              const subdomain = item.subdomain || item.slug || item.domain || 'clinic';
+
               return (
                 <Card style={styles.clinicCard}>
                   <View style={styles.cardHeader}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.clinicName}>{item.name}</Text>
                       <Text style={styles.subdomain}>
-                        🌐 {item.subdomain}.zuna.io · Plan: {item.plan || 'ENTERPRISE'}
+                        {subdomain} · Plan: {item.plan || 'ENTERPRISE'}
                       </Text>
-                      <Text style={styles.category}>Category: {item.category}</Text>
-                      <Text style={styles.adminEmail}>Admin: {item.adminEmail}</Text>
+                      <Text style={styles.category}>Specialty: {categoryName}</Text>
+                      <Text style={styles.adminEmail}>Admin: {adminEmail}</Text>
+                      {item._count && (
+                        <Text style={styles.statsText}>
+                          Staff: {item._count.users || item.staffCount || 0} · Patients: {item._count.patients || item.patientsCount || 0}
+                        </Text>
+                      )}
                     </View>
-                    <Badge label={item.status} status={item.status} />
+                    <Badge label={statusStr} status={statusStr} />
                   </View>
 
                   {isPending && (
@@ -168,71 +207,92 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    padding: SPACING.md,
+    paddingHorizontal: SPACING.md,
   },
   filterRow: {
     flexDirection: 'row',
+    marginBottom: SPACING.sm,
     gap: 8,
-    marginBottom: SPACING.md,
   },
   filterPill: {
     paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 16,
     borderRadius: RADIUS.full,
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
   filterPillActive: {
-    backgroundColor: COLORS.primaryLight,
+    backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
   filterText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-    color: COLORS.textSecondary,
+    color: COLORS.textMuted,
   },
   filterTextActive: {
-    color: COLORS.primary,
+    color: '#FFF',
   },
   list: {
-    paddingBottom: SPACING.xxl,
+    paddingBottom: SPACING.xl,
   },
   clinicCard: {
-    padding: SPACING.md,
     marginBottom: SPACING.sm,
   },
   cardHeader: {
     flexDirection: 'row',
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   clinicName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 2,
   },
   subdomain: {
-    fontSize: 11,
-    color: COLORS.primary,
-    fontFamily: 'monospace',
-    marginTop: 2,
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginBottom: 4,
   },
   category: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 2,
+    fontSize: 12,
+    fontWeight: '600',
+    color: COLORS.primary,
+    marginBottom: 2,
   },
   adminEmail: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+  },
+  statsText: {
     fontSize: 11,
     color: COLORS.textMuted,
-    marginTop: 2,
+    marginTop: 4,
   },
   approvalActions: {
     flexDirection: 'row',
+    marginTop: SPACING.sm,
+    paddingTop: SPACING.sm,
     borderTopWidth: 1,
-    borderTopColor: COLORS.borderLight,
-    paddingTop: 10,
-    marginTop: 6,
+    borderTopColor: COLORS.border,
+  },
+  errorBanner: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#F87171',
+    borderWidth: 1,
+    marginBottom: SPACING.sm,
+  },
+  errorTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.danger,
+    marginBottom: 2,
+  },
+  errorMessage: {
+    fontSize: 12,
+    color: COLORS.danger,
   },
 });
 

@@ -88,11 +88,12 @@ pubsub.subscribe('permissions:invalidate', (message) => {
   }
 })
 
-// Start server bound to 0.0.0.0 for cloud/container compatibility
-server.listen(env.PORT, '0.0.0.0', () => {
-  logger.info(`🚀 clinic OS API running on http://0.0.0.0:${env.PORT}`)
-  logger.info(`📑 Swagger API Docs available at http://0.0.0.0:${env.PORT}${env.API_PREFIX}/docs`)
-  logger.info(`🔌 Real-time WebSocket endpoint at ws://0.0.0.0:${env.PORT}/ws/updates`)
+// Start server listening on all interfaces (dual-stack IPv4 & IPv6 for seamless localhost and cloud compatibility)
+const listenHost = process.env.HOST || undefined
+server.listen(env.PORT, listenHost, () => {
+  logger.info(`🚀 clinic OS API running on port ${env.PORT} (IPv4 + IPv6 dual-stack)`)
+  logger.info(`📑 Swagger API Docs available at http://localhost:${env.PORT}${env.API_PREFIX}/docs`)
+  logger.info(`🔌 Real-time WebSocket endpoint at ws://localhost:${env.PORT}/ws/updates`)
 })
 
 // Graceful Shutdown

@@ -236,14 +236,16 @@ export const AppShell = () => {
 
   // Clinic Category resolution: dynamically identify chosen category
   const resolvedCategoryName =
-    user?.clinicCategoryName ||
-    user?.clinicCategory?.name ||
-    user?.tenant?.clinicCategoryName ||
-    user?.tenant?.clinicCategory?.name ||
-    (permittedModules.some((m) => m.route?.includes('/dental/')) ? 'Dentist' :
-     permittedModules.some((m) => m.route?.includes('/cardio/')) ? 'Cardiology' :
-     permittedModules.some((m) => m.route?.includes('/physio/')) ? 'Physiotherapy' :
-     (user?.clinicName ? 'General Care' : null))
+    (isSuperadmin || isRbacSuper)
+      ? 'SUPER ADMIN'
+      : user?.clinicCategoryName ||
+        user?.clinicCategory?.name ||
+        user?.tenant?.clinicCategoryName ||
+        user?.tenant?.clinicCategory?.name ||
+        (permittedModules.some((m) => m.route?.includes('/dental/')) ? 'Dental Care' :
+         permittedModules.some((m) => m.route?.includes('/cardio/')) ? 'Cardiology' :
+         permittedModules.some((m) => m.route?.includes('/physio/')) ? 'Physiotherapy' :
+         (user?.clinicName ? 'General Care' : null))
 
   // Dynamic Navigation: Render sidebar/menu ONLY for modules with can_view = true from the Permission API
   let navItems = []
@@ -274,14 +276,32 @@ export const AppShell = () => {
       })
     })
 
-    // If Roles & Permissions is permitted and not already in permittedModules, add it
-    const hasRolesInPermitted = permittedModules.some((m) => m.route?.includes('/roles'))
-    if (!hasRolesInPermitted && hasPermission('roles.view')) {
-      navItems.push({
-        to: '/app/admin/roles',
-        label: 'Roles & Permissions',
-        icon: KeyRound,
-      })
+    // Fallback: If permittedModules happens to be empty (e.g. during initial loading or network lag),
+    // provide the standard Admin module suite so sidebar never empties out
+    if (navItems.length <= 1) {
+      const defaultAdminRoutes = [
+        { to: '/app/staff/patients', label: 'Patients', icon: Users },
+        { to: '/app/staff/appointments', label: 'Appointments', icon: Calendar },
+        { to: '/app/staff/prescriptions', label: 'Prescriptions', icon: Pill },
+        { to: '/app/staff/billing', label: 'Billing/Invoices', icon: CreditCard },
+        { to: '/app/staff/inventory', label: 'Inventory', icon: Boxes },
+        { to: '/app/admin/staff', label: 'Staff', icon: ShieldCheck },
+        { to: '/app/admin/roles', label: 'Roles & Permissions', icon: KeyRound },
+        { to: '/app/staff/reports', label: 'Reports', icon: BarChart3 },
+        { to: '/app/admin/clinical-config', label: 'Clinical Config', icon: Sliders },
+        { to: '/app/admin/settings', label: 'Global Settings', icon: Sliders },
+      ]
+      defaultAdminRoutes.forEach((r) => navItems.push(r))
+    } else {
+      // If Roles & Permissions is not already in permittedModules, ensure it's accessible
+      const hasRolesInPermitted = permittedModules.some((m) => m.route?.includes('/roles'))
+      if (!hasRolesInPermitted) {
+        navItems.push({
+          to: '/app/admin/roles',
+          label: 'Roles & Permissions',
+          icon: KeyRound,
+        })
+      }
     }
   } else {
     // Dynamic Staff Navigation strictly based on user's permitted modules (can_view = true)
@@ -363,7 +383,11 @@ export const AppShell = () => {
         {/* Tenant/Clinic info pill */}
         {!sidebarCollapsed && user?.clinicName && (
           <div className="p-3 mx-3 my-3 rounded-xl bg-primary/5 border border-primary/15 flex items-center gap-2.5 shrink-0">
-            <Building2 className="w-4 h-4 text-primary shrink-0" />
+            {isSuperadmin || isRbacSuper ? (
+              <ShieldAlert className="w-4 h-4 text-primary shrink-0" />
+            ) : (
+              <Building2 className="w-4 h-4 text-primary shrink-0" />
+            )}
             <div className="min-w-0 flex-1">
               <div className="text-[11px] font-semibold text-text-primary truncate" title={user.clinicName}>
                 {user.clinicName}
@@ -371,9 +395,9 @@ export const AppShell = () => {
               <div className="flex items-center gap-1.5 mt-0.5">
                 <span
                   className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-primary/15 text-primary border border-primary/20 truncate uppercase tracking-wider"
-                  title={`Clinic Specialty: ${resolvedCategoryName || 'Active Workspace'}`}
+                  title={(isSuperadmin || isRbacSuper) ? 'Global Super Administrator' : `Clinic Specialty: ${resolvedCategoryName || 'Active Workspace'}`}
                 >
-                  {resolvedCategoryName || 'Active Workspace'}
+                  {(isSuperadmin || isRbacSuper) ? 'SUPER ADMIN' : (resolvedCategoryName || 'Active Workspace')}
                 </span>
               </div>
             </div>
@@ -402,7 +426,7 @@ export const AppShell = () => {
             )
           })}
 
-          {hasZeroPermissions && !sidebarCollapsed && (
+          {!isAdmin && hasZeroPermissions && !sidebarCollapsed && (
             <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-center space-y-1">
               <AlertTriangle className="w-4 h-4 mx-auto text-amber-500" />
               <div className="text-[11px] font-bold text-amber-500">No modules assigned. Contact admin.</div>

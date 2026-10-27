@@ -269,26 +269,56 @@ export class RbacService {
   }
 
   /**
+   * In-memory cache for tenant module enablement to eliminate remote DB roundtrips on every request
+   */
+  static _tenantModulesCache = new Map()
+
+  /**
    * Check whether a given module key is enabled for the specified tenant in TenantModule
    */
   static async isModuleEnabledForTenant(tenantId, moduleKey) {
     if (!tenantId || !moduleKey) return true
-    try {
-      const tenantModulesCount = await prisma.tenantModule.count({
-        where: { tenantId }
-      })
-      if (tenantModulesCount === 0) return true
 
-      const tm = await prisma.tenantModule.findFirst({
-        where: {
-          tenantId,
-          isEnabled: true,
-          module: { key: moduleKey }
-        }
+    const now = Date.now()
+    const cached = this._tenantModulesCache.get(tenantId)
+    if (cached && now < cached.expiry) {
+      if (cached.allEnabled) return true
+      return cached.keys.has(moduleKey)
+    }
+
+    try {
+      const tenantModules = await prisma.tenantModule.findMany({
+        where: { tenantId, isEnabled: true },
+        select: { module: { select: { key: true } } }
       })
-      return Boolean(tm)
+
+      if (!tenantModules || tenantModules.length === 0) {
+        // If no custom tenantModules are set, all modules are enabled
+        this._tenantModulesCache.set(tenantId, {
+          allEnabled: true,
+          keys: new Set(),
+          expiry: now + 10 * 60 * 1000 // 10 minutes TTL
+        })
+        return true
+      }
+
+      const keys = new Set(tenantModules.map((tm) => tm.module?.key).filter(Boolean))
+      this._tenantModulesCache.set(tenantId, {
+        allEnabled: false,
+        keys,
+        expiry: now + 10 * 60 * 1000 // 10 minutes TTL
+      })
+      return keys.has(moduleKey)
     } catch {
       return true
+    }
+  }
+
+  static invalidateTenantModulesCache(tenantId) {
+    if (tenantId) {
+      this._tenantModulesCache.delete(tenantId)
+    } else {
+      this._tenantModulesCache.clear()
     }
   }
 

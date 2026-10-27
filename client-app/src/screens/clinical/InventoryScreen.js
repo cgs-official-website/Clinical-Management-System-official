@@ -5,9 +5,10 @@ import {
   FlatList,
   RefreshControl,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
+  TouchableOpacity,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
@@ -17,25 +18,38 @@ import { Badge } from '../../components/common/Badge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { Loader } from '../../components/common/Loader';
 import { clinicalApi } from '../../api/clinical';
+import { useAuth } from '../../hooks/useAuth';
 import { formatCurrency } from '../../utils/formatters';
 
 export const InventoryScreen = () => {
+  const { hasPermission, isAdmin, isSuperadmin } = useAuth();
   const [items, setItems] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
+
+  const canViewInventory = isSuperadmin || isAdmin || hasPermission('inventory.view') || hasPermission('prescriptions.view');
 
   const fetchInventory = useCallback(async () => {
+    if (!canViewInventory) {
+      setIsLoading(false);
+      setRefreshing(false);
+      return;
+    }
+    setErrorMessage(null);
     try {
       const data = await clinicalApi.getInventory();
-      setItems(data);
-    } catch {
-      // Handled in service fallback
+      setItems(Array.isArray(data) ? data : []);
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to fetch inventory stock.';
+      setErrorMessage(msg);
+      setItems([]);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [canViewInventory]);
 
   useEffect(() => {
     fetchInventory();
@@ -46,11 +60,29 @@ export const InventoryScreen = () => {
     fetchInventory();
   };
 
+  if (!canViewInventory) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+        <Header
+          title="Pharmacy & Inventory"
+          subtitle="CDSCO schedule drugs & statutory DPCO ceiling pricing"
+        />
+        <View style={styles.container}>
+          <EmptyState
+            title="Access Restricted"
+            message="Your role does not have 'inventory.view' permissions. Please consult your clinic administrator."
+          />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   const filtered = items.filter((item) => {
     const q = searchQuery.toLowerCase();
     return (
       (item.name || '').toLowerCase().includes(q) ||
-      (item.sku || '').toLowerCase().includes(q) ||
+      (item.sku || item.itemCode || '').toLowerCase().includes(q) ||
       (item.category || '').toLowerCase().includes(q)
     );
   });
@@ -64,6 +96,15 @@ export const InventoryScreen = () => {
       />
 
       <View style={styles.container}>
+        {errorMessage && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorText}>{errorMessage}</Text>
+            <TouchableOpacity onPress={fetchInventory} style={styles.retryBtn}>
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <Input
           placeholder="Search medication, SKU, or category..."
           value={searchQuery}
@@ -75,7 +116,7 @@ export const InventoryScreen = () => {
         ) : (
           <FlatList
             data={filtered}
-            keyExtractor={(item) => item.id || item.sku}
+            keyExtractor={(item) => String(item.id || item.sku || item.itemCode || Math.random())}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -85,22 +126,35 @@ export const InventoryScreen = () => {
             }
             ListEmptyComponent={
               <EmptyState
-                title="No inventory matches"
-                message="No pharmaceuticals matched your search query."
+                title={searchQuery ? 'No inventory matches' : 'No Inventory Items'}
+                message={
+                  searchQuery
+                    ? 'No pharmaceuticals matched your search query.'
+                    : 'No pharmacy or inventory records currently registered on this tenant.'
+                }
               />
             }
             renderItem={({ item }) => {
-              const isLowStock = (item.quantity || 0) <= (item.minThreshold || 50);
+              const qty = item.quantity ?? item.stockQuantity ?? 0;
+              const threshold = item.minThreshold ?? item.minReorderThreshold ?? 20;
+              const isLowStock = qty <= threshold;
+              const price = item.unitPrice ?? item.sellingPrice ?? item.unitCost ?? 0;
+
               return (
                 <Card style={styles.card}>
                   <View style={styles.cardHeader}>
                     <View style={styles.infoCol}>
                       <Text style={styles.itemName}>{item.name}</Text>
-                      <Text style={styles.sku}>SKU: {item.sku} · {item.category}</Text>
+                      <Text style={styles.sku}>
+                        SKU: {item.sku || item.itemCode || 'N/A'} · {item.category || 'General'}
+                      </Text>
+                      {item.manufacturer ? (
+                        <Text style={styles.manufacturer}>{item.manufacturer}</Text>
+                      ) : null}
                     </View>
                     <Badge
-                      label={item.schedule || 'OTC'}
-                      status={item.schedule === 'Schedule H' ? 'HIGH RISK' : 'ACTIVE'}
+                      label={item.schedule || (isLowStock ? 'LOW STOCK' : 'IN STOCK')}
+                      status={isLowStock ? 'HIGH RISK' : 'ACTIVE'}
                     />
                   </View>
 
@@ -113,25 +167,28 @@ export const InventoryScreen = () => {
                           isLowStock ? { color: COLORS.danger } : { color: COLORS.primary },
                         ]}
                       >
-                        {item.quantity} {item.unit || 'Units'}
+                        {qty} {item.unit || 'Units'}
                       </Text>
                     </View>
 
                     <View style={styles.statBox}>
                       <Text style={styles.statLabel}>Unit MRP</Text>
-                      <Text style={styles.statVal}>{formatCurrency(item.unitPrice)}</Text>
+                      <Text style={styles.statVal}>{formatCurrency(price)}</Text>
                     </View>
 
                     <View style={styles.statBox}>
-                      <Text style={styles.statLabel}>Expiry Date</Text>
-                      <Text style={styles.statVal}>{item.expiryDate || 'N/A'}</Text>
+                      <Text style={styles.statLabel}>Batch / Exp</Text>
+                      <Text style={styles.statVal}>
+                        {item.batchNumber ? `${item.batchNumber} · ` : ''}
+                        {item.expiryDate ? String(item.expiryDate).slice(0, 10) : 'N/A'}
+                      </Text>
                     </View>
                   </View>
 
                   {isLowStock && (
                     <View style={styles.lowStockWarning}>
                       <Text style={styles.warningText}>
-                        ⚠️ Stock level below minimum threshold ({item.minThreshold} {item.unit})
+                        Stock level ({qty}) below minimum threshold ({threshold})
                       </Text>
                     </View>
                   )}
@@ -218,6 +275,40 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.danger,
     fontWeight: '600',
+  },
+  manufacturer: {
+    fontSize: 11,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  errorBanner: {
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#F87171',
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  errorText: {
+    color: '#B91C1C',
+    fontSize: 12,
+    fontWeight: '600',
+    flex: 1,
+  },
+  retryBtn: {
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  retryText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
 

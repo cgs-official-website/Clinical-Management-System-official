@@ -49,6 +49,8 @@ export const RolesListPage = () => {
       return res.data
     },
     enabled: !!tenantId,
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
   })
 
   const createMutation = useMutation({

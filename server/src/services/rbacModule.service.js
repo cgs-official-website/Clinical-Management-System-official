@@ -36,6 +36,7 @@ export const MODULE_METADATA = {
   cardiac_risk_assessment: { name: 'Cardiac Risk Assessment', icon: 'ShieldAlert', route: '/app/cardio/risk-assessment', defaultOrder: 6 },
   roles: { name: 'Roles & Permissions', icon: 'KeyRound', route: '/app/admin/roles', defaultOrder: 15 },
   clinical_config: { name: 'Clinical Config', icon: 'Sliders', route: '/app/admin/clinical-config', defaultOrder: 16 },
+  settings: { name: 'Global Settings', icon: 'Sliders', route: '/app/admin/settings', defaultOrder: 17 },
 }
 
 const DEFAULT_MODULES = [
@@ -54,11 +55,14 @@ const DEFAULT_MODULES = [
   { id: 'a9999999-9999-9999-9999-999999999999', key: 'staff', name: 'Staff', icon: 'ShieldCheck', route: '/app/admin/staff', displayOrder: 13 },
   { id: 'a6666666-6666-6666-6666-666666666666', key: 'flow', name: 'Patient Flow (Rx Loop)', icon: 'Sparkles', route: '/app/staff/flow', displayOrder: 14 },
   { id: 'a8888888-8888-8888-8888-888888888888', key: 'roles', name: 'Roles & Permissions', icon: 'KeyRound', route: '/app/admin/roles', displayOrder: 15 },
-  { id: 'baaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', key: 'clinical_config', name: 'Clinical Config', icon: 'Sliders', route: '/app/admin/clinical-config', displayOrder: 16 }
+  { id: 'baaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', key: 'clinical_config', name: 'Clinical Config', icon: 'Sliders', route: '/app/admin/clinical-config', displayOrder: 16 },
+  { id: '26260e5d-250c-4552-85cc-1bd75656d9ed', key: 'settings', name: 'Global Settings', icon: 'Sliders', route: '/app/admin/settings', displayOrder: 17 }
 ]
 
 // In-memory permission matrix store: roleId -> { [moduleId]: { can_view, can_edit, can_delete } }
 const memoryPermissions = new Map()
+// High-performance cache for joined role permissions
+const rolePermissionsCache = new Map()
 
 // Helper to seed in-memory defaults
 const initMemoryStore = () => {
@@ -180,9 +184,80 @@ export class RbacModuleService {
   }
 
   /**
-   * Fetch all registered modules
+   * Fetch all registered modules (scoped to tenant category if tenantId supplied, or all DB modules)
    */
-  static async getModules() {
+  static async getModules(tenantId = null) {
+    try {
+      if (tenantId) {
+        // Query category-enabled tenant modules
+        const tenantModules = await prisma.tenantModule.findMany({
+          where: { tenantId, isEnabled: true },
+          include: { module: true },
+          orderBy: { createdAt: 'asc' }
+        })
+
+        if (tenantModules && tenantModules.length > 0) {
+          const tenantRecord = await prisma.tenant.findUnique({
+            where: { id: tenantId },
+            select: { clinicCategoryId: true, clinicCategory: { select: { name: true } } }
+          })
+          const categoryName = tenantRecord?.clinicCategory?.name || ''
+          let categoryModuleOrderMap = new Map()
+          if (tenantRecord?.clinicCategoryId) {
+            const cms = await prisma.clinicCategoryModule.findMany({
+              where: { clinicCategoryId: tenantRecord.clinicCategoryId },
+              select: { moduleId: true, displayOrder: true }
+            })
+            categoryModuleOrderMap = new Map(cms.map((c) => [c.moduleId, c.displayOrder]))
+          }
+
+          const modules = tenantModules.map((tm) => {
+            const m = tm.module
+            const meta = MODULE_METADATA[m.key] || {}
+            let route = meta.route || `/app/staff/${m.key}`
+            if (m.key === 'implant_registry' && categoryName?.toLowerCase().includes('cardio')) {
+              route = '/app/cardio/implants'
+            }
+            const order = categoryModuleOrderMap.get(m.id) ?? meta.defaultOrder ?? 50
+            return {
+              id: m.id,
+              key: m.key,
+              name: meta.name || m.name,
+              description: m.description,
+              icon: meta.icon || 'Boxes',
+              route,
+              displayOrder: order,
+            }
+          })
+
+          modules.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+          return modules
+        }
+      }
+
+      // If no tenantId or no tenantModules configured, fetch all modules from database
+      const dbModules = await prisma.module.findMany({
+        orderBy: { createdAt: 'asc' }
+      })
+
+      if (dbModules && dbModules.length > 0) {
+        return dbModules.map((m) => {
+          const meta = MODULE_METADATA[m.key] || {}
+          return {
+            id: m.id,
+            key: m.key,
+            name: meta.name || m.name,
+            description: m.description,
+            icon: meta.icon || 'Boxes',
+            route: meta.route || `/app/staff/${m.key}`,
+            displayOrder: meta.defaultOrder ?? 50
+          }
+        }).sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0))
+      }
+    } catch (err) {
+      logger.warn(`Error querying database in getModules: ${err.message}`)
+    }
+
     return DEFAULT_MODULES
   }
 
@@ -212,10 +287,16 @@ export class RbacModuleService {
   static async getPermissionsByRole(roleIdentifier, { tenantId = null, canViewOnly = false } = {}) {
     initMemoryStore()
     const resolvedId = this.resolveRoleId(roleIdentifier)
+    const cacheKey = `${resolvedId}:${tenantId || ''}:${Boolean(canViewOnly)}`
+    const now = Date.now()
+    const cached = rolePermissionsCache.get(cacheKey)
+    if (cached && now < cached.expiry) {
+      return cached.data
+    }
 
     // Super Admin bypass: sees all modules with full permissions
     if (resolvedId === 'superadmin' && !tenantId) {
-      return DEFAULT_MODULES.map(m => ({
+      const superPerms = DEFAULT_MODULES.map(m => ({
         id: `perm-super-${m.id}`,
         role_id: 'superadmin',
         module_id: m.id,
@@ -227,6 +308,8 @@ export class RbacModuleService {
         can_edit: true,
         can_delete: true
       }))
+      rolePermissionsCache.set(cacheKey, { data: superPerms, expiry: now + 5 * 60 * 1000 })
+      return superPerms
     }
 
     // Try resolving role and TenantModule from PostgreSQL
@@ -344,10 +427,9 @@ export class RbacModuleService {
 
         result.sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
 
-        if (canViewOnly) {
-          return result.filter((p) => p.can_view === true)
-        }
-        return result
+        const finalResult = canViewOnly ? result.filter((p) => p.can_view === true) : result
+        rolePermissionsCache.set(cacheKey, { data: finalResult, expiry: now + 5 * 60 * 1000 })
+        return finalResult
       }
     } catch (dbErr) {
       logger.warn(`Database query in getPermissionsByRole fallback: ${dbErr.message}`)
@@ -373,11 +455,9 @@ export class RbacModuleService {
       }
     })
 
-    if (canViewOnly) {
-      return result.filter(p => p.can_view === true)
-    }
-
-    return result
+    const finalFallback = canViewOnly ? result.filter(p => p.can_view === true) : result
+    rolePermissionsCache.set(cacheKey, { data: finalFallback, expiry: now + 5 * 60 * 1000 })
+    return finalFallback
   }
 
   /**
@@ -386,6 +466,7 @@ export class RbacModuleService {
    */
   static async savePermissions(roleIdentifier, permissionsList = []) {
     initMemoryStore()
+    rolePermissionsCache.clear()
     const resolvedId = this.resolveRoleId(roleIdentifier)
 
     let rolePermMap = memoryPermissions.get(resolvedId)
@@ -406,28 +487,78 @@ export class RbacModuleService {
       }
     }
 
-    // Attempt to persist to PostgreSQL
+    // Attempt to persist to PostgreSQL role_permissions
     try {
-      for (const item of permissionsList) {
-        const modId = item.moduleId || item.module_id
-        if (!modId) continue
-        const canView = Boolean(item.can_view ?? item.canView)
-        const canEdit = Boolean(item.can_edit ?? item.canEdit)
-        const canDelete = Boolean(item.can_delete ?? item.canDelete)
+      const dbRole = await prisma.role.findFirst({
+        where: {
+          OR: [
+            { id: resolvedId },
+            { name: { equals: resolvedId, mode: 'insensitive' } }
+          ]
+        }
+      })
 
-        await prisma.$executeRaw`
-          INSERT INTO permissions (role_id, module_id, can_view, can_edit, can_delete, updated_at)
-          VALUES (${resolvedId}::uuid, ${modId}::uuid, ${canView}, ${canEdit}, ${canDelete}, NOW())
-          ON CONFLICT (role_id, module_id)
-          DO UPDATE SET 
-            can_view = EXCLUDED.can_view,
-            can_edit = EXCLUDED.can_edit,
-            can_delete = EXCLUDED.can_delete,
-            updated_at = NOW();
-        `
+      if (dbRole) {
+        for (const item of permissionsList) {
+          const modId = item.moduleId || item.module_id
+          if (!modId) continue
+
+          const mod = await prisma.module.findFirst({
+            where: {
+              OR: [
+                { id: modId },
+                { key: modId }
+              ]
+            }
+          })
+
+          if (!mod) continue
+
+          const canView = Boolean(item.can_view ?? item.canView)
+          const canCreate = Boolean(item.can_create ?? item.canCreate ?? item.can_edit ?? item.canEdit)
+          const canEdit = Boolean(item.can_edit ?? item.canEdit)
+          const canDelete = Boolean(item.can_delete ?? item.canDelete)
+
+          const modulePerms = await prisma.permission.findMany({
+            where: { moduleId: mod.id },
+            include: { action: true }
+          })
+
+          for (const p of modulePerms) {
+            const actionKey = p.action?.key || p.key.split('.')[1] || ''
+            let shouldGrant = false
+            if (actionKey === 'view') shouldGrant = canView
+            else if (actionKey === 'create') shouldGrant = canCreate
+            else if (actionKey === 'edit') shouldGrant = canEdit
+            else if (actionKey === 'delete') shouldGrant = canDelete
+
+            if (shouldGrant) {
+              await prisma.rolePermission.upsert({
+                where: {
+                  roleId_permissionId: {
+                    roleId: dbRole.id,
+                    permissionId: p.id
+                  }
+                },
+                create: {
+                  roleId: dbRole.id,
+                  permissionId: p.id
+                },
+                update: {}
+              })
+            } else if (['view', 'create', 'edit', 'delete'].includes(actionKey)) {
+              await prisma.rolePermission.deleteMany({
+                where: {
+                  roleId: dbRole.id,
+                  permissionId: p.id
+                }
+              })
+            }
+          }
+        }
       }
     } catch (e) {
-      logger.warn(`PostgreSQL permissions save skipped/offline: ${e.message}`)
+      logger.warn(`PostgreSQL permissions save skipped/error: ${e.message}`)
     }
 
     // Broadcast permission invalidation event to Redis / WebSockets for live instant client update

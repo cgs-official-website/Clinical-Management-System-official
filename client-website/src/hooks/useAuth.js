@@ -63,10 +63,15 @@ export const useAuth = () => {
       }
     },
     onError: (error) => {
-      notify.error(
-        error.response?.data?.message || 'Invalid credentials. Please verify your email and password.',
-        { title: 'Login Failed' }
-      )
+      const serverMsg =
+        error.response?.data?.error?.message ||
+        error.response?.data?.message
+      const errorMsg =
+        serverMsg ||
+        (error.message === 'Network Error'
+          ? 'Unable to connect to server. Retrying connection...'
+          : 'Invalid credentials. Please verify your email and password.')
+      notify.error(errorMsg, { title: 'Login Failed' })
     },
   })
 

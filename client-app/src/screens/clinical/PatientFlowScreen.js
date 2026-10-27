@@ -6,9 +6,10 @@ import {
   RefreshControl,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Icon } from '../../components/common/Icon';
 import { COLORS } from '../../constants/colors';
 import { RADIUS, SPACING } from '../../constants/theme';
 import { Header } from '../../components/common/Header';
@@ -16,15 +17,16 @@ import { Card } from '../../components/common/Card';
 import { Badge } from '../../components/common/Badge';
 import { EmptyState } from '../../components/common/EmptyState';
 import { Loader } from '../../components/common/Loader';
+import { Button } from '../../components/common/Button';
 import { clinicalApi } from '../../api/clinical';
 
 const STAGES = [
-  { id: 'ALL', label: 'All Stages', icon: '⚡' },
-  { id: 'RECEPTION', label: 'Reception', icon: '📝' },
-  { id: 'TRIAGE', label: 'Nurse Triage', icon: '🩺' },
-  { id: 'CONSULTATION', label: 'Doctor Room', icon: '👨‍⚕️' },
-  { id: 'PHARMACY', label: 'Pharmacy', icon: '💊' },
-  { id: 'BILLING', label: 'Cashier', icon: '💳' },
+  { id: 'ALL', label: 'All Stages', icon: 'Zap' },
+  { id: 'RECEPTION', label: 'Reception', icon: 'ClipboardList' },
+  { id: 'TRIAGE', label: 'Nurse Triage', icon: 'Activity' },
+  { id: 'CONSULTATION', label: 'Doctor Room', icon: 'Stethoscope' },
+  { id: 'PHARMACY', label: 'Pharmacy', icon: 'Pill' },
+  { id: 'BILLING', label: 'Cashier', icon: 'CreditCard' },
 ];
 
 export const PatientFlowScreen = () => {
@@ -32,13 +34,21 @@ export const PatientFlowScreen = () => {
   const [activeStage, setActiveStage] = useState('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(null);
 
   const fetchTriage = useCallback(async () => {
+    setErrorMessage(null);
     try {
       const data = await clinicalApi.getTriageQueue();
-      setQueue(data);
-    } catch {
-      // Handled in service
+      setQueue(Array.isArray(data) ? data : []);
+    } catch (err) {
+      const msg =
+        err.response?.data?.error?.message ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to load triage queue from server.';
+      setErrorMessage(msg);
+      setQueue([]);
     } finally {
       setIsLoading(false);
       setRefreshing(false);
@@ -64,31 +74,23 @@ export const PatientFlowScreen = () => {
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
       <Header
         title="Patient Flow & Triage"
-        subtitle="5-Stage OPD pipeline from reception intake to cashier"
+        subtitle="End-to-end OPD journey tracking"
       />
 
-      <View style={styles.container}>
-        {/* Horizontal Stage Selector */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.stageScroll}
-          contentContainerStyle={styles.stageContent}
-        >
+      {/* Stage Selector Tabs */}
+      <View style={styles.stageTabs}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.stageScroll}>
           {STAGES.map((s) => (
             <TouchableOpacity
               key={s.id}
-              style={[
-                styles.stageTab,
-                activeStage === s.id && styles.stageTabActive,
-              ]}
+              style={[styles.stageChip, activeStage === s.id && styles.stageChipActive]}
               onPress={() => setActiveStage(s.id)}
             >
-              <Text style={styles.stageIcon}>{s.icon}</Text>
+              <Icon name={s.icon} size={16} color={COLORS.primary} />
               <Text
                 style={[
-                  styles.stageLabel,
-                  activeStage === s.id && styles.stageLabelActive,
+                  styles.stageText,
+                  activeStage === s.id && styles.stageTextActive,
                 ]}
               >
                 {s.label}
@@ -96,72 +98,95 @@ export const PatientFlowScreen = () => {
             </TouchableOpacity>
           ))}
         </ScrollView>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[COLORS.primary]}
+          />
+        }
+      >
+        {errorMessage && (
+          <Card style={styles.errorBanner}>
+            <Text style={styles.errorTitle}>Error Loading Triage Queue</Text>
+            <Text style={styles.errorMessage}>{errorMessage}</Text>
+            <Button
+              title="Retry"
+              variant="outline"
+              size="sm"
+              onPress={fetchTriage}
+              style={{ marginTop: 8 }}
+            />
+          </Card>
+        )}
 
         {isLoading ? (
-          <Loader message="Syncing real-time triage queue..." />
+          <Loader message="Loading triage & token queue..." />
+        ) : filteredQueue.length === 0 ? (
+          !errorMessage && (
+            <EmptyState
+              title="Queue is clear"
+              message={
+                activeStage === 'ALL'
+                  ? 'No patients currently waiting across triage stations.'
+                  : `No patients currently stationed at '${activeStage}'.`
+              }
+            />
+          )
         ) : (
-          <ScrollView
-            contentContainerStyle={styles.queueList}
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                colors={[COLORS.primary]}
-              />
-            }
-          >
-            {filteredQueue.length === 0 ? (
-              <EmptyState
-                title="Queue is empty"
-                message="No active patients are currently queued for this stage."
-              />
-            ) : (
-              filteredQueue.map((item) => (
-                <Card key={item.id} style={styles.queueCard}>
-                  <View style={styles.cardTop}>
-                    <View style={styles.tokenBox}>
-                      <Text style={styles.tokenLabel}>TOKEN</Text>
-                      <Text style={styles.tokenNumber}>{item.tokenNumber}</Text>
-                    </View>
-                    <View style={styles.patientInfo}>
-                      <Text style={styles.patientName}>{item.patientName}</Text>
-                      <Text style={styles.stageText}>Current: {item.stage}</Text>
-                    </View>
-                    <Badge label={item.stage} status={item.stage} />
-                  </View>
+          filteredQueue.map((item) => {
+            const patName = item.patient?.fullName || item.patientName || item.name || 'Outpatient';
+            const stageStr = item.stage || 'TRIAGE';
 
-                  {/* Vitals Summary Pill Container */}
-                  <View style={styles.vitalsContainer}>
-                    <View style={styles.vitalBadge}>
-                      <Text style={styles.vitalK}>BP</Text>
-                      <Text style={styles.vitalV}>{item.bp || '120/80'}</Text>
-                    </View>
-                    <View style={styles.vitalBadge}>
-                      <Text style={styles.vitalK}>Pulse</Text>
-                      <Text style={styles.vitalV}>{item.pulse || '72'}</Text>
-                    </View>
-                    <View style={styles.vitalBadge}>
-                      <Text style={styles.vitalK}>Temp</Text>
-                      <Text style={styles.vitalV}>{item.temperature || '98.4°F'}</Text>
-                    </View>
-                    <View style={styles.vitalBadge}>
-                      <Text style={styles.vitalK}>SpO2</Text>
-                      <Text style={styles.vitalV}>{item.spo2 || '99%'}</Text>
-                    </View>
+            return (
+              <Card key={item.id} style={styles.tokenCard}>
+                <View style={styles.cardHeader}>
+                  <View style={styles.tokenBadge}>
+                    <Text style={styles.tokenNum}>{item.tokenNumber || 'A-01'}</Text>
                   </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.patName}>{patName}</Text>
+                    <Text style={styles.stageSubtitle}>Station: {stageStr}</Text>
+                  </View>
+                  <Badge label={stageStr} status={stageStr} />
+                </View>
 
-                  {item.nurseNotes && (
-                    <View style={styles.notesBox}>
-                      <Text style={styles.notesText}>📝 {item.nurseNotes}</Text>
-                    </View>
-                  )}
-                </Card>
-              ))
-            )}
-          </ScrollView>
+                {/* Vitals Ribbon */}
+                <View style={styles.vitalsGrid}>
+                  <View style={styles.vitalCell}>
+                    <Text style={styles.vitalLabel}>Blood Pressure</Text>
+                    <Text style={styles.vitalVal}>{item.bp || '120/80'}</Text>
+                  </View>
+                  <View style={styles.vitalCell}>
+                    <Text style={styles.vitalLabel}>Pulse Rate</Text>
+                    <Text style={styles.vitalVal}>{item.pulse || '72 bpm'}</Text>
+                  </View>
+                  <View style={styles.vitalCell}>
+                    <Text style={styles.vitalLabel}>Temperature</Text>
+                    <Text style={styles.vitalVal}>{item.temperature || '98.6 °F'}</Text>
+                  </View>
+                  <View style={styles.vitalCell}>
+                    <Text style={styles.vitalLabel}>SpO2</Text>
+                    <Text style={styles.vitalVal}>{item.spo2 || '99%'}</Text>
+                  </View>
+                </View>
+
+                {item.nurseNotes ? (
+                  <View style={styles.notesBox}>
+                    <Text style={styles.notesLabel}>Triage Notes:</Text>
+                    <Text style={styles.notesContent}>{item.nurseNotes}</Text>
+                  </View>
+                ) : null}
+              </Card>
+            );
+          })
         )}
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -171,124 +196,130 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.bg,
   },
-  container: {
-    flex: 1,
-    padding: SPACING.md,
+  stageTabs: {
+    backgroundColor: COLORS.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    paddingVertical: 8,
   },
   stageScroll: {
-    maxHeight: 46,
-    marginBottom: SPACING.md,
-  },
-  stageContent: {
+    paddingHorizontal: SPACING.md,
     gap: 8,
-    paddingRight: SPACING.lg,
   },
-  stageTab: {
+  stageChip: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingVertical: 6,
     paddingHorizontal: 12,
-    paddingVertical: 8,
     borderRadius: RADIUS.full,
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.bg,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
-  stageTabActive: {
-    backgroundColor: COLORS.primaryLight,
+  stageChipActive: {
+    backgroundColor: COLORS.primary,
     borderColor: COLORS.primary,
   },
   stageIcon: {
     fontSize: 14,
-    marginRight: 6,
+    marginRight: 4,
   },
-  stageLabel: {
+  stageText: {
     fontSize: 12,
     fontWeight: '700',
-    color: COLORS.textSecondary,
+    color: COLORS.textMuted,
   },
-  stageLabelActive: {
-    color: COLORS.primary,
+  stageTextActive: {
+    color: '#FFF',
   },
-  queueList: {
-    paddingBottom: SPACING.xxl,
-  },
-  queueCard: {
+  container: {
     padding: SPACING.md,
+    paddingBottom: SPACING.xl,
+  },
+  tokenCard: {
     marginBottom: SPACING.sm,
   },
-  cardTop: {
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 10,
   },
-  tokenBox: {
-    backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    alignItems: 'center',
+  tokenBadge: {
+    backgroundColor: COLORS.primary,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: RADIUS.sm,
     marginRight: 10,
   },
-  tokenLabel: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: COLORS.primary,
-  },
-  tokenNumber: {
+  tokenNum: {
     fontSize: 14,
-    fontWeight: '800',
-    color: COLORS.primary,
+    fontWeight: '900',
+    color: '#FFF',
   },
-  patientInfo: {
-    flex: 1,
-  },
-  patientName: {
+  patName: {
     fontSize: 15,
     fontWeight: '700',
-    color: COLORS.textPrimary,
+    color: COLORS.text,
   },
-  stageText: {
+  stageSubtitle: {
     fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  vitalsContainer: {
-    flexDirection: 'row',
-    gap: 6,
-    marginBottom: 8,
-  },
-  vitalBadge: {
-    flex: 1,
-    backgroundColor: COLORS.surface,
-    paddingVertical: 4,
-    paddingHorizontal: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-  },
-  vitalK: {
-    fontSize: 9,
     color: COLORS.textMuted,
-    fontWeight: '600',
-  },
-  vitalV: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
     marginTop: 1,
   },
-  notesBox: {
-    backgroundColor: COLORS.surfaceMuted,
+  vitalsGrid: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.bg,
+    borderRadius: RADIUS.sm,
     padding: 8,
-    borderRadius: 6,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.primary,
+    marginBottom: 8,
+    justifyContent: 'space-between',
   },
-  notesText: {
+  vitalCell: {
+    alignItems: 'center',
+  },
+  vitalLabel: {
+    fontSize: 9,
+    color: COLORS.textMuted,
+  },
+  vitalVal: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginTop: 2,
+  },
+  notesBox: {
+    backgroundColor: '#FFFBEB',
+    padding: 8,
+    borderRadius: RADIUS.sm,
+    borderLeftWidth: 3,
+    borderLeftColor: '#F59E0B',
+  },
+  notesLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
+    textTransform: 'uppercase',
+  },
+  notesContent: {
     fontSize: 11,
-    color: COLORS.textSecondary,
-    lineHeight: 16,
+    color: COLORS.text,
+    marginTop: 2,
+  },
+  errorBanner: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#F87171',
+    borderWidth: 1,
+    marginBottom: SPACING.sm,
+  },
+  errorTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.danger,
+    marginBottom: 2,
+  },
+  errorMessage: {
+    fontSize: 12,
+    color: COLORS.danger,
   },
 });
 
