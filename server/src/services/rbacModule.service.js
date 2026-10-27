@@ -59,6 +59,8 @@ const DEFAULT_MODULES = [
 
 // In-memory permission matrix store: roleId -> { [moduleId]: { can_view, can_edit, can_delete } }
 const memoryPermissions = new Map()
+// High-performance cache for joined role permissions
+const rolePermissionsCache = new Map()
 
 // Helper to seed in-memory defaults
 const initMemoryStore = () => {
@@ -283,10 +285,16 @@ export class RbacModuleService {
   static async getPermissionsByRole(roleIdentifier, { tenantId = null, canViewOnly = false } = {}) {
     initMemoryStore()
     const resolvedId = this.resolveRoleId(roleIdentifier)
+    const cacheKey = `${resolvedId}:${tenantId || ''}:${Boolean(canViewOnly)}`
+    const now = Date.now()
+    const cached = rolePermissionsCache.get(cacheKey)
+    if (cached && now < cached.expiry) {
+      return cached.data
+    }
 
     // Super Admin bypass: sees all modules with full permissions
     if (resolvedId === 'superadmin' && !tenantId) {
-      return DEFAULT_MODULES.map(m => ({
+      const superPerms = DEFAULT_MODULES.map(m => ({
         id: `perm-super-${m.id}`,
         role_id: 'superadmin',
         module_id: m.id,
@@ -298,6 +306,8 @@ export class RbacModuleService {
         can_edit: true,
         can_delete: true
       }))
+      rolePermissionsCache.set(cacheKey, { data: superPerms, expiry: now + 5 * 60 * 1000 })
+      return superPerms
     }
 
     // Try resolving role and TenantModule from PostgreSQL
@@ -415,10 +425,9 @@ export class RbacModuleService {
 
         result.sort((a, b) => (a.display_order || 0) - (b.display_order || 0))
 
-        if (canViewOnly) {
-          return result.filter((p) => p.can_view === true)
-        }
-        return result
+        const finalResult = canViewOnly ? result.filter((p) => p.can_view === true) : result
+        rolePermissionsCache.set(cacheKey, { data: finalResult, expiry: now + 5 * 60 * 1000 })
+        return finalResult
       }
     } catch (dbErr) {
       logger.warn(`Database query in getPermissionsByRole fallback: ${dbErr.message}`)
@@ -444,11 +453,9 @@ export class RbacModuleService {
       }
     })
 
-    if (canViewOnly) {
-      return result.filter(p => p.can_view === true)
-    }
-
-    return result
+    const finalFallback = canViewOnly ? result.filter(p => p.can_view === true) : result
+    rolePermissionsCache.set(cacheKey, { data: finalFallback, expiry: now + 5 * 60 * 1000 })
+    return finalFallback
   }
 
   /**
@@ -457,6 +464,7 @@ export class RbacModuleService {
    */
   static async savePermissions(roleIdentifier, permissionsList = []) {
     initMemoryStore()
+    rolePermissionsCache.clear()
     const resolvedId = this.resolveRoleId(roleIdentifier)
 
     let rolePermMap = memoryPermissions.get(resolvedId)

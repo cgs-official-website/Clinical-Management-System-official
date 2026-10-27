@@ -22,8 +22,8 @@ export const StaffRolesListPage = () => {
       const res = await api.get(`/api/admin/staff${tId ? `?tenantId=${tId}` : ''}`)
       return res.data
     },
-    refetchOnMount: 'always',
-    staleTime: 0,
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
   })
 
   const staff = data?.staff || (Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []))

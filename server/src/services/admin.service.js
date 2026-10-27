@@ -6,6 +6,13 @@ import { AuditService } from './audit.service.js'
 import { NotFoundError, ConflictError, ForbiddenError, BadRequestError } from '../utils/errors.js'
 import { CATEGORY_DEPARTMENTS, CATEGORY_ROLES } from '../constants/clinicCategoryDepartments.js'
 
+const tenantUuidCache = new Map()
+const seededTenants = new Set()
+const rolesCache = new Map()
+const departmentsCache = new Map()
+const seededDepartments = new Set()
+const staffCache = new Map()
+
 export class AdminService {
   /**
    * Clinic-level KPI dashboard statistics
@@ -241,18 +248,43 @@ export class AdminService {
       return first?.id || null
     }
     const clean = String(tenantId).trim()
+    if (tenantUuidCache.has(clean)) {
+      return tenantUuidCache.get(clean)
+    }
+
+    // Direct UUID match (valid RFC 4122 UUID)
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean)) {
+      tenantUuidCache.set(clean, clean)
+      return clean
+    }
+
     if (clean === 'clinic-1' || clean === 'tenant-1' || clean === 'demo-tenant') {
       const demoTenant = await prisma.tenant.findFirst({
         where: { OR: [{ name: { contains: 'Aura', mode: 'insensitive' } }, { subdomain: 'aura-health' }] }
       }).catch(() => null)
-      if (demoTenant) return demoTenant.id
+      if (demoTenant) {
+        tenantUuidCache.set(clean, demoTenant.id)
+        return demoTenant.id
+      }
       const firstTenant = await prisma.tenant.findFirst({ where: { status: 'ACTIVE' }, orderBy: { createdAt: 'asc' } }).catch(() => null)
-      return firstTenant?.id || null
+      if (firstTenant) {
+        tenantUuidCache.set(clean, firstTenant.id)
+        return firstTenant.id
+      }
+      return null
     }
+
     const existing = await prisma.tenant.findUnique({ where: { id: clean } }).catch(() => null)
-    if (existing) return existing.id
+    if (existing) {
+      tenantUuidCache.set(clean, existing.id)
+      return existing.id
+    }
     const bySubdomain = await prisma.tenant.findUnique({ where: { subdomain: clean.toLowerCase() } }).catch(() => null)
-    if (bySubdomain) return bySubdomain.id
+    if (bySubdomain) {
+      tenantUuidCache.set(clean, bySubdomain.id)
+      return bySubdomain.id
+    }
+    tenantUuidCache.set(clean, clean)
     return clean
   }
 
@@ -293,6 +325,8 @@ export class AdminService {
   static async seedTenantRoles(tenantId) {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId)
     if (!resolvedTenantId) return
+    if (seededTenants.has(resolvedTenantId)) return
+    seededTenants.add(resolvedTenantId)
 
     try {
       const tenant = await prisma.tenant.findUnique({
@@ -398,7 +432,16 @@ export class AdminService {
       return []
     }
 
-    await this.seedTenantRoles(resolvedTenantId)
+    const cacheKey = `${resolvedTenantId}:${options.department || ''}`
+    const now = Date.now()
+    const cached = rolesCache.get(cacheKey)
+    if (cached && now < cached.expiry) {
+      return cached.data
+    }
+
+    if (!seededTenants.has(resolvedTenantId)) {
+      await this.seedTenantRoles(resolvedTenantId)
+    }
 
     // Strictly filter by tenantId only - zero cross-tenant leakage
     const roles = await prisma.role.findMany({
@@ -453,7 +496,7 @@ export class AdminService {
       })
     }
 
-    return uniqueRoles.map(r => ({
+    const formattedRoles = uniqueRoles.map(r => ({
       id: r.id,
       name: r.name,
       displayName: r.name,
@@ -466,6 +509,9 @@ export class AdminService {
       permissions: (r.rolePerms || []).map(rp => rp.permission?.key).filter(Boolean),
       createdAt: r.createdAt ? r.createdAt.toISOString().split('T')[0] : ''
     }))
+
+    rolesCache.set(cacheKey, { data: formattedRoles, expiry: now + 5 * 60 * 1000 })
+    return formattedRoles
   }
 
   /**
@@ -843,6 +889,12 @@ export class AdminService {
    */
   static async getStaff({ tenantId, page = 1, limit = 50, search = '' }) {
     const resolvedTenantId = await this.resolveTenantUuid(tenantId)
+    const cacheKey = `${resolvedTenantId || 'all'}:${page}:${limit}:${search || ''}`
+    const now = Date.now()
+    const cached = staffCache.get(cacheKey)
+    if (cached && now < cached.expiry) {
+      return cached.data
+    }
 
     const where = {
       ...(resolvedTenantId ? { tenantId: resolvedTenantId } : {}),
@@ -886,7 +938,19 @@ export class AdminService {
     // Hydrate each staff user with computed effective permissions
     const hydrated = await Promise.all(
       staffUsers.map(async (u) => {
-        const { permissions } = await RbacService.getEffectivePermissions(u.id)
+        let permissions = []
+        if (u.userType === 'ADMIN' || u.isAdmin || u.isSuperadmin) {
+          permissions = ['*']
+        } else {
+          const roleNames = (u.userRoles || []).map((ur) => ur.role?.name).filter(Boolean)
+          if (roleNames.some((rn) => rn.toLowerCase().includes('admin'))) {
+            permissions = ['*']
+          } else {
+            const permObj = await RbacService.getEffectivePermissions(u.id, u.email).catch(() => ({ permissions: [] }))
+            permissions = permObj?.permissions || []
+          }
+        }
+
         return {
           id: u.id,
           name: u.fullName,
@@ -908,7 +972,7 @@ export class AdminService {
       })
     )
 
-    return {
+    const result = {
       staff: hydrated,
       data: hydrated,
       pagination: {
@@ -918,6 +982,8 @@ export class AdminService {
         totalPages: Math.ceil(total / limit)
       }
     }
+    staffCache.set(cacheKey, { data: result, expiry: now + 30 * 1000 })
+    return result
   }
 
   /**
@@ -1244,6 +1310,12 @@ export class AdminService {
       return []
     }
 
+    const now = Date.now()
+    const cached = departmentsCache.get(resolvedTenantId)
+    if (cached && now < cached.expiry) {
+      return cached.data
+    }
+
     const tenant = await prisma.tenant.findUnique({
       where: { id: resolvedTenantId },
       include: { clinicCategory: true }
@@ -1261,15 +1333,18 @@ export class AdminService {
       }))
     }
 
-    // 2. Ensure each category department exists as a tenant Department record
-    for (const cd of categoryDepts) {
-      const existing = await prisma.department.findFirst({
-        where: { tenantId: resolvedTenantId, name: cd.name }
-      })
-      if (!existing) {
-        await prisma.department.create({
-          data: { tenantId: resolvedTenantId, name: cd.name }
-        }).catch(() => { })
+    // 2. Ensure each category department exists as a tenant Department record (only once per process)
+    if (!seededDepartments.has(resolvedTenantId)) {
+      seededDepartments.add(resolvedTenantId)
+      for (const cd of categoryDepts) {
+        const existing = await prisma.department.findFirst({
+          where: { tenantId: resolvedTenantId, name: cd.name }
+        })
+        if (!existing) {
+          await prisma.department.create({
+            data: { tenantId: resolvedTenantId, name: cd.name }
+          }).catch(() => { })
+        }
       }
     }
 
@@ -1290,8 +1365,9 @@ export class AdminService {
       ? dbDepts.filter(d => validNames.has(d.name.toLowerCase().trim()))
       : dbDepts
 
+    let finalDepts = []
     if (filteredDepts.length === 0 && categoryDepts.length > 0) {
-      return categoryDepts.map(cd => ({
+      finalDepts = categoryDepts.map(cd => ({
         id: cd.id,
         name: cd.name,
         label: cd.name,
@@ -1299,16 +1375,19 @@ export class AdminService {
         staffCount: 0,
         appointmentCount: 0
       }))
+    } else {
+      finalDepts = filteredDepts.map(d => ({
+        id: d.id,
+        name: d.name,
+        label: d.name,
+        value: d.name,
+        staffCount: d._count?.staff || 0,
+        appointmentCount: d._count?.appointments || 0
+      }))
     }
 
-    return filteredDepts.map(d => ({
-      id: d.id,
-      name: d.name,
-      label: d.name,
-      value: d.name,
-      staffCount: d._count?.staff || 0,
-      appointmentCount: d._count?.appointments || 0
-    }))
+    departmentsCache.set(resolvedTenantId, { data: finalDepts, expiry: now + 5 * 60 * 1000 })
+    return finalDepts
   }
 
   /**

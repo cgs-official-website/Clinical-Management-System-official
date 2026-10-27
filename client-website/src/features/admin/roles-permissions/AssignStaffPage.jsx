@@ -33,8 +33,8 @@ export const AssignStaffPage = () => {
       return res.data
     },
     retry: 2,
-    refetchOnMount: 'always',
-    staleTime: 0,
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
   })
 
   // 2. Fetch Roles list

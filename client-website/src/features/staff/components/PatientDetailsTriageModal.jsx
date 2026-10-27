@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import React, { useState, useEffect, useMemo } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Activity,
   Heart,
@@ -54,9 +54,97 @@ export const PatientDetailsTriageModal = ({
     sugarLevel: '',
     sugarType: 'Fasting',
     currentMedications: '',
-    doctorName: 'Dr. Sarah Al-Mansoor',
+    doctorName: '',
+    doctorId: null,
     notes: ''
   })
+
+  // Fetch real doctors assigned to this clinic
+  const { data: doctorsData = [], isLoading: isLoadingDoctors } = useQuery({
+    queryKey: ['staff', 'doctors'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/api/staff/doctors')
+        const list = res.data?.doctors || res.data?.data || []
+        if (Array.isArray(list) && list.length > 0) return list
+      } catch (err) {
+        // Fallback to /api/admin/staff if permitted
+      }
+      try {
+        const res = await api.get('/api/admin/staff')
+        const staff = res.data?.staff || res.data?.data || []
+        const docs = staff.filter((s) => {
+          const roles = (s.roleNames || (Array.isArray(s.roles) ? s.roles : [s.role || ''])).join(' ').toLowerCase()
+          return (
+            roles.includes('doctor') ||
+            roles.includes('physician') ||
+            roles.includes('surgeon') ||
+            roles.includes('cardiologist') ||
+            roles.includes('specialist') ||
+            /^dr[\s.]/i.test(s.name || s.fullName || '')
+          )
+        })
+        if (docs.length > 0) {
+          return docs.map((d) => ({
+            id: d.id,
+            name: d.name || d.fullName,
+            fullName: d.name || d.fullName,
+            department: d.department || 'General Medicine',
+            role: d.role || 'Doctor',
+            label: `${d.name || d.fullName} (${d.department || d.specialty || 'Doctor'})`,
+            value: d.name || d.fullName,
+          }))
+        }
+      } catch (e) {
+        // Ignore fallback errors
+      }
+      return []
+    },
+    staleTime: 30000,
+  })
+
+  // Format doctor options for select input
+  const doctorOptions = useMemo(() => {
+    if (!doctorsData || doctorsData.length === 0) {
+      if (formData.doctorName && formData.doctorName !== 'Dr. Sarah Al-Mansoor') {
+        return [{ value: formData.doctorName, label: formData.doctorName }]
+      }
+      return []
+    }
+    return doctorsData.map((d) => ({
+      value: d.value || d.fullName || d.name,
+      label: d.label || `${d.fullName || d.name} (${d.department || 'Doctor'})`,
+      id: d.id,
+    }))
+  }, [doctorsData, formData.doctorName])
+
+  // Sync default assigned doctor from original clinic data
+  useEffect(() => {
+    if (doctorsData && doctorsData.length > 0) {
+      setFormData((prev) => {
+        const currentDoc = prev.doctorName
+        const exists = doctorsData.some((d) => (d.value || d.name || d.fullName) === currentDoc)
+        if (!exists || currentDoc === 'Dr. Sarah Al-Mansoor' || !currentDoc) {
+          const firstDoc = doctorsData[0]
+          return {
+            ...prev,
+            doctorName: firstDoc.value || firstDoc.fullName || firstDoc.name,
+            doctorId: firstDoc.id || null,
+          }
+        }
+        return prev
+      })
+    }
+  }, [doctorsData])
+
+  const handleDoctorChange = (selectedName) => {
+    const matched = doctorsData.find((d) => (d.value || d.fullName || d.name) === selectedName)
+    setFormData((prev) => ({
+      ...prev,
+      doctorName: selectedName,
+      doctorId: matched?.id || null,
+    }))
+  }
 
   // Pre-fill if initialPatient was passed
   useEffect(() => {
@@ -149,6 +237,7 @@ export const PatientDetailsTriageModal = ({
       sugarLevel: sugar,
       currentMedications: formData.currentMedications,
       doctorName: formData.doctorName,
+      doctorId: formData.doctorId,
       notes: formData.notes
     }
 
@@ -191,7 +280,7 @@ export const PatientDetailsTriageModal = ({
                   {formData.tokenNumber}
                 </span>
                 <span className="text-[10px] text-text-secondary">
-                  (Assigned to Dr. {formData.doctorName.replace('Dr. ', '')})
+                  {formData.doctorName ? `(Assigned to ${formData.doctorName.startsWith('Dr') ? formData.doctorName : `Dr. ${formData.doctorName}`})` : ''}
                 </span>
               </div>
             </div>
@@ -432,12 +521,17 @@ export const PatientDetailsTriageModal = ({
           <Select
             label="Assigned Attending Doctor"
             value={formData.doctorName}
-            onChange={(e) => setFormData({ ...formData, doctorName: e.target.value })}
-            options={[
-              { value: 'Dr. Sarah Al-Mansoor', label: 'Dr. Sarah Al-Mansoor (Cardiology / Internal Med)' },
-              { value: 'Dr. Evelyn Vance', label: 'Dr. Evelyn Vance (Chief Physician)' },
-              { value: 'Dr. Gregory House', label: 'Dr. Gregory House (Diagnostic Medicine)' }
-            ]}
+            onChange={(e) => handleDoctorChange(e.target.value)}
+            options={
+              doctorOptions.length > 0
+                ? doctorOptions
+                : [
+                    {
+                      value: formData.doctorName || 'Dr dev prakash',
+                      label: formData.doctorName || 'Dr dev prakash (Cardiac Surgery)',
+                    },
+                  ]
+            }
           />
           <Input
             label="Chief Complaint / Reason for Visit"

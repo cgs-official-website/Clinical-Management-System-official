@@ -389,6 +389,24 @@ export class ClinicalController {
       next(error)
     }
   }
+
+  /* =========================================================================
+   * CLINICAL DOCTORS DIRECTORY
+   * ========================================================================= */
+  static async getDoctors(req, res, next) {
+    try {
+      const tenantId = req.query.tenantId || req.user?.tenantId
+      const doctors = await ClinicalService.getDoctors({ tenantId })
+      return res.status(200).json({
+        success: true,
+        doctors,
+        data: doctors,
+        total: doctors.length
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
 }
 
 export default ClinicalController

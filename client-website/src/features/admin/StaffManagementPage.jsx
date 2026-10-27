@@ -43,8 +43,8 @@ export const StaffManagementPage = () => {
       const res = await api.get(`/api/admin/staff${tenantId ? `?tenantId=${tenantId}` : ''}`)
       return res.data
     },
-    refetchOnMount: 'always',
-    staleTime: 0,
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
   })
 
   // Fetch departments dynamically strictly filtered by current tenant's clinic_category
@@ -55,6 +55,8 @@ export const StaffManagementPage = () => {
       return res.data
     },
     enabled: !!tenantId,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev,
   })
   const departments = deptData?.departments || deptData?.data || []
 
@@ -66,6 +68,8 @@ export const StaffManagementPage = () => {
       return res.data
     },
     enabled: !!tenantId,
+    staleTime: 5 * 60 * 1000,
+    placeholderData: (prev) => prev,
   })
   const roles = roleData?.roles || roleData?.data || []
 

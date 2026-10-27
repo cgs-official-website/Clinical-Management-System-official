@@ -24,6 +24,7 @@ import { Textarea } from '../../../components/ui/Textarea'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/Badge'
 import { notify } from '../../../components/ui/Toast'
+import { useAuthStore } from '../../../store/useAuthStore'
 
 export const DoctorVitalsReportModal = ({
   isOpen,
@@ -32,6 +33,7 @@ export const DoctorVitalsReportModal = ({
   onPrescriptionSuccess
 }) => {
   const queryClient = useQueryClient()
+  const { user } = useAuthStore()
   const [isWritingRx, setIsWritingRx] = useState(false)
 
   const [rxForm, setRxForm] = useState({
@@ -52,7 +54,7 @@ export const DoctorVitalsReportModal = ({
     mutationFn: async () => {
       if (!patientData) return
       const tokenNumber = patientData.tokenNumber || 'TK-101'
-      const doctorName = patientData.doctorName || 'Dr. Sarah Al-Mansoor'
+      const doctorName = patientData.doctorName || user?.fullName || user?.name || 'Attending Physician'
       const payload = {
         patientId: patientData.patientId || patientData.id,
         patientName: patientData.patientName || patientData.fullName,
@@ -88,7 +90,7 @@ export const DoctorVitalsReportModal = ({
   const bp = patientData.bp || '120/80 mmHg'
   const sugarLevel = patientData.sugarLevel || '105 mg/dL'
   const currentMedications = patientData.currentMedications || 'None reported'
-  const doctorName = patientData.doctorName || 'Dr. Sarah Al-Mansoor'
+  const doctorName = patientData.doctorName || user?.fullName || user?.name || 'Attending Physician'
 
   const handleAddItem = () => {
     setRxForm((prev) => ({

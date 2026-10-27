@@ -46,6 +46,8 @@ export const AppointmentsPage = () => {
       const res = await api.get('/api/staff/appointments')
       return res.data
     },
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
   })
 
   const { data: triageData } = useQuery({
@@ -54,6 +56,8 @@ export const AppointmentsPage = () => {
       const res = await api.get('/api/staff/triage')
       return res.data?.data || []
     },
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
   })
 
   const { data: patientsData } = useQuery({
@@ -62,7 +66,70 @@ export const AppointmentsPage = () => {
       const res = await api.get('/api/staff/patients')
       return res.data?.patients || res.data?.data || []
     },
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
   })
+
+  // Fetch real clinical doctors for this clinic
+  const { data: doctorsData = [] } = useQuery({
+    queryKey: ['staff', 'doctors'],
+    queryFn: async () => {
+      try {
+        const res = await api.get('/api/staff/doctors')
+        const list = res.data?.doctors || res.data?.data || []
+        if (Array.isArray(list) && list.length > 0) return list
+      } catch (err) {}
+      try {
+        const res = await api.get('/api/admin/staff')
+        const staff = res.data?.staff || res.data?.data || []
+        const docs = staff.filter((s) => {
+          const roles = (s.roleNames || (Array.isArray(s.roles) ? s.roles : [s.role || ''])).join(' ').toLowerCase()
+          return (
+            roles.includes('doctor') ||
+            roles.includes('physician') ||
+            roles.includes('surgeon') ||
+            roles.includes('cardiologist') ||
+            roles.includes('specialist') ||
+            /^dr[\s.]/i.test(s.name || s.fullName || '')
+          )
+        })
+        if (docs.length > 0) {
+          return docs.map((d) => ({
+            id: d.id,
+            name: d.name || d.fullName,
+            fullName: d.name || d.fullName,
+            department: d.department || 'General Medicine',
+            role: d.role || 'Doctor',
+            label: `${d.name || d.fullName} (${d.department || d.specialty || 'Doctor'})`,
+            value: d.name || d.fullName,
+          }))
+        }
+      } catch (e) {}
+      return []
+    },
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
+  })
+
+  const doctorOptions = React.useMemo(() => {
+    if (!doctorsData || doctorsData.length === 0) {
+      if (formData.doctorName) return [{ value: formData.doctorName, label: formData.doctorName }]
+      return []
+    }
+    return doctorsData.map((d) => ({
+      value: d.value || d.fullName || d.name,
+      label: d.label || `${d.fullName || d.name} (${d.department || 'Doctor'})`,
+    }))
+  }, [doctorsData, formData.doctorName])
+
+  React.useEffect(() => {
+    if (doctorsData && doctorsData.length > 0 && (!formData.doctorName || formData.doctorName === 'Attending Clinician')) {
+      setFormData((prev) => ({
+        ...prev,
+        doctorName: doctorsData[0].value || doctorsData[0].fullName || doctorsData[0].name,
+      }))
+    }
+  }, [doctorsData])
 
   const triageList = Array.isArray(triageData) ? triageData : []
 
@@ -393,20 +460,32 @@ export const AppointmentsPage = () => {
                 { value: 'Procedure', label: 'In-Office Minor Procedure' },
               ]}
             />
+            <Select
+              label="Assigned Attending Doctor"
+              value={formData.doctorName}
+              onChange={(e) => setFormData({ ...formData, doctorName: e.target.value })}
+              options={
+                doctorOptions.length > 0
+                  ? doctorOptions
+                  : [{ value: formData.doctorName || 'Dr dev prakash', label: formData.doctorName || 'Dr dev prakash (Cardiac Surgery)' }]
+              }
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input
               label="Clinical Room / Location"
               value={formData.room}
               onChange={(e) => setFormData({ ...formData, room: e.target.value })}
             />
+            <Input
+              label="Clinical Reason for Visit"
+              required
+              placeholder="e.g. Follow-up for elevated blood pressure"
+              value={formData.reason}
+              onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+            />
           </div>
-
-          <Input
-            label="Clinical Reason for Visit"
-            required
-            placeholder="e.g. Follow-up for elevated blood pressure"
-            value={formData.reason}
-            onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
-          />
 
           <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-border">
             <Button variant="secondary" size="sm" type="button" onClick={() => setIsBookOpen(false)}>

@@ -2,7 +2,16 @@ import { prisma } from '../config/prisma.js'
 import { NotFoundError, ValidationError } from '../utils/errors.js'
 import { AuditService } from './audit.service.js'
 
+const patientsCache = new Map()
+const inventoryCache = new Map()
+
 export class ClinicalService {
+  static invalidatePatientsCache() {
+    patientsCache.clear()
+  }
+  static invalidateInventoryCache() {
+    inventoryCache.clear()
+  }
   /* =========================================================================
    * PATIENTS
    * ========================================================================= */
@@ -12,6 +21,14 @@ export class ClinicalService {
       const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
+
+    const cacheKey = `${targetTenantId || 'all'}:${page}:${limit}:${search || ''}:${gender || ''}:${status || ''}`
+    const now = Date.now()
+    const cached = patientsCache.get(cacheKey)
+    if (cached && now < cached.expiry) {
+      return cached.data
+    }
+
     const where = targetTenantId ? { tenantId: targetTenantId } : {}
     if (search) {
       where.OR = [
@@ -58,7 +75,7 @@ export class ClinicalService {
       }
     })
 
-    return {
+    const result = {
       data: formatted,
       pagination: {
         page,
@@ -67,6 +84,8 @@ export class ClinicalService {
         totalPages: Math.ceil(total / limit)
       }
     }
+    patientsCache.set(cacheKey, { data: result, expiry: now + 30 * 1000 })
+    return result
   }
 
   static async getPatientById(id, tenantId) {
@@ -712,7 +731,7 @@ export class ClinicalService {
       sugarLevel: data.sugarLevel ? `${data.sugarLevel}` : '',
       currentMedications: data.currentMedications ? `${data.currentMedications}` : '',
       notes: data.notes || '',
-      doctorName: data.doctorName || 'Dr. Sarah Al-Mansoor',
+      doctorName: data.doctorName || 'Attending Physician',
       doctorId: data.doctorId || null,
       status: 'WAITING_FOR_DOCTOR',
       recordedAt: new Date().toISOString(),
@@ -756,12 +775,29 @@ export class ClinicalService {
         })
       }
 
+      // Resolve doctor staffId if available
+      let assignedStaffId = null
+      if (data.doctorId) {
+        const prof = await prisma.staffProfile.findFirst({
+          where: { OR: [{ id: data.doctorId }, { userId: data.doctorId }] }
+        }).catch(() => null)
+        assignedStaffId = prof?.id || null
+      }
+      if (!assignedStaffId && data.doctorName) {
+        const docUser = await prisma.user.findFirst({
+          where: { tenantId: targetTenantId, fullName: { equals: data.doctorName, mode: 'insensitive' } },
+          include: { staffProfile: true }
+        }).catch(() => null)
+        assignedStaffId = docUser?.staffProfile?.id || null
+      }
+
       if (appointment) {
         // Update existing appointment to CHECKED_IN
         appointment = await prisma.appointment.update({
           where: { id: appointment.id },
           data: {
             status: 'CHECKED_IN',
+            staffId: assignedStaffId || appointment.staffId || undefined,
             notes: JSON.stringify(triageReport),
             reason: appointment.reason && !appointment.reason.includes('[Token:')
               ? `[Token: ${tokenNumber}] ${appointment.reason}`
@@ -774,6 +810,7 @@ export class ClinicalService {
           data: {
             tenantId: targetTenantId,
             patientId: patient.id,
+            staffId: assignedStaffId || undefined,
             scheduledAt: new Date(),
             durationMinutes: 30,
             status: 'CHECKED_IN',
@@ -883,7 +920,7 @@ export class ClinicalService {
           sugarLevel: latest.sugarLevel,
           currentMedications: latest.currentMedications,
           notes: latest.notes,
-          doctorName: latest.doctorName || 'Dr. Sarah Al-Mansoor',
+          doctorName: latest.doctorName || 'Attending Physician',
           recordedAt: latest.recordedAt || p.updatedAt,
           status: flowStatus,
           prescriptionId: linkedRx?.id,
@@ -965,7 +1002,7 @@ export class ClinicalService {
       data: {
         patientId,
         appointmentId: data.appointmentId || null,
-        prescribedBy: doctorName || 'Dr. Sarah Al-Mansoor',
+        prescribedBy: doctorName || 'Attending Physician',
         diagnosis: data.diagnosis,
         medications: data.items || data.medications || [],
         notes: notes || null,
@@ -1375,6 +1412,14 @@ export class ClinicalService {
       const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
+
+    const cacheKey = `${targetTenantId || 'all'}:${page}:${limit}:${search || ''}:${category || ''}:${lowStockOnly}`
+    const now = Date.now()
+    const cached = inventoryCache.get(cacheKey)
+    if (cached && now < cached.expiry) {
+      return cached.data
+    }
+
     const where = targetTenantId ? { tenantId: targetTenantId } : {}
     if (category) where.category = category
     if (search) {
@@ -1411,7 +1456,7 @@ export class ClinicalService {
       ? formatted.filter(it => it.isLowStock)
       : formatted
 
-    return {
+    const result = {
       data: filtered,
       pagination: {
         page,
@@ -1420,6 +1465,8 @@ export class ClinicalService {
         totalPages: Math.ceil(total / limit)
       }
     }
+    inventoryCache.set(cacheKey, { data: result, expiry: now + 30 * 1000 })
+    return result
   }
 
   static async createInventoryItem(data, tenantId, actorId) {
@@ -1545,6 +1592,91 @@ export class ClinicalService {
         { day: 'Sun', count: 4 }
       ]
     }
+  }
+
+  /**
+   * Get all active clinical doctors for the tenant
+   */
+  static async getDoctors({ tenantId }) {
+    let targetTenantId = tenantId
+    if (tenantId && tenantId.startsWith('clinic-')) {
+      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      if (firstTenant) targetTenantId = firstTenant.id
+    }
+    if (!targetTenantId) {
+      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      targetTenantId = firstTenant?.id
+    }
+
+    const where = {
+      ...(targetTenantId ? { tenantId: targetTenantId } : {}),
+      userType: { in: ['STAFF', 'ADMIN'] }
+    }
+
+    const staffUsers = await prisma.user.findMany({
+      where,
+      orderBy: { fullName: 'asc' },
+      include: {
+        userRoles: {
+          include: { role: true }
+        },
+        staffProfile: {
+          include: { department: true }
+        }
+      }
+    })
+
+    // Filter staff members who are doctors / physicians / surgeons
+    const matchedDoctors = staffUsers.filter((u) => {
+      const roleNames = (u.userRoles || []).map((ur) => (ur.role?.name || '').toLowerCase())
+      const isExplicitNonDoctorRole =
+        roleNames.some((r) =>
+          r.includes('reception') ||
+          r.includes('front desk') ||
+          r.includes('nurse') ||
+          r.includes('biller') ||
+          r.includes('billing') ||
+          r.includes('pharmacist')
+        ) && !roleNames.some((r) => r.includes('doctor') || r.includes('surgeon') || r.includes('physician'))
+
+      if (isExplicitNonDoctorRole) return false
+
+      const isDocRole = roleNames.some((r) =>
+        r.includes('doctor') ||
+        r.includes('physician') ||
+        r.includes('surgeon') ||
+        r.includes('cardiologist') ||
+        r.includes('specialist') ||
+        r.includes('dentist') ||
+        r.includes('consultant')
+      )
+      const nameStartsDr = /^Dr[\s.]/i.test((u.fullName || '').trim())
+      const specialty = (u.staffProfile?.specialty || '').toLowerCase()
+      const isDocSpecialty = specialty.includes('doctor') || specialty.includes('physician') || specialty.includes('surgeon')
+
+      return isDocRole || nameStartsDr || (isDocSpecialty && !roleNames.includes('clinical administrator'))
+    })
+
+    const doctorsToFormat = matchedDoctors.length > 0 ? matchedDoctors : staffUsers
+
+    const formatted = doctorsToFormat.map((u) => {
+      const deptName = u.staffProfile?.department?.name || u.staffProfile?.specialty || 'General Medicine'
+      const roleName = (u.userRoles || [])[0]?.role?.name || 'Doctor'
+      return {
+        id: u.id,
+        name: u.fullName,
+        fullName: u.fullName,
+        email: u.email,
+        phone: u.phone,
+        department: deptName,
+        role: roleName,
+        specialty: u.staffProfile?.specialty || deptName,
+        label: `${u.fullName} (${deptName})`,
+        value: u.fullName
+      }
+    })
+
+    return formatted
   }
 }
 

@@ -47,6 +47,8 @@ export const PatientsPage = () => {
       const res = await api.get('/api/staff/patients')
       return res.data?.data || res.data?.patients || res.data || []
     },
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
   })
 
   const createMutation = useMutation({

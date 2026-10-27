@@ -74,9 +74,9 @@ export const useRolePermissions = () => {
       return { permissions: list, permittedModules: permitted }
     },
     enabled: !!user,
-    staleTime: 0, // Always fetch fresh on mount/page load
-    refetchOnMount: 'always',
-    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000, // Fresh for 5 minutes (invalidated automatically on permission changes)
+    refetchOnWindowFocus: false,
+    placeholderData: (prev) => prev,
   })
 
   // Listen for broadcast/storage events when admin saves permissions in another tab or page

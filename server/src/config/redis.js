@@ -87,46 +87,52 @@ class MemoryRedisStore extends EventEmitter {
 let redisClient
 let redisSubscriber
 let isMemoryFallback = false
+const isRailwayInternal = Boolean(env.REDIS_URL?.includes('railway.internal') && !process.env.RAILWAY_ENVIRONMENT)
 
-try {
-  redisClient = new Redis(env.REDIS_URL, {
-    maxRetriesPerRequest: 1,
-    retryStrategy(times) {
-      if (times > 3) {
-        return null // Stop retrying and fallback
-      }
-      return Math.min(times * 100, 1000)
-    },
-    reconnectOnError: () => false,
-    lazyConnect: true
-  })
-
-  redisSubscriber = new Redis(env.REDIS_URL, {
-    maxRetriesPerRequest: 1,
-    lazyConnect: true
-  })
-
-  redisClient.on('error', (err) => {
-    if (!isMemoryFallback) {
-      logger.warn(`Redis connection unavailable (${err.message}). Using resilient in-memory store.`)
-      isMemoryFallback = true
-    }
-  })
-
-  redisSubscriber.on('error', () => {})
-
-  // Try initiating connection
-  redisClient.connect().then(() => {
-    logger.info('Connected to Redis server successfully')
-    isMemoryFallback = false
-  }).catch((err) => {
-    logger.warn(`Redis connect error: ${err.message}. Falling back to in-memory store.`)
-    isMemoryFallback = true
-  })
-
-} catch (err) {
-  logger.warn(`Failed to initialize Redis client (${err.message}). Falling back to in-memory store.`)
+if (isRailwayInternal || !env.REDIS_URL) {
+  logger.info('Using high-performance in-memory cache/pubsub store (local development mode).')
   isMemoryFallback = true
+} else {
+  try {
+    redisClient = new Redis(env.REDIS_URL, {
+      maxRetriesPerRequest: 1,
+      retryStrategy(times) {
+        if (times > 2) {
+          return null // Stop retrying and fallback
+        }
+        return Math.min(times * 100, 1000)
+      },
+      reconnectOnError: () => false,
+      lazyConnect: true
+    })
+
+    redisSubscriber = new Redis(env.REDIS_URL, {
+      maxRetriesPerRequest: 1,
+      lazyConnect: true
+    })
+
+    redisClient.on('error', (err) => {
+      if (!isMemoryFallback) {
+        logger.warn(`Redis connection unavailable (${err.message}). Using resilient in-memory store.`)
+        isMemoryFallback = true
+      }
+    })
+
+    redisSubscriber.on('error', () => {})
+
+    // Try initiating connection
+    redisClient.connect().then(() => {
+      logger.info('Connected to Redis server successfully')
+      isMemoryFallback = false
+    }).catch((err) => {
+      logger.warn(`Redis connect error: ${err.message}. Falling back to in-memory store.`)
+      isMemoryFallback = true
+    })
+
+  } catch (err) {
+    logger.warn(`Failed to initialize Redis client (${err.message}). Falling back to in-memory store.`)
+    isMemoryFallback = true
+  }
 }
 
 const memoryStore = new MemoryRedisStore()

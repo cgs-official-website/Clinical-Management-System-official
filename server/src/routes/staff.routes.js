@@ -126,6 +126,11 @@ router.post('/appointments', requirePermission('appointments.create'), validateR
 router.patch('/appointments/:id', requirePermission('appointments.edit'), ClinicalController.updateAppointment)
 
 /* =========================================================================
+ * CLINICAL DOCTORS DIRECTORY (FOR TRIAGE CHECK-IN & APPOINTMENT ASSIGNMENT)
+ * ========================================================================= */
+router.get('/doctors', requireAnyPermission('patients.view', 'appointments.view', 'prescriptions.view', 'staff.view', 'patients.create', 'appointments.create'), ClinicalController.getDoctors)
+
+/* =========================================================================
  * OUTPATIENT TRIAGE & TOKEN QUEUE (RECEPTION -> DOCTOR -> PHARMACY)
  * ========================================================================= */
 router.get('/triage', requireAnyPermission('patients.view', 'appointments.view', 'prescriptions.view', 'inventory.view'), ClinicalController.getTriageQueue)

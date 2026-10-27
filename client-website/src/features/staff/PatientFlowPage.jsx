@@ -11,8 +11,8 @@ import {
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Button } from '../../components/ui/Button'
-import { Badge } from '../../components/ui/Badge'
 import { notify } from '../../components/ui/Toast'
+import { useAuthStore } from '../../store/useAuthStore'
 
 // Lazy load workflow modals
 const PatientDetailsTriageModal = lazy(() =>
@@ -26,6 +26,7 @@ const PharmacyFulfillModal = lazy(() =>
 )
 
 export const PatientFlowPage = () => {
+  const { user } = useAuthStore()
   const [activeStage, setActiveStage] = useState('all') // 'all' | 'reception' | 'doctor' | 'pharmacy'
   const [search, setSearch] = useState('')
 
@@ -404,7 +405,7 @@ export const PatientFlowPage = () => {
               </h2>
             </div>
             <span className="text-xs text-text-secondary">
-              Logged as: <strong className="text-text-primary">Dr. Sarah Al-Mansoor</strong>
+              Logged as: <strong className="text-text-primary">{user?.fullName || user?.name || 'Attending Physician'}</strong>
             </span>
           </div>
 

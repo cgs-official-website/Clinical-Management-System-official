@@ -3,9 +3,7 @@ import { useAuthStore } from '../store/useAuthStore'
 import { notify } from '../components/ui/Toast'
 import { handleSimulatedRequest } from './devApiSimulator'
 
-const baseURL =
-  import.meta.env.VITE_API_BASE_URL ||
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost' ? 'http://localhost:5000' : '')
+const baseURL = import.meta.env.VITE_API_BASE_URL || ''
 const useMockApi = import.meta.env.VITE_ENABLE_DEV_MOCK_SERVER === 'true'
 
 export const api = axios.create({
@@ -95,8 +93,16 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config
 
+    // Transparently retry once on transient socket/network glitch before erroring
+    const isNetworkError = !error.response || error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED' || error.message?.includes('Network Error')
+    if (isNetworkError && originalRequest && !originalRequest._networkRetry && !originalRequest.url?.includes('/auth/refresh')) {
+      originalRequest._networkRetry = true
+      await new Promise((r) => setTimeout(r, 200))
+      return api(originalRequest)
+    }
+
     // Network error or backend offline: gracefully fallback to dev simulator only if explicitly enabled
-    if (useMockApi && (!error.response || error.code === 'ERR_NETWORK' || error.message?.includes('Network Error')) && originalRequest && !originalRequest._isFallback) {
+    if (useMockApi && isNetworkError && originalRequest && !originalRequest._isFallback) {
       originalRequest._isFallback = true
       try {
         const [simStatus, simData] = await handleSimulatedRequest(originalRequest)

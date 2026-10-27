@@ -27,6 +27,8 @@ export const BillingPage = () => {
       const res = await api.get('/api/staff/billing?limit=100')
       return res.data
     },
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
   })
 
   const createInvoiceMutation = useMutation({
