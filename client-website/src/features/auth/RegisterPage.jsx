@@ -43,6 +43,7 @@ const registerSchema = z.object({
     .string()
     .min(1, 'Direct contact phone is required')
     .regex(/^\d{10}$/, 'Phone number must be exactly 10 numeric digits'),
+  address: z.string().min(5, 'Physical facility address is required'),
   specialty: z.string().optional(),
   region: z.string().min(1, 'Region is required'),
   plan: z.string().min(1, 'Please choose an operational plan'),
@@ -613,6 +614,17 @@ export const RegisterPage = () => {
                       <p className="mt-1 text-xs text-danger font-medium">{errors.subdomain.message}</p>
                     )}
                   </div>
+                </div>
+
+                <div className="mt-4">
+                  <Input
+                    label="Physical Facility Address"
+                    required
+                    leftIcon={<MapPin className="w-4 h-4 text-primary" />}
+                    placeholder="e.g. KMCH Campus, Avinashi Road, Coimbatore, Tamil Nadu 641014"
+                    error={errors.address?.message}
+                    {...register('address')}
+                  />
                 </div>
               </div>
 

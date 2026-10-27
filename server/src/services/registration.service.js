@@ -26,6 +26,7 @@ export const registerClinicSchema = z
     email: z.string().min(1, 'Email is required').email('Enter a valid email address'),
     password: z.string().min(6, 'Password must be at least 6 characters'),
     phone: z.string().min(8, 'Valid phone number is required'),
+    address: z.string().optional(),
     specialty: z.string().optional().default('General Medicine'),
     region: z.string().optional().default('Asia / India (INR ₹)'),
     plan: z.string().optional().default('Professional'),
@@ -70,7 +71,7 @@ export class RegistrationService {
       throw new ValidationError(details[0]?.message || 'Invalid registration details', details)
     }
 
-    const { clinicName, subdomain, adminName, email, password, phone, specialty, region, plan } = parsed.data
+    const { clinicName, subdomain, adminName, email, password, phone, address, specialty, region, plan } = parsed.data
     const selectedCategoryId = parsed.data.clinic_category_id || parsed.data.clinicCategoryId
     const normalizedEmail = email.toLowerCase().trim()
     const cleanSubdomain = subdomain.toLowerCase().trim()
@@ -126,6 +127,33 @@ export class RegistrationService {
             userType: 'ADMIN',
           },
         })
+
+        if (address && address.trim().length > 0) {
+          const tz = region?.includes('India') ? 'Asia/Kolkata (IST)' : 'America/New_York (UTC-5)'
+          await tx.publicSiteContent.upsert({
+            where: { key: `clinic_settings_${t.id}` },
+            update: {
+              content: {
+                address: address.trim(),
+                clinicName,
+                contactEmail: normalizedEmail,
+                contactPhone: phone,
+                timezone: tz,
+              }
+            },
+            create: {
+              key: `clinic_settings_${t.id}`,
+              content: {
+                address: address.trim(),
+                clinicName,
+                contactEmail: normalizedEmail,
+                contactPhone: phone,
+                timezone: tz,
+              }
+            }
+          }).catch(() => {})
+        }
+
         return t
       })
       logger.info(`✅ Clinic registration saved to PostgreSQL: ${tenant.id}`)

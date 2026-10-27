@@ -34,6 +34,7 @@ const StaffRolesListPage = lazy(() => import('../features/admin/roles-permission
 const RoleTemplatesPage = lazy(() => import('../features/admin/roles-permissions/RoleTemplatesPage'))
 const StaffManagementPage = lazy(() => import('../features/admin/StaffManagementPage'))
 const ClinicalConfigPage = lazy(() => import('../features/admin/ClinicalConfigPage'))
+const ClinicSettingsPage = lazy(() => import('../features/admin/ClinicSettingsPage'))
 const AdminReportsPage = lazy(() => import('../features/admin/AdminReportsPage'))
 
 // Staff pages
@@ -397,6 +398,16 @@ export const router = createBrowserRouter([
           </RequireRole>
         ),
       },
+      {
+        path: 'admin/settings',
+        element: (
+          <RequireRole role="ADMIN">
+            <Suspense fallback={<PageLoader />}>
+              <ClinicSettingsPage />
+            </Suspense>
+          </RequireRole>
+        ),
+      },
 
       // STAFF ROUTES (Dynamic per permission)
       {
@@ -475,6 +486,14 @@ export const router = createBrowserRouter([
               <StaffReportsPage />
             </Suspense>
           </RequireModuleView>
+        ),
+      },
+      {
+        path: 'staff/settings',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <ClinicSettingsPage />
+          </Suspense>
         ),
       },
       // DENTAL CARE CATEGORY MODULE ROUTES

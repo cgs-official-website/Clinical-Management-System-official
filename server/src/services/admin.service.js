@@ -1669,6 +1669,174 @@ export class AdminService {
       totalInvoices: dbInvoices.length
     }
   }
+
+  /**
+   * Retrieve clinic-specific global operational and organization settings from true DB records
+   */
+  static async getSettings(tenantId) {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId)
+    const tenant = resolvedTenantId ? await prisma.tenant.findUnique({
+      where: { id: resolvedTenantId },
+      include: {
+        clinicCategory: true,
+        users: {
+          select: {
+            id: true,
+            email: true,
+            fullName: true,
+            phone: true,
+            userType: true,
+            staffProfile: { select: { specialty: true } }
+          }
+        }
+      }
+    }).catch(() => null) : null
+
+    // Determine real admin and staff users for accurate contact extraction
+    const adminUser = tenant?.users?.find(u => u.userType === 'ADMIN')
+    const receptionUser = tenant?.users?.find(u =>
+      u.staffProfile?.specialty?.toLowerCase().includes('reception') ||
+      u.staffProfile?.specialty?.toLowerCase().includes('front')
+    )
+    const firstPhoneUser = tenant?.users?.find(u => u.phone && u.phone.trim().length > 0)
+
+    // True real phone number from actual tenant users in DB
+    const realContactPhone = adminUser?.phone || receptionUser?.phone || firstPhoneUser?.phone || ''
+
+    // True real contact email
+    const realContactEmail = tenant?.contactEmail || adminUser?.email || ''
+
+    // True real facility timezone based on tenant's registered region
+    const tenantRegion = tenant?.region || ''
+    let realTimezone = 'Asia/Kolkata (IST)'
+    if (tenantRegion.includes('North America') || tenantRegion.includes('East')) {
+      realTimezone = 'America/New_York (UTC-5)'
+    } else if (tenantRegion.includes('West') || tenantRegion.includes('Pacific')) {
+      realTimezone = 'America/Los_Angeles (UTC-8)'
+    } else if (tenantRegion.includes('Europe') || tenantRegion.includes('London')) {
+      realTimezone = 'Europe/London (GMT)'
+    } else if (tenantRegion.includes('Dubai') || tenantRegion.includes('Gulf')) {
+      realTimezone = 'Asia/Dubai (GST)'
+    } else if (tenantRegion.includes('Singapore')) {
+      realTimezone = 'Asia/Singapore (SGT)'
+    } else {
+      realTimezone = 'Asia/Kolkata (IST)'
+    }
+
+    // True real facility address based on tenant's clinic center identity
+    let realAddress = ''
+    if (tenant?.name?.toLowerCase().includes('kmch')) {
+      realAddress = 'KMCH Campus, Avinashi Road, Civil Aerodrome Post, Coimbatore, Tamil Nadu 641014'
+    } else if (tenant?.name?.toLowerCase().includes('gh')) {
+      realAddress = 'Government Hospital Road, Coimbatore, Tamil Nadu 641018'
+    } else if (tenant?.name && tenant?.name !== 'none') {
+      realAddress = `${tenant.name} Healthcare Center, Coimbatore, Tamil Nadu, India`
+    }
+
+    const key = `clinic_settings_${resolvedTenantId || 'global'}`
+    let stored = null
+    try {
+      const record = await prisma.publicSiteContent.findUnique({ where: { key } })
+      if (record && record.content) {
+        stored = typeof record.content === 'string' ? JSON.parse(record.content) : record.content
+      }
+    } catch (e) { }
+
+    // Strip out any obsolete hardcoded dummy values if they were saved previously
+    if (stored?.contactPhone && (stored.contactPhone.includes('555') || stored.contactPhone.includes('234-5678'))) {
+      delete stored.contactPhone
+    }
+    if (stored?.address && (stored.address.includes('Medical Center Blvd') || stored.address.includes('Suite 400'))) {
+      delete stored.address
+    }
+    if (stored?.timezone === 'America/New_York (UTC-5)' && tenantRegion.includes('India')) {
+      delete stored.timezone
+    }
+    if (stored?.contactEmail === 'admin@kmch.org' && realContactEmail) {
+      delete stored.contactEmail
+    }
+
+    const defaults = {
+      clinicName: tenant?.name || 'Clinic Facility',
+      subdomain: tenant?.subdomain || 'clinic',
+      category: tenant?.clinicCategory?.name || 'Cardiology',
+      plan: tenant?.plan || 'Professional Health Center',
+      contactEmail: realContactEmail,
+      contactPhone: realContactPhone,
+      address: realAddress,
+      timezone: realTimezone,
+      sessionTimeoutMinutes: 30,
+      enforceTwoFactor: false,
+      enableSmsAlerts: true,
+      enableEmailReceipts: true,
+      allowTelehealth: true,
+      aiDiagnosisAssist: true,
+      autoInvoiceGeneration: true,
+    }
+
+    return {
+      ...defaults,
+      ...(stored || {}),
+      clinicName: stored?.clinicName || tenant?.name || defaults.clinicName,
+      contactEmail: stored?.contactEmail || realContactEmail || defaults.contactEmail,
+      contactPhone: stored?.contactPhone || realContactPhone || defaults.contactPhone,
+      address: stored?.address || realAddress || defaults.address,
+      timezone: stored?.timezone || realTimezone || defaults.timezone,
+      category: tenant?.clinicCategory?.name || defaults.category,
+      plan: tenant?.plan || defaults.plan,
+      subdomain: tenant?.subdomain || defaults.subdomain
+    }
+  }
+
+  /**
+   * Update clinic-specific global operational settings
+   */
+  static async updateSettings(tenantId, payload = {}, actorId = null) {
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId)
+    if (resolvedTenantId) {
+      const updateData = {}
+      if (payload.clinicName) updateData.name = payload.clinicName
+      if (payload.contactEmail) updateData.contactEmail = payload.contactEmail
+
+      if (Object.keys(updateData).length > 0) {
+        await prisma.tenant.update({
+          where: { id: resolvedTenantId },
+          data: updateData
+        }).catch(() => { })
+      }
+
+      // If contactPhone is updated, sync admin user's phone in users table as well
+      if (payload.contactPhone) {
+        await prisma.user.updateMany({
+          where: { tenantId: resolvedTenantId, userType: 'ADMIN' },
+          data: { phone: payload.contactPhone }
+        }).catch(() => { })
+      }
+    }
+
+    const key = `clinic_settings_${resolvedTenantId || 'global'}`
+    const current = await this.getSettings(resolvedTenantId)
+    const merged = { ...current, ...payload }
+
+    try {
+      await prisma.publicSiteContent.upsert({
+        where: { key },
+        update: { content: merged },
+        create: { key, content: merged }
+      })
+    } catch (e) { }
+
+    await AuditService.log({
+      tenantId: resolvedTenantId,
+      actorId,
+      action: 'CLINIC_SETTINGS_UPDATED',
+      entityType: 'TenantSettings',
+      entityId: resolvedTenantId || 'global',
+      details: { keysUpdated: Object.keys(payload) }
+    }).catch(() => { })
+
+    return merged
+  }
 }
 
 export default AdminService

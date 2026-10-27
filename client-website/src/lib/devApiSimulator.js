@@ -2275,6 +2275,32 @@ export const handleSimulatedRequest = async (config) => {
     return [200, db.clinicalConfig]
   }
 
+  if ((url === '/admin/settings' || url === '/api/admin/settings') && method === 'get') {
+    return [200, db.clinicSettings || {
+      clinicName: db.user?.clinicName || 'kmch',
+      subdomain: 'kmch',
+      category: 'Cardiology',
+      plan: 'Professional Health Center',
+      contactEmail: db.user?.email || 'preethi@gmail.com',
+      contactPhone: db.user?.phone || '1234567839',
+      address: 'KMCH Campus, Avinashi Road, Civil Aerodrome Post, Coimbatore, Tamil Nadu 641014',
+      timezone: 'Asia/Kolkata (IST)',
+      sessionTimeoutMinutes: 30,
+      enforceTwoFactor: false,
+      enableSmsAlerts: true,
+      enableEmailReceipts: true,
+      allowTelehealth: true,
+      aiDiagnosisAssist: true,
+      autoInvoiceGeneration: true,
+    }]
+  }
+
+  if ((url === '/admin/settings' || url === '/api/admin/settings') && method === 'put') {
+    db.clinicSettings = { ...(db.clinicSettings || {}), ...data }
+    saveDb()
+    return [200, db.clinicSettings]
+  }
+
   if (url === '/admin/environment-setup' && method === 'post') {
     const {
       currency = '₹ INR',

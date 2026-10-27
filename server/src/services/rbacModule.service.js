@@ -36,6 +36,7 @@ export const MODULE_METADATA = {
   cardiac_risk_assessment: { name: 'Cardiac Risk Assessment', icon: 'ShieldAlert', route: '/app/cardio/risk-assessment', defaultOrder: 6 },
   roles: { name: 'Roles & Permissions', icon: 'KeyRound', route: '/app/admin/roles', defaultOrder: 15 },
   clinical_config: { name: 'Clinical Config', icon: 'Sliders', route: '/app/admin/clinical-config', defaultOrder: 16 },
+  settings: { name: 'Global Settings', icon: 'Sliders', route: '/app/admin/settings', defaultOrder: 17 },
 }
 
 const DEFAULT_MODULES = [
@@ -54,7 +55,8 @@ const DEFAULT_MODULES = [
   { id: 'a9999999-9999-9999-9999-999999999999', key: 'staff', name: 'Staff', icon: 'ShieldCheck', route: '/app/admin/staff', displayOrder: 13 },
   { id: 'a6666666-6666-6666-6666-666666666666', key: 'flow', name: 'Patient Flow (Rx Loop)', icon: 'Sparkles', route: '/app/staff/flow', displayOrder: 14 },
   { id: 'a8888888-8888-8888-8888-888888888888', key: 'roles', name: 'Roles & Permissions', icon: 'KeyRound', route: '/app/admin/roles', displayOrder: 15 },
-  { id: 'baaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', key: 'clinical_config', name: 'Clinical Config', icon: 'Sliders', route: '/app/admin/clinical-config', displayOrder: 16 }
+  { id: 'baaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', key: 'clinical_config', name: 'Clinical Config', icon: 'Sliders', route: '/app/admin/clinical-config', displayOrder: 16 },
+  { id: '26260e5d-250c-4552-85cc-1bd75656d9ed', key: 'settings', name: 'Global Settings', icon: 'Sliders', route: '/app/admin/settings', displayOrder: 17 }
 ]
 
 // In-memory permission matrix store: roleId -> { [moduleId]: { can_view, can_edit, can_delete } }

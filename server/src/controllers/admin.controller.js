@@ -406,6 +406,37 @@ export class AdminController {
       next(error)
     }
   }
+
+  static async getSettings(req, res, next) {
+    try {
+      const settings = await AdminService.getSettings(req.user?.tenantId)
+      return res.status(200).json({
+        success: true,
+        ...settings,
+        data: settings
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
+
+  static async updateSettings(req, res, next) {
+    try {
+      const settings = await AdminService.updateSettings(
+        req.user?.tenantId,
+        req.body,
+        req.user?.id
+      )
+      return res.status(200).json({
+        success: true,
+        message: 'Clinic settings updated successfully',
+        ...settings,
+        data: settings
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
 }
 
 export default AdminController
