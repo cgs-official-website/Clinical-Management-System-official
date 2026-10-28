@@ -87,8 +87,15 @@ const RequireAuth = ({ children }) => {
 const PublicOnlyRoute = ({ children }) => {
   const { isAuthenticated, user } = useAuth()
   const { isSuperadmin, isAdmin } = usePermissions()
+  const location = useLocation()
 
-  if (isAuthenticated && user) {
+  // Staff registration/activation invite links should always open even if another session is active
+  const isInvite =
+    location.search.includes('invite=') ||
+    location.search.includes('type=staff') ||
+    location.search.includes('token=')
+
+  if (isAuthenticated && user && !isInvite) {
     if (isSuperadmin) return <Navigate to="/app/superadmin/dashboard" replace />
     if (isAdmin) return <Navigate to="/app/admin/dashboard" replace />
     return <Navigate to="/app/staff/dashboard" replace />

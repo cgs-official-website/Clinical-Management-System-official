@@ -211,6 +211,26 @@ export class PublicController {
       next(error)
     }
   }
+
+  static async getStaffInviteStatus(req, res, next) {
+    try {
+      const { email, staffId } = req.query
+      const result = await RegistrationService.getStaffInviteStatus({ email, staffId })
+      return res.status(200).json({ success: true, data: result, ...result })
+    } catch (error) {
+      next(error)
+    }
+  }
+
+  static async accessStaffPortal(req, res, next) {
+    try {
+      const { email, staffId } = req.body
+      const result = await RegistrationService.accessStaffPortal({ email, staffId })
+      return res.status(200).json(result)
+    } catch (error) {
+      next(error)
+    }
+  }
 }
 
 export default PublicController

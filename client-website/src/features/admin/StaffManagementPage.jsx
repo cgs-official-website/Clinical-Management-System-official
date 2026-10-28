@@ -68,37 +68,15 @@ export const StaffManagementPage = () => {
       return res.data
     },
     enabled: !!tenantId,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 10 * 1000,
+    refetchOnWindowFocus: true,
     placeholderData: (prev) => prev,
   })
-  const roles = roleData?.roles || roleData?.data || []
+  const roles = roleData?.roles || (Array.isArray(roleData?.data) ? roleData.data : (Array.isArray(roleData) ? roleData : []))
 
-  const filterRolesForDepartment = (roleList, departmentName) => {
-    if (!departmentName) return roleList
-    const dept = departmentName.toLowerCase().trim()
-    return roleList.filter((r) => {
-      const rName = (r.name || '').toLowerCase()
-      if (rName.includes('admin') || rName.includes('administrator')) return true
-      if (dept.includes('cardio') || dept.includes('cardiac')) {
-        return !rName.includes('dent') && !rName.includes('physio')
-      }
-      if (dept.includes('dent') || dept.includes('oral') || dept.includes('orthodont')) {
-        return rName.includes('dent') || rName.includes('hygienist') || rName.includes('reception') || rName.includes('biller') || rName.includes('billing')
-      }
-      if (dept.includes('physio') || dept.includes('rehab')) {
-        return rName.includes('physio') || rName.includes('therap') || rName.includes('reception') || rName.includes('biller') || rName.includes('billing')
-      }
-      return true
-    })
-  }
-
-  const filteredInviteRoles = React.useMemo(() => {
-    return filterRolesForDepartment(roles, formData.department)
-  }, [roles, formData.department])
-
-  const filteredEditRoles = React.useMemo(() => {
-    return filterRolesForDepartment(roles, editFormData.department)
-  }, [roles, editFormData.department])
+  // All roles defined in the clinic's Roles & Permissions are available for staff assignment
+  const filteredInviteRoles = roles
+  const filteredEditRoles = roles
 
   const updateRoleMutation = useMutation({
     mutationFn: async ({ id, roles }) => {
@@ -180,12 +158,15 @@ export const StaffManagementPage = () => {
     )
     const roleTitle = matchedRole?.name || staffMember.role || staffMember.specialty || 'Clinical Staff Member'
 
+    const roleId = matchedRole?.id || (assignedRoleIds.length > 0 ? assignedRoleIds[0] : '')
+
     const invitePayload = {
       type: 'staff',
       staffId: staffMember.id,
       name: staffMember.name || staffMember.fullName || '',
       email: staffMember.email || '',
       role: roleTitle,
+      roleId,
       department: staffMember.department || '',
       specialty: staffMember.specialty || '',
       clinicName: staffMember.clinicName || user?.clinicName || 'Clinic Practice',
@@ -222,6 +203,7 @@ export const StaffManagementPage = () => {
 
   // Handle opening the Edit Staff Modal
   const handleOpenEdit = (staffMember) => {
+    queryClient.invalidateQueries({ queryKey: ['admin', 'roles'] })
     const assignedRoleIds = Array.isArray(staffMember.roles) ? staffMember.roles : [staffMember.roles].filter(Boolean)
     const matchedRole = roles.find(
       (r) =>
@@ -413,9 +395,12 @@ export const StaffManagementPage = () => {
   ]
 
   const handleOpenInvite = () => {
+    queryClient.invalidateQueries({ queryKey: ['admin', 'roles'] })
     const defaultDept = departments[0]?.name || ''
-    const relevantRoles = filterRolesForDepartment(roles, defaultDept)
-    const defaultRole = relevantRoles.find((r) => r.name.includes('Physician') || r.name.includes('Doctor') || r.name.includes('Cardiologist') || r.name.includes('Dentist') || r.name.includes('Physiotherapist')) || relevantRoles[0] || roles[0]
+    const defaultRole = roles.find((r) => {
+      const n = (r.name || '').toLowerCase()
+      return n.includes('physician') || n.includes('doctor') || n.includes('dentist') || n.includes('cardiologist') || n.includes('physiotherapist')
+    }) || roles[0]
     const defaultRoleId = defaultRole?.id || ''
 
     setFormData({
@@ -543,15 +528,9 @@ export const StaffManagementPage = () => {
               label="Clinical Department"
               value={formData.department}
               onChange={(e) => {
-                const newDept = e.target.value
-                const matchingRoles = filterRolesForDepartment(roles, newDept)
-                const currentStillValid = matchingRoles.some((r) => r.id === formData.selectedRoleId)
-                const fallbackRole = matchingRoles[0]?.id || roles[0]?.id || ''
                 setFormData({
                   ...formData,
-                  department: newDept,
-                  selectedRoleId: currentStillValid ? formData.selectedRoleId : fallbackRole,
-                  roles: [currentStillValid ? formData.selectedRoleId : fallbackRole].filter(Boolean),
+                  department: e.target.value,
                 })
               }}
               options={
@@ -666,14 +645,9 @@ export const StaffManagementPage = () => {
               label="Department"
               value={editFormData.department}
               onChange={(e) => {
-                const newDept = e.target.value
-                const matchingRoles = filterRolesForDepartment(roles, newDept)
-                const currentStillValid = matchingRoles.some((r) => r.id === editFormData.selectedRoleId)
-                const fallbackRole = matchingRoles[0]?.id || roles[0]?.id || ''
                 setEditFormData({
                   ...editFormData,
-                  department: newDept,
-                  selectedRoleId: currentStillValid ? editFormData.selectedRoleId : fallbackRole,
+                  department: e.target.value,
                 })
               }}
               options={

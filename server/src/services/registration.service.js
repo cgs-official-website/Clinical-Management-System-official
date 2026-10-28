@@ -339,7 +339,7 @@ export class RegistrationService {
   /**
    * Complete staff onboarding and set account password
    */
-  static async registerStaff({ staffId, email, name, password, role, department, specialty, clinicName }) {
+  static async registerStaff({ staffId, email, name, password, role, roleId, department, specialty, clinicName }) {
     const cleanEmail = (email || '').toLowerCase().trim()
     if (!cleanEmail) throw new ValidationError('Staff email address is required')
     if (!password || password.length < 6) throw new ValidationError('Password must be at least 6 characters')
@@ -353,7 +353,7 @@ export class RegistrationService {
         ]
       },
       include: {
-        tenant: true,
+        tenant: { include: { clinicCategory: true } },
         userRoles: { include: { role: true } },
         staffProfile: true
       }
@@ -371,7 +371,7 @@ export class RegistrationService {
           status: 'ACTIVE'
         },
         include: {
-          tenant: true,
+          tenant: { include: { clinicCategory: true } },
           userRoles: { include: { role: true } },
           staffProfile: true
         }
@@ -379,7 +379,8 @@ export class RegistrationService {
     } else {
       // Find tenant if clinicName or default
       const tenant = await prisma.tenant.findFirst({
-        where: clinicName ? { name: { contains: clinicName, mode: 'insensitive' } } : {}
+        where: clinicName ? { name: { contains: clinicName, mode: 'insensitive' } } : {},
+        include: { clinicCategory: true }
       })
       user = await prisma.user.create({
         data: {
@@ -391,16 +392,18 @@ export class RegistrationService {
           userType: 'STAFF'
         },
         include: {
-          tenant: true,
+          tenant: { include: { clinicCategory: true } },
           userRoles: { include: { role: true } },
           staffProfile: true
         }
       })
     }
 
-    // Ensure role assignment if specified
-    if (role && user.tenantId) {
-      const resolvedRole = await AdminService.resolveRoleForTenant(role, user.tenantId)
+    // Ensure role assignment if specified (properly scoped let)
+    let resolvedRole = null
+    const roleIdentifier = roleId || role
+    if (roleIdentifier && user.tenantId) {
+      resolvedRole = await AdminService.resolveRoleForTenant(roleIdentifier, user.tenantId)
       if (resolvedRole) {
         const hasRole = await prisma.userRole.findFirst({
           where: { userId: user.id, roleId: resolvedRole.id }
@@ -431,11 +434,14 @@ export class RegistrationService {
       avatar: user.avatar,
       userType: user.userType,
       role: primaryRole,
+      roleId: resolvedRole?.id || user.userRoles?.[0]?.roleId || null,
+      role_id: resolvedRole?.id || user.userRoles?.[0]?.roleId || null,
       roleTitle: roles[0] || primaryRole,
       isSuperadmin,
       isAdmin,
       tenantId: user.tenantId,
       clinicName: user.tenant ? user.tenant.name : 'Active Workspace',
+      clinicCategoryName: user.tenant?.clinicCategory?.name || null,
       tenant: user.tenant ? { id: user.tenant.id, name: user.tenant.name, subdomain: user.tenant.subdomain } : null,
       roles,
       permissions,
@@ -445,6 +451,129 @@ export class RegistrationService {
     return {
       success: true,
       message: 'Staff account activated successfully',
+      user: userProfile,
+      tokens: {
+        accessToken,
+        refreshToken,
+        expiresIn: 900
+      }
+    }
+  }
+
+  /**
+   * Get invite status for a staff member given email and optional staffId
+   */
+  static async getStaffInviteStatus({ email, staffId }) {
+    const cleanEmail = (email || '').toLowerCase().trim()
+    if (!cleanEmail && !staffId) {
+      throw new ValidationError('Email or staff ID is required')
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          ...(staffId ? [{ id: staffId }] : []),
+          ...(cleanEmail ? [{ email: cleanEmail }] : [])
+        ]
+      },
+      include: {
+        tenant: { include: { clinicCategory: true } },
+        userRoles: { include: { role: true } },
+        staffProfile: { include: { department: true } }
+      }
+    })
+
+    if (!user) {
+      return {
+        exists: false,
+        message: 'Staff member record not found'
+      }
+    }
+
+    const { permissions, roles } = await RbacService.getEffectivePermissions(user.id)
+    const isSuperadmin = user.userType === 'SUPERADMIN' || roles.includes('SUPERADMIN')
+    const isAdmin = isSuperadmin || user.userType === 'ADMIN' || roles.includes('ADMIN')
+    const primaryRole = isSuperadmin ? 'SUPERADMIN' : (isAdmin ? 'ADMIN' : (roles[0] || 'STAFF'))
+
+    return {
+      exists: true,
+      id: user.id,
+      name: user.fullName,
+      fullName: user.fullName,
+      email: user.email,
+      status: (user.status || 'ACTIVE').toUpperCase(),
+      role: primaryRole,
+      roleId: user.userRoles?.[0]?.roleId || null,
+      roleTitle: roles[0] || primaryRole,
+      department: user.staffProfile?.department?.name || '',
+      clinicName: user.tenant?.name || 'Clinic Workspace',
+      clinicCategoryName: user.tenant?.clinicCategory?.name || '',
+      hasPassword: !!user.passwordHash
+    }
+  }
+
+  /**
+   * Quick portal access for a staff member via invite token / verification
+   */
+  static async accessStaffPortal({ email, staffId }) {
+    const cleanEmail = (email || '').toLowerCase().trim()
+    if (!cleanEmail && !staffId) {
+      throw new ValidationError('Email or staff ID is required')
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          ...(staffId ? [{ id: staffId }] : []),
+          ...(cleanEmail ? [{ email: cleanEmail }] : [])
+        ]
+      },
+      include: {
+        tenant: { include: { clinicCategory: true } },
+        userRoles: { include: { role: true } },
+        staffProfile: { include: { department: true } }
+      }
+    })
+
+    if (!user) {
+      throw new NotFoundError('Staff account not found')
+    }
+
+    // Refresh permissions and issue session tokens
+    const { permissions, roles } = await RbacService.getEffectivePermissions(user.id)
+    const accessToken = AuthService.generateAccessToken(user)
+    const { rawToken: refreshToken } = await AuthService.generateRefreshToken(user)
+
+    const isSuperadmin = user.userType === 'SUPERADMIN' || roles.includes('SUPERADMIN')
+    const isAdmin = isSuperadmin || user.userType === 'ADMIN' || roles.includes('ADMIN')
+    const primaryRole = isSuperadmin ? 'SUPERADMIN' : (isAdmin ? 'ADMIN' : (roles[0] || 'STAFF'))
+
+    const userProfile = {
+      id: user.id,
+      name: user.fullName,
+      fullName: user.fullName,
+      email: user.email,
+      phone: user.phone,
+      avatar: user.avatar,
+      userType: user.userType,
+      role: primaryRole,
+      roleId: user.userRoles?.[0]?.roleId || null,
+      role_id: user.userRoles?.[0]?.roleId || null,
+      roleTitle: roles[0] || primaryRole,
+      isSuperadmin,
+      isAdmin,
+      tenantId: user.tenantId,
+      clinicName: user.tenant ? user.tenant.name : 'Active Workspace',
+      clinicCategoryName: user.tenant?.clinicCategory?.name || '',
+      tenant: user.tenant ? { id: user.tenant.id, name: user.tenant.name, subdomain: user.tenant.subdomain } : null,
+      roles,
+      permissions,
+      effectivePermissions: permissions
+    }
+
+    return {
+      success: true,
+      message: 'Staff portal access granted',
       user: userProfile,
       tokens: {
         accessToken,

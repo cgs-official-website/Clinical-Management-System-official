@@ -9,8 +9,6 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
-  Monitor,
-  Globe,
   SlidersHorizontal,
   Eye,
 } from 'lucide-react'
@@ -288,7 +286,7 @@ export const AuditLogsPage = () => {
             </h1>
             <p className="text-xs text-text-secondary mt-1 max-w-2xl leading-relaxed">
               Trail of create, update, delete, login, permission and settings actions across all clinics.
-              Every operation is recorded with actor role, network origin, and state snapshot.
+              Every operation is recorded with actor role and state snapshot.
             </p>
           </div>
         </div>
@@ -374,7 +372,7 @@ export const AuditLogsPage = () => {
         {/* Query State Displays */}
         {isLoading ? (
           <div className="p-4">
-            <SkeletonTable rows={8} cols={6} />
+            <SkeletonTable rows={8} cols={7} />
           </div>
         ) : isError ? (
           <div className="p-12 text-center flex flex-col items-center justify-center space-y-3">
@@ -421,7 +419,6 @@ export const AuditLogsPage = () => {
                   <th className="py-3 px-4">Module</th>
                   <th className="py-3 px-4">Target Record / Description</th>
                   <th className="py-3 px-4">Clinic Scope</th>
-                  <th className="py-3 px-4">IP & Device</th>
                   <th className="py-3 px-3 text-center">Actions</th>
                 </tr>
               </thead>
@@ -507,21 +504,7 @@ export const AuditLogsPage = () => {
                         </span>
                       </td>
 
-                      {/* 7. IP & Device */}
-                      <td className="py-3.5 px-4 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5 font-mono text-[11px] text-text-primary">
-                          <Globe className="w-3.5 h-3.5 text-text-secondary shrink-0" />
-                          <span>{log.ipAddress || '—'}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-[10px] text-text-secondary mt-0.5">
-                          <Monitor className="w-3 h-3 text-text-secondary/70 shrink-0" />
-                          <span className="truncate max-w-[140px]" title={log.device}>
-                            {log.device || '—'}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* 8. Actions (Inspect Record) */}
+                      {/* 7. Actions (Inspect Record) */}
                       <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <button
                           type="button"

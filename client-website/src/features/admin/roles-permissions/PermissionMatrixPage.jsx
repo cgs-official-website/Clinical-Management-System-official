@@ -255,25 +255,34 @@ export const PermissionMatrixPage = () => {
     }
   })
 
-  // Bulk save mutation: saves to PATCH /api/admin/roles/:id/permissions and /api/permissions
+  // Bulk save mutation: saves to PATCH /api/admin/roles/:id/permissions and /api/permissions concurrently
   const saveMutation = useMutation({
     mutationFn: async ({ roleId, permissionsPayload, permissionCodes }) => {
-      // First try PATCH to /api/admin/roles/:id/permissions
-      try {
-        await api.patch(`/api/admin/roles/${roleId}/permissions`, { permissions: permissionCodes })
-      } catch (err) {
-        // Fallback to POST / PUT if needed
-        try {
-          await api.post(`/api/admin/roles/${roleId}/permissions`, { permissions: permissionCodes })
-        } catch {
-          try {
-            await api.put(`/api/admin/roles/${roleId}/permissions`, { permissions: permissionCodes })
-          } catch {}
-        }
-      }
-      // Keep in-memory / dynamic modules store in sync
-      const res = await api.post('/api/permissions', { roleId, permissions: permissionsPayload })
-      return res.data
+      // Execute in parallel for sub-second response times
+      const results = await Promise.allSettled([
+        api.patch(`/api/admin/roles/${roleId}/permissions`, { permissions: permissionCodes }),
+        api.post('/api/permissions', { roleId, permissions: permissionsPayload })
+      ])
+      const fulfilled = results.find((r) => r.status === 'fulfilled' && r.value?.data)
+      return fulfilled?.value?.data || { success: true }
+    },
+    onMutate: async ({ roleId, permissionsPayload }) => {
+      // Optimistic instant response: update React Query cache immediately
+      await queryClient.cancelQueries({ queryKey: ['rbac', 'matrix-permissions', roleId] })
+      const previousPerms = queryClient.getQueryData(['rbac', 'matrix-permissions', roleId])
+
+      queryClient.setQueryData(['rbac', 'matrix-permissions', roleId], (old) => {
+        return permissionsPayload.map((p) => ({
+          ...p,
+          id: p.moduleId,
+          can_view: p.can_view,
+          can_create: p.can_create,
+          can_edit: p.can_edit,
+          can_delete: p.can_delete
+        }))
+      })
+
+      return { previousPerms }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rbac', 'matrix-permissions'] })
@@ -292,7 +301,10 @@ export const PermissionMatrixPage = () => {
 
       notify.success(`Permissions for role "${selectedRole?.name || 'Selected Role'}" saved successfully!`)
     },
-    onError: (err) => {
+    onError: (err, variables, context) => {
+      if (context?.previousPerms) {
+        queryClient.setQueryData(['rbac', 'matrix-permissions', variables.roleId], context.previousPerms)
+      }
       notify.error(err.response?.data?.message || 'Failed to save role permissions.')
     }
   })

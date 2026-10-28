@@ -480,8 +480,14 @@ export class AdminService {
       const deptClean = options.department.toLowerCase().trim()
       uniqueRoles = uniqueRoles.filter(r => {
         const rName = (r.name || '').toLowerCase()
-        // Admin roles are always available across all departments
-        if (rName.includes('admin') || rName.includes('administrator')) return true
+        // Admin, doctor, and custom clinic roles are always available across all departments
+        if (
+          rName.includes('admin') ||
+          rName.includes('administrator') ||
+          rName.includes('doctor') ||
+          rName.includes('physician') ||
+          !r.isSystemRole
+        ) return true
 
         if (deptClean.includes('cardio') || deptClean.includes('cardiac')) {
           return !rName.includes('dent') && !rName.includes('physio')
@@ -518,6 +524,7 @@ export class AdminService {
    * Create a new custom role dynamically
    */
   static async createRole({ tenantId, name, displayName, description, permissionCodes = [], actorId }) {
+    rolesCache.clear()
     const cleanName = (name || displayName || '').trim()
     if (!cleanName) {
       throw new ConflictError('Role name is required')
@@ -650,6 +657,7 @@ export class AdminService {
    * Update role permissions dynamically and invalidate cache
    */
   static async updateRolePermissions({ roleId, tenantId, permissionCodes = [], actorId }) {
+    rolesCache.clear()
     if (tenantId) {
       await this.seedTenantRoles(tenantId)
     }
@@ -738,6 +746,7 @@ export class AdminService {
    * Delete a custom role
    */
   static async deleteRole(roleId, tenantId, actorId) {
+    rolesCache.clear()
     const role = await prisma.role.findFirst({
       where: {
         id: roleId,

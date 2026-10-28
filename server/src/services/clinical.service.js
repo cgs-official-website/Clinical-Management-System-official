@@ -1,4 +1,5 @@
 import { prisma } from '../config/prisma.js'
+import { AppointmentStatus } from '@prisma/client'
 import { NotFoundError, ValidationError } from '../utils/errors.js'
 import { AuditService } from './audit.service.js'
 
@@ -562,7 +563,15 @@ export class ClinicalService {
       if (!isNaN(parsed.getTime())) updatePayload.scheduledAt = parsed
     }
     if (data.durationMinutes !== undefined) updatePayload.durationMinutes = parseInt(data.durationMinutes, 10) || 30
-    if (data.status !== undefined) updatePayload.status = data.status
+    if (data.status !== undefined) {
+      const rawStatus = String(data.status).toUpperCase().replace(/[\s-]/g, '_').trim()
+      const allowed = Object.values(AppointmentStatus)
+      if (allowed.includes(rawStatus)) {
+        updatePayload.status = rawStatus
+      } else {
+        updatePayload.status = data.status
+      }
+    }
     if (data.type !== undefined || data.appointmentType !== undefined) updatePayload.type = data.type || data.appointmentType
     if (data.room !== undefined) updatePayload.room = data.room
     if (data.reason !== undefined) updatePayload.reason = data.reason

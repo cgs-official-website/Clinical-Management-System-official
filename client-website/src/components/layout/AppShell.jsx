@@ -155,7 +155,9 @@ export const AppShell = () => {
             (currentUser.role !== freshUser.role ||
               currentUser.roleTitle !== freshUser.roleTitle ||
               currentUser.clinicName !== freshUser.clinicName ||
-              JSON.stringify(currentUser.roles) !== JSON.stringify(freshUser.roles))
+              currentUser.roleId !== freshUser.roleId ||
+              JSON.stringify(currentUser.roles) !== JSON.stringify(freshUser.roles) ||
+              JSON.stringify(currentUser.permissions) !== JSON.stringify(freshUser.permissions))
           ) {
             useAuthStore.getState().setUser({
               ...currentUser,

@@ -1,4 +1,5 @@
 import { ClinicalService } from '../services/clinical.service.js'
+import { AppointmentStatus } from '@prisma/client'
 import { RbacService } from '../services/rbac.service.js'
 
 export class ClinicalController {
@@ -82,6 +83,24 @@ export class ClinicalController {
   /* =========================================================================
    * APPOINTMENTS
    * ========================================================================= */
+  static async getAppointmentStatuses(req, res, next) {
+    try {
+      const statuses = Object.values(AppointmentStatus).map((status) => ({
+        value: status,
+        label: status
+          .toLowerCase()
+          .replace(/[_-]/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase())
+      }))
+      return res.status(200).json({
+        success: true,
+        statuses
+      })
+    } catch (error) {
+      next(error)
+    }
+  }
+
   static async getAppointments(req, res, next) {
     try {
       const page = parseInt(req.query.page, 10) || 1
@@ -97,10 +116,19 @@ export class ClinicalController {
         date
       })
 
+      const statuses = Object.values(AppointmentStatus).map((status) => ({
+        value: status,
+        label: status
+          .toLowerCase()
+          .replace(/[_-]/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase())
+      }))
+
       return res.status(200).json({
         success: true,
         appointments: result.data,
         data: result.data,
+        statuses,
         total: result.pagination?.total || result.data?.length,
         pagination: result.pagination
       })

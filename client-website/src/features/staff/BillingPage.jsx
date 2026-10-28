@@ -13,13 +13,15 @@ export const BillingPage = () => {
   const queryClient = useQueryClient()
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-  const [formData, setFormData] = useState({
-    patientName: 'Sophia Maria Gonzalez',
-    amount: 250.0,
-    insuranceCoverage: 200.0,
-    patientResponsibility: 50.0,
+
+  const initialFormData = {
+    patientName: '',
+    amount: '',
+    insuranceCoverage: '',
+    patientResponsibility: '',
     paymentMethod: 'Credit Card',
-  })
+  }
+  const [formData, setFormData] = useState(initialFormData)
 
   const { data, isLoading } = useQuery({
     queryKey: ['staff', 'billing'],
@@ -31,6 +33,15 @@ export const BillingPage = () => {
     placeholderData: (prev) => prev,
   })
 
+  const { data: patientsData } = useQuery({
+    queryKey: ['staff', 'patients'],
+    queryFn: async () => {
+      const res = await api.get('/api/staff/patients')
+      return res.data?.patients || res.data?.data || []
+    },
+    staleTime: 60 * 1000,
+  })
+
   const createInvoiceMutation = useMutation({
     mutationFn: async (payload) => {
       const res = await api.post('/api/staff/billing', payload)
@@ -39,6 +50,7 @@ export const BillingPage = () => {
     onSuccess: (newInv) => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'billing'] })
       setIsInvoiceOpen(false)
+      setFormData(initialFormData)
       const invNum = newInv.invoiceNumber || newInv.data?.invoiceNumber || 'New'
       notify.success(`Invoice ${invNum} recorded!`)
     },
@@ -122,7 +134,10 @@ export const BillingPage = () => {
         <Button
           variant="primary"
           size="sm"
-          onClick={() => setIsInvoiceOpen(true)}
+          onClick={() => {
+            setFormData(initialFormData)
+            setIsInvoiceOpen(true)
+          }}
           leftIcon={<Plus className="w-4 h-4" />}
           className="w-full sm:w-auto shrink-0 shadow-sm"
         >
@@ -143,48 +158,82 @@ export const BillingPage = () => {
       <Modal
         isOpen={isInvoiceOpen}
         onClose={() => setIsInvoiceOpen(false)}
+        maxWidth="max-w-lg"
         title="Generate Clinical Invoice"
         description="Creates an itemized billing ledger record."
       >
         <form
           onSubmit={(e) => {
             e.preventDefault()
-            createInvoiceMutation.mutate(formData)
+            const payload = {
+              ...formData,
+              amount: parseFloat(formData.amount) || 0,
+              insuranceCoverage: parseFloat(formData.insuranceCoverage) || 0,
+              patientResponsibility: parseFloat(formData.patientResponsibility) || 0,
+            }
+            createInvoiceMutation.mutate(payload)
           }}
           className="space-y-4"
         >
           <Input
             label="Patient Name"
             required
+            placeholder="e.g. Liam Reyes"
+            list="billing-patients-list"
             value={formData.patientName}
             onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
           />
+          <datalist id="billing-patients-list">
+            {(Array.isArray(patientsData) ? patientsData : []).map((p) => (
+              <option key={p.id || p.fullName} value={p.fullName || p.name} />
+            ))}
+          </datalist>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input
               label="Total Fee (₹)"
               type="number"
               step="0.01"
+              min="0"
               required
+              placeholder="0.00"
               value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
+              onChange={(e) => {
+                const val = e.target.value
+                setFormData((prev) => {
+                  const numAmt = parseFloat(val) || 0
+                  const numIns = parseFloat(prev.insuranceCoverage) || 0
+                  const copay = val && prev.insuranceCoverage ? Math.max(0, numAmt - numIns).toFixed(2) : prev.patientResponsibility
+                  return { ...prev, amount: val, patientResponsibility: copay }
+                })
+              }}
             />
             <Input
               label="Insurance Paid (₹)"
               type="number"
               step="0.01"
+              min="0"
+              placeholder="0.00"
               value={formData.insuranceCoverage}
-              onChange={(e) =>
-                setFormData({ ...formData, insuranceCoverage: parseFloat(e.target.value) || 0 })
-              }
+              onChange={(e) => {
+                const val = e.target.value
+                setFormData((prev) => {
+                  const numAmt = parseFloat(prev.amount) || 0
+                  const numIns = parseFloat(val) || 0
+                  const copay = prev.amount && val ? Math.max(0, numAmt - numIns).toFixed(2) : prev.patientResponsibility
+                  return { ...prev, insuranceCoverage: val, patientResponsibility: copay }
+                })
+              }}
             />
             <Input
               label="Patient Copay (₹)"
               type="number"
               step="0.01"
+              min="0"
+              placeholder="0.00"
               value={formData.patientResponsibility}
               onChange={(e) =>
-                setFormData({ ...formData, patientResponsibility: parseFloat(e.target.value) || 0 })
+                setFormData({ ...formData, patientResponsibility: e.target.value })
               }
             />
           </div>

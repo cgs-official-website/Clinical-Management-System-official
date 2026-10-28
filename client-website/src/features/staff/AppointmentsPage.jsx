@@ -234,7 +234,20 @@ export const AppointmentsPage = () => {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => setIsBookOpen(true)}
+              onClick={() => {
+                setFormData({
+                  patientName: '',
+                  patientPhone: '',
+                  doctorName: user?.name || user?.fullName || 'Attending Clinician',
+                  department: user?.clinicCategoryName || user?.department || 'General Practice',
+                  dateTime: new Date().toISOString().slice(0, 16),
+                  durationMinutes: 30,
+                  type: 'In-Person Consultation',
+                  reason: '',
+                  room: 'Consultation Room 1',
+                })
+                setIsBookOpen(true)
+              }}
               leftIcon={<Plus className="w-4 h-4" />}
               className="w-full sm:w-auto shrink-0 shadow-sm"
             >
@@ -393,6 +406,7 @@ export const AppointmentsPage = () => {
       <Modal
         isOpen={isBookOpen}
         onClose={() => setIsBookOpen(false)}
+        maxWidth="max-w-2xl"
         title="Schedule Clinical Appointment"
         description="Book a dedicated consultation slot with room assignment."
       >
@@ -401,17 +415,16 @@ export const AppointmentsPage = () => {
             e.preventDefault()
             bookMutation.mutate(formData)
           }}
-          className="space-y-4"
+          className="flex flex-col space-y-4"
         >
-          <Input
-            label="Patient Full Name"
-            required
-            placeholder="Liam Reyes"
-            value={formData.patientName}
-            onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
-          />
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Input
+              label="Patient Full Name"
+              required
+              placeholder="e.g. Liam Reyes"
+              value={formData.patientName}
+              onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
+            />
             <Input
               label="Contact Phone"
               type="tel"
@@ -439,16 +452,49 @@ export const AppointmentsPage = () => {
                 }
               }}
             />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
-              label="Appointment Date & Time"
-              type="datetime-local"
+              label="Appointment Date"
+              type="date"
               required
-              value={formData.dateTime}
-              onChange={(e) => setFormData({ ...formData, dateTime: e.target.value })}
+              value={formData.dateTime ? formData.dateTime.slice(0, 10) : ''}
+              onChange={(e) => {
+                const dateVal = e.target.value
+                const timeVal =
+                  formData.dateTime && formData.dateTime.includes('T')
+                    ? formData.dateTime.slice(11, 16)
+                    : '09:00'
+                setFormData((prev) => ({
+                  ...prev,
+                  dateTime: dateVal ? `${dateVal}T${timeVal}` : '',
+                }))
+              }}
+            />
+            <Input
+              label="Appointment Time"
+              type="time"
+              required
+              value={
+                formData.dateTime && formData.dateTime.includes('T')
+                  ? formData.dateTime.slice(11, 16)
+                  : ''
+              }
+              onChange={(e) => {
+                const timeVal = e.target.value
+                const dateVal = formData.dateTime
+                  ? formData.dateTime.slice(0, 10)
+                  : new Date().toISOString().slice(0, 10)
+                setFormData((prev) => ({
+                  ...prev,
+                  dateTime: `${dateVal}T${timeVal}`,
+                }))
+              }}
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Select
               label="Visit Type"
               value={formData.type}
@@ -467,14 +513,15 @@ export const AppointmentsPage = () => {
               options={
                 doctorOptions.length > 0
                   ? doctorOptions
-                  : [{ value: formData.doctorName || 'Dr dev prakash', label: formData.doctorName || 'Dr dev prakash (Cardiac Surgery)' }]
+                  : [{ value: formData.doctorName || 'Attending Doctor', label: formData.doctorName || 'Attending Doctor' }]
               }
             />
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Clinical Room / Location"
+              placeholder="e.g. Consultation Room 1"
               value={formData.room}
               onChange={(e) => setFormData({ ...formData, room: e.target.value })}
             />
@@ -487,7 +534,7 @@ export const AppointmentsPage = () => {
             />
           </div>
 
-          <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-border">
+          <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-border shrink-0">
             <Button variant="secondary" size="sm" type="button" onClick={() => setIsBookOpen(false)}>
               Cancel
             </Button>

@@ -121,9 +121,11 @@ router.delete('/patients/:id', requirePermission('patients.delete'), ClinicalCon
 /* =========================================================================
  * APPOINTMENTS
  * ========================================================================= */
+router.get('/appointments/statuses', requirePermission('appointments.view'), ClinicalController.getAppointmentStatuses)
 router.get('/appointments', requirePermission('appointments.view'), ClinicalController.getAppointments)
 router.post('/appointments', requirePermission('appointments.create'), validateRequest({ body: createAppointmentSchema }), ClinicalController.createAppointment)
 router.patch('/appointments/:id', requirePermission('appointments.edit'), ClinicalController.updateAppointment)
+router.put('/appointments/:id', requirePermission('appointments.edit'), ClinicalController.updateAppointment)
 
 /* =========================================================================
  * CLINICAL DOCTORS DIRECTORY (FOR TRIAGE CHECK-IN & APPOINTMENT ASSIGNMENT)

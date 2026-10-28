@@ -1,4 +1,4 @@
-import React, { useState, lazy, Suspense } from 'react'
+import React, { useState, useMemo, lazy, Suspense } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Boxes, Plus, CheckCircle2, Pill, Download, FileSpreadsheet } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { Input } from '../../components/ui/Input'
+import { Select } from '../../components/ui/Select'
 import { notify } from '../../components/ui/Toast'
 import { PermissionAction } from '../../components/common/PermissionAction'
 import { BulkImportModal } from './components/BulkImportModal'
@@ -23,18 +24,29 @@ export const InventoryPage = () => {
   const [selectedFulfillRx, setSelectedFulfillRx] = useState(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [isBulkImportOpen, setIsBulkImportOpen] = useState(false)
-  const [formData, setFormData] = useState({
-    itemCode: 'MED-CIPRO-500',
-    name: 'Ciprofloxacin 500mg Tablets',
-    category: 'Antibiotics',
-    stockQuantity: 300,
-    unit: 'Tablets',
-    minReorderThreshold: 100,
-    batchNumber: 'BCH-2026-90',
-    expiryDate: '2027-12-31',
-    unitCost: 0.35,
-    sellingPrice: 1.5,
-  })
+
+  const initialFormData = {
+    itemCode: '',
+    name: '',
+    category: '',
+    newCategory: '',
+    stockQuantity: '',
+    unit: '',
+    minReorderThreshold: '',
+    batchNumber: '',
+    expiryDate: '',
+    unitCost: '',
+    sellingPrice: '',
+  }
+
+  const [formData, setFormData] = useState(initialFormData)
+  const [formErrors, setFormErrors] = useState({})
+
+  const handleOpenAdd = () => {
+    setFormData(initialFormData)
+    setFormErrors({})
+    setIsAddOpen(true)
+  }
 
   const handleDownloadTemplate = async () => {
     try {
@@ -89,6 +101,60 @@ export const InventoryPage = () => {
     (p) => p.status !== 'Fulfilled' && p.status !== 'Dispensed'
   ).length
 
+  const inventory = Array.isArray(data) ? data : data?.inventory || data?.data || []
+
+  // Extract distinct existing categories dynamically from inventory items
+  const existingCategories = useMemo(() => {
+    const set = new Set()
+    inventory.forEach((item) => {
+      if (item.category && typeof item.category === 'string') {
+        const c = item.category.trim()
+        if (c) set.add(c)
+      }
+    })
+    return Array.from(set).sort()
+  }, [inventory])
+
+  const validateForm = () => {
+    const errors = {}
+    if (!formData.itemCode.trim()) errors.itemCode = 'Item Code is required'
+    if (!formData.name.trim()) errors.name = 'Drug / Consumable Name is required'
+
+    if (!formData.category) {
+      errors.category = 'Please select a category'
+    } else if (formData.category === '__NEW__' && !formData.newCategory.trim()) {
+      errors.newCategory = 'Please enter category name'
+    }
+
+    if (!formData.unit.trim()) errors.unit = 'Unit is required'
+
+    if (formData.stockQuantity === '' || isNaN(formData.stockQuantity) || Number(formData.stockQuantity) <= 0) {
+      errors.stockQuantity = 'Quantity must be greater than 0'
+    }
+
+    if (
+      formData.minReorderThreshold === '' ||
+      isNaN(formData.minReorderThreshold) ||
+      Number(formData.minReorderThreshold) < 0
+    ) {
+      errors.minReorderThreshold = 'Reorder level must be 0 or more'
+    }
+
+    if (!formData.batchNumber.trim()) errors.batchNumber = 'Batch Number is required'
+    if (!formData.expiryDate) errors.expiryDate = 'Expiry Date is required'
+
+    if (formData.unitCost === '' || isNaN(formData.unitCost) || Number(formData.unitCost) < 0) {
+      errors.unitCost = 'Unit cost is required'
+    }
+
+    if (formData.sellingPrice === '' || isNaN(formData.sellingPrice) || Number(formData.sellingPrice) < 0) {
+      errors.sellingPrice = 'Selling price is required'
+    }
+
+    setFormErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
   const addMutation = useMutation({
     mutationFn: async (payload) => {
       const res = await api.post('/api/staff/inventory', payload)
@@ -97,12 +163,33 @@ export const InventoryPage = () => {
     onSuccess: (item) => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'inventory'] })
       setIsAddOpen(false)
-      notify.success(`Stock item ${item.name} added!`)
+      setFormData(initialFormData)
+      setFormErrors({})
+      notify.success(`Stock item ${item.name || 'successfully'} added!`)
     },
     onError: (err) => notify.error(err.response?.data?.message || 'Failed to add inventory item.'),
   })
 
-  const inventory = Array.isArray(data) ? data : data?.inventory || data?.data || []
+  const handleSubmitAdd = (e) => {
+    e.preventDefault()
+    if (!validateForm()) return
+
+    const categoryVal =
+      formData.category === '__NEW__' ? formData.newCategory.trim() : formData.category.trim()
+
+    addMutation.mutate({
+      itemCode: formData.itemCode.trim(),
+      name: formData.name.trim(),
+      category: categoryVal,
+      unit: formData.unit.trim(),
+      stockQuantity: Number(formData.stockQuantity),
+      minReorderThreshold: Number(formData.minReorderThreshold),
+      batchNumber: formData.batchNumber.trim(),
+      expiryDate: formData.expiryDate,
+      unitCost: Number(formData.unitCost),
+      sellingPrice: Number(formData.sellingPrice),
+    })
+  }
 
   const columns = [
     {
@@ -251,7 +338,7 @@ export const InventoryPage = () => {
             <Button
               variant="primary"
               size="sm"
-              onClick={() => setIsAddOpen(true)}
+              onClick={handleOpenAdd}
               leftIcon={<Plus className="w-4 h-4" />}
               className="w-full sm:w-auto shrink-0 shadow-sm"
             >
@@ -399,80 +486,231 @@ export const InventoryPage = () => {
       {/* Receive Stock Modal */}
       <Modal
         isOpen={isAddOpen}
-        onClose={() => setIsAddOpen(false)}
+        onClose={() => {
+          setIsAddOpen(false)
+          setFormErrors({})
+        }}
+        maxWidth="max-w-2xl"
         title="Receive New Pharmacy Stock"
         description="Record newly delivered pharmaceutical batches into clinic inventory."
       >
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            addMutation.mutate(formData)
-          }}
-          className="space-y-4"
-        >
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Item Code"
-              required
-              value={formData.itemCode}
-              onChange={(e) => setFormData({ ...formData, itemCode: e.target.value })}
-            />
-            <Input
-              label="Drug / Consumable Name"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            />
+        <form onSubmit={handleSubmitAdd} className="flex flex-col">
+          <div className="space-y-5 max-h-[68vh] overflow-y-auto pr-1">
+            {/* Section 1: Item Details */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">
+                  Item Details
+                </span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+                <Input
+                  label="Item Code"
+                  placeholder="MED-0001"
+                  required
+                  className="h-10"
+                  value={formData.itemCode}
+                  error={formErrors.itemCode}
+                  onChange={(e) => {
+                    setFormData({ ...formData, itemCode: e.target.value })
+                    if (formErrors.itemCode) setFormErrors({ ...formErrors, itemCode: null })
+                  }}
+                />
+                <Input
+                  label="Drug / Consumable Name"
+                  placeholder="Paracetamol 500mg"
+                  required
+                  className="h-10"
+                  value={formData.name}
+                  error={formErrors.name}
+                  onChange={(e) => {
+                    setFormData({ ...formData, name: e.target.value })
+                    if (formErrors.name) setFormErrors({ ...formErrors, name: null })
+                  }}
+                />
+                <Select
+                  label="Category"
+                  required
+                  className="h-10"
+                  value={formData.category}
+                  error={formErrors.category}
+                  onChange={(e) => {
+                    setFormData({ ...formData, category: e.target.value })
+                    if (formErrors.category) setFormErrors({ ...formErrors, category: null })
+                  }}
+                >
+                  <option value="">Select a category</option>
+                  {existingCategories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                  <option value="__NEW__">+ Add new category</option>
+                </Select>
+                <Input
+                  label="Unit"
+                  placeholder="Tablets"
+                  required
+                  className="h-10"
+                  helperText="Tablets, Bottles, Strips"
+                  value={formData.unit}
+                  error={formErrors.unit}
+                  onChange={(e) => {
+                    setFormData({ ...formData, unit: e.target.value })
+                    if (formErrors.unit) setFormErrors({ ...formErrors, unit: null })
+                  }}
+                />
+
+                {formData.category === '__NEW__' && (
+                  <div className="sm:col-span-2 animate-in fade-in duration-200">
+                    <Input
+                      label="New Category Name"
+                      placeholder="e.g. Analgesics"
+                      required
+                      className="h-10"
+                      value={formData.newCategory}
+                      error={formErrors.newCategory}
+                      onChange={(e) => {
+                        setFormData({ ...formData, newCategory: e.target.value })
+                        if (formErrors.newCategory) setFormErrors({ ...formErrors, newCategory: null })
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Section 2: Stock & Batch */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">
+                  Stock & Batch
+                </span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+                <Input
+                  label="Stock Quantity"
+                  type="number"
+                  placeholder="300"
+                  min="1"
+                  required
+                  className="h-10"
+                  value={formData.stockQuantity}
+                  error={formErrors.stockQuantity}
+                  onChange={(e) => {
+                    setFormData({ ...formData, stockQuantity: e.target.value })
+                    if (formErrors.stockQuantity) setFormErrors({ ...formErrors, stockQuantity: null })
+                  }}
+                />
+                <Input
+                  label="Reorder Level"
+                  type="number"
+                  placeholder="50"
+                  min="0"
+                  required
+                  className="h-10"
+                  helperText="Alert when stock falls below this"
+                  value={formData.minReorderThreshold}
+                  error={formErrors.minReorderThreshold}
+                  onChange={(e) => {
+                    setFormData({ ...formData, minReorderThreshold: e.target.value })
+                    if (formErrors.minReorderThreshold) setFormErrors({ ...formErrors, minReorderThreshold: null })
+                  }}
+                />
+                <Input
+                  label="Batch Number"
+                  placeholder="BCH-0001"
+                  required
+                  className="h-10"
+                  value={formData.batchNumber}
+                  error={formErrors.batchNumber}
+                  onChange={(e) => {
+                    setFormData({ ...formData, batchNumber: e.target.value })
+                    if (formErrors.batchNumber) setFormErrors({ ...formErrors, batchNumber: null })
+                  }}
+                />
+                <Input
+                  label="Expiry Date"
+                  type="date"
+                  placeholder="dd-mm-yyyy"
+                  required
+                  className="h-10"
+                  value={formData.expiryDate}
+                  error={formErrors.expiryDate}
+                  onChange={(e) => {
+                    setFormData({ ...formData, expiryDate: e.target.value })
+                    if (formErrors.expiryDate) setFormErrors({ ...formErrors, expiryDate: null })
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Section 3: Pricing */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">
+                  Pricing
+                </span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+                <Input
+                  label="Unit Cost (₹)"
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  min="0"
+                  required
+                  className="h-10"
+                  value={formData.unitCost}
+                  error={formErrors.unitCost}
+                  onChange={(e) => {
+                    setFormData({ ...formData, unitCost: e.target.value })
+                    if (formErrors.unitCost) setFormErrors({ ...formErrors, unitCost: null })
+                  }}
+                />
+                <Input
+                  label="Selling Price (₹)"
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  min="0"
+                  required
+                  className="h-10"
+                  value={formData.sellingPrice}
+                  error={formErrors.sellingPrice}
+                  onChange={(e) => {
+                    setFormData({ ...formData, sellingPrice: e.target.value })
+                    if (formErrors.sellingPrice) setFormErrors({ ...formErrors, sellingPrice: null })
+                  }}
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <Input
-              label="Stock Quantity"
-              type="number"
-              required
-              value={formData.stockQuantity}
-              onChange={(e) =>
-                setFormData({ ...formData, stockQuantity: parseInt(e.target.value) || 0 })
-              }
-            />
-            <Input
-              label="Unit (e.g. Tablets)"
-              required
-              value={formData.unit}
-              onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-            />
-            <Input
-              label="Reorder Alert Threshold"
-              type="number"
-              required
-              value={formData.minReorderThreshold}
-              onChange={(e) =>
-                setFormData({ ...formData, minReorderThreshold: parseInt(e.target.value) || 0 })
-              }
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Input
-              label="Batch Number"
-              required
-              value={formData.batchNumber}
-              onChange={(e) => setFormData({ ...formData, batchNumber: e.target.value })}
-            />
-            <Input
-              label="Expiration Date"
-              type="date"
-              required
-              value={formData.expiryDate}
-              onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
-            />
-          </div>
-
-          <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-border">
-            <Button variant="secondary" size="sm" type="button" onClick={() => setIsAddOpen(false)}>
+          <div className="pt-4 mt-5 flex items-center justify-end gap-2.5 border-t border-border shrink-0">
+            <Button
+              variant="secondary"
+              size="sm"
+              type="button"
+              onClick={() => {
+                setIsAddOpen(false)
+                setFormErrors({})
+              }}
+            >
               Cancel
             </Button>
-            <Button variant="primary" size="sm" type="submit" isLoading={addMutation.isPending}>
+            <Button
+              variant="primary"
+              size="sm"
+              type="submit"
+              isLoading={addMutation.isPending}
+            >
               Receive Batch
             </Button>
           </div>

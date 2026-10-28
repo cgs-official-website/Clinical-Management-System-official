@@ -8,7 +8,6 @@ import {
   Database,
   Layers,
   Calendar,
-  Globe,
   Building2,
   Copy,
   Check,
@@ -121,27 +120,6 @@ export const formatInspectorTime = (isoString) => {
   }).format(d)
 }
 
-export const formatInspectorIp = (rawIp) => {
-  if (!rawIp || rawIp === '-' || rawIp === '—') return '-'
-  const ip = String(rawIp).trim()
-  if (ip === '::1' || ip === '::ffff:127.0.0.1' || ip === '127.0.0.1') {
-    return 'Local machine (::1)'
-  }
-  if (ip.startsWith('::ffff:')) {
-    return ip.replace('::ffff:', '')
-  }
-  return ip
-}
-
-export const formatInspectorDevice = (device, userAgent) => {
-  if (device && device !== '-' && device !== '—' && device !== 'Device not recorded') {
-    return device
-  }
-  if (!userAgent || typeof userAgent !== 'string' || userAgent.trim() === '') {
-    return 'Device not recorded'
-  }
-  return 'Device not recorded'
-}
 
 export const AuditRecordInspector = ({ record, isOpen, onClose }) => {
   const [viewRawJson, setViewRawJson] = useState(false)
@@ -282,7 +260,7 @@ export const AuditRecordInspector = ({ record, isOpen, onClose }) => {
             </div>
           </div>
 
-          {/* 6 Info Cards Grid + Clinic Card (7 cards total) */}
+          {/* 6 Info Cards Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {/* Card 1: Performed By */}
             <div className="p-4 rounded-2xl border border-border bg-surface shadow-soft flex flex-col justify-between space-y-2">
@@ -407,35 +385,6 @@ export const AuditRecordInspector = ({ record, isOpen, onClose }) => {
                   {formatInspectorTime(merged.timestamp || merged.createdAt)}
                 </div>
               </div>
-            </div>
-
-            {/* Card 7: IP Address & Device (Spans all columns on desktop) */}
-            <div className="sm:col-span-2 lg:col-span-3 p-4 rounded-2xl border border-border bg-surface shadow-soft flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2.5 rounded-xl bg-teal-500/10 text-teal-500 shrink-0">
-                  <Globe className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary block">
-                    IP Address & Device
-                  </span>
-                  <div className="font-mono text-sm font-semibold text-text-primary mt-0.5">
-                    {formatInspectorIp(merged.ipAddress)}
-                  </div>
-                  <div className="text-xs text-text-secondary mt-0.5">
-                    {formatInspectorDevice(merged.device, merged.userAgent)}
-                  </div>
-                </div>
-              </div>
-
-              {merged.userAgent && (
-                <div
-                  className="text-[10px] text-text-secondary/70 font-mono max-w-sm truncate bg-surface-muted/50 p-2 rounded-xl border border-border/50 shrink-0"
-                  title={merged.userAgent}
-                >
-                  Raw Agent: {merged.userAgent}
-                </div>
-              )}
             </div>
           </div>
 

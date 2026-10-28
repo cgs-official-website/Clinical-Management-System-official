@@ -559,9 +559,7 @@ export class AuditService {
         Action: log.action,
         Module: log.entityType || 'General',
         Description: description,
-        Clinic: log.tenant?.name || 'System-Wide',
-        IP: normalizeIp(log.ip),
-        Device: formatDevice(log.userAgent)
+        Clinic: log.tenant?.name || 'System-Wide'
       }
     })
 

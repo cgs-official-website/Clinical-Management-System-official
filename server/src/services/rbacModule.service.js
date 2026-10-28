@@ -286,8 +286,9 @@ export class RbacModuleService {
    */
   static async getPermissionsByRole(roleIdentifier, { tenantId = null, canViewOnly = false } = {}) {
     initMemoryStore()
+    const cleanIdent = String(roleIdentifier || '').trim()
     const resolvedId = this.resolveRoleId(roleIdentifier)
-    const cacheKey = `${resolvedId}:${tenantId || ''}:${Boolean(canViewOnly)}`
+    const cacheKey = `${cleanIdent}:${resolvedId}:${tenantId || ''}:${Boolean(canViewOnly)}`
     const now = Date.now()
     const cached = rolePermissionsCache.get(cacheKey)
     if (cached && now < cached.expiry) {
@@ -295,7 +296,7 @@ export class RbacModuleService {
     }
 
     // Super Admin bypass: sees all modules with full permissions
-    if (resolvedId === 'superadmin' && !tenantId) {
+    if ((cleanIdent === 'superadmin' || resolvedId === 'superadmin') && !tenantId) {
       const superPerms = DEFAULT_MODULES.map(m => ({
         id: `perm-super-${m.id}`,
         role_id: 'superadmin',
@@ -314,13 +315,20 @@ export class RbacModuleService {
 
     // Try resolving role and TenantModule from PostgreSQL
     try {
-      // 1. Find role in DB
+      // 1. Find role in DB: search by exact ID or name under tenant first
       let dbRole = await prisma.role.findFirst({
         where: {
           OR: [
+            ...(tenantId ? [
+              { tenantId, id: cleanIdent },
+              { tenantId, name: { equals: cleanIdent, mode: 'insensitive' } },
+              { tenantId, id: resolvedId },
+              { tenantId, name: { equals: resolvedId, mode: 'insensitive' } }
+            ] : []),
+            { id: cleanIdent },
+            { name: { equals: cleanIdent, mode: 'insensitive' } },
             { id: resolvedId },
-            { name: { equals: resolvedId, mode: 'insensitive' } },
-            ...(tenantId ? [{ tenantId, name: { equals: resolvedId, mode: 'insensitive' } }] : [])
+            { name: { equals: resolvedId, mode: 'insensitive' } }
           ]
         },
         include: {
@@ -397,17 +405,33 @@ export class RbacModuleService {
 
           // Staff roles: check against rolePerms
           const permsForModule = (dbRole?.rolePerms || []).filter(
-            (rp) => rp.permission?.moduleId === m.id || rp.permission?.module?.key === m.key
+            (rp) =>
+              rp.permission?.moduleId === m.id ||
+              rp.permission?.module?.key === m.key ||
+              rp.permission?.key?.startsWith(`${m.key}.`)
           )
           const can_view = permsForModule.some(
-            (rp) => rp.permission?.action?.key === 'view' || rp.permission?.key?.endsWith('.view')
+            (rp) =>
+              rp.permission?.action?.key === 'view' ||
+              rp.permission?.key?.endsWith('.view') ||
+              rp.permission?.key?.includes('.view')
           )
           const can_edit = permsForModule.some((rp) => {
             const act = rp.permission?.action?.key || ''
-            return act === 'create' || act === 'edit' || rp.permission?.key?.endsWith('.create') || rp.permission?.key?.endsWith('.edit')
+            return (
+              act === 'create' ||
+              act === 'edit' ||
+              rp.permission?.key?.endsWith('.create') ||
+              rp.permission?.key?.endsWith('.edit') ||
+              rp.permission?.key?.includes('.create') ||
+              rp.permission?.key?.includes('.edit')
+            )
           })
           const can_delete = permsForModule.some(
-            (rp) => rp.permission?.action?.key === 'delete' || rp.permission?.key?.endsWith('.delete')
+            (rp) =>
+              rp.permission?.action?.key === 'delete' ||
+              rp.permission?.key?.endsWith('.delete') ||
+              rp.permission?.key?.includes('.delete')
           )
 
           return {
@@ -487,7 +511,7 @@ export class RbacModuleService {
       }
     }
 
-    // Attempt to persist to PostgreSQL role_permissions
+    // High-performance batch persistence to PostgreSQL role_permissions
     try {
       const dbRole = await prisma.role.findFirst({
         where: {
@@ -499,63 +523,58 @@ export class RbacModuleService {
       })
 
       if (dbRole) {
+        const allPerms = await prisma.permission.findMany({
+          include: { module: true, action: true }
+        })
+
+        const permissionIdsToAssign = []
         for (const item of permissionsList) {
-          const modId = item.moduleId || item.module_id
+          const modId = (item.moduleId || item.module_id || '').toLowerCase()
           if (!modId) continue
-
-          const mod = await prisma.module.findFirst({
-            where: {
-              OR: [
-                { id: modId },
-                { key: modId }
-              ]
-            }
-          })
-
-          if (!mod) continue
 
           const canView = Boolean(item.can_view ?? item.canView)
           const canCreate = Boolean(item.can_create ?? item.canCreate ?? item.can_edit ?? item.canEdit)
           const canEdit = Boolean(item.can_edit ?? item.canEdit)
           const canDelete = Boolean(item.can_delete ?? item.canDelete)
 
-          const modulePerms = await prisma.permission.findMany({
-            where: { moduleId: mod.id },
-            include: { action: true }
+          const matchingPerms = allPerms.filter((p) => {
+            const mKey = (p.module?.key || '').toLowerCase()
+            const mId = (p.moduleId || '').toLowerCase()
+            const pKey = (p.key || '').toLowerCase()
+            return mKey === modId || mId === modId || pKey.startsWith(`${modId}.`)
           })
 
-          for (const p of modulePerms) {
-            const actionKey = p.action?.key || p.key.split('.')[1] || ''
-            let shouldGrant = false
-            if (actionKey === 'view') shouldGrant = canView
-            else if (actionKey === 'create') shouldGrant = canCreate
-            else if (actionKey === 'edit') shouldGrant = canEdit
-            else if (actionKey === 'delete') shouldGrant = canDelete
-
-            if (shouldGrant) {
-              await prisma.rolePermission.upsert({
-                where: {
-                  roleId_permissionId: {
-                    roleId: dbRole.id,
-                    permissionId: p.id
-                  }
-                },
-                create: {
-                  roleId: dbRole.id,
-                  permissionId: p.id
-                },
-                update: {}
-              })
-            } else if (['view', 'create', 'edit', 'delete'].includes(actionKey)) {
-              await prisma.rolePermission.deleteMany({
-                where: {
-                  roleId: dbRole.id,
-                  permissionId: p.id
-                }
-              })
+          for (const p of matchingPerms) {
+            const actionKey = (p.action?.key || p.key.split('.')[1] || '').toLowerCase()
+            if (
+              (actionKey === 'view' && canView) ||
+              (actionKey === 'create' && canCreate) ||
+              (actionKey === 'edit' && canEdit) ||
+              (actionKey === 'delete' && canDelete)
+            ) {
+              permissionIdsToAssign.push(p.id)
             }
           }
         }
+
+        const uniquePermIds = Array.from(new Set(permissionIdsToAssign))
+        await prisma.$transaction([
+          prisma.rolePermission.deleteMany({ where: { roleId: dbRole.id } }),
+          ...(uniquePermIds.length > 0
+            ? [
+                prisma.rolePermission.createMany({
+                  data: uniquePermIds.map((permId) => ({
+                    roleId: dbRole.id,
+                    permissionId: permId
+                  })),
+                  skipDuplicates: true
+                })
+              ]
+            : [])
+        ])
+
+        // Invalidate Redis cache asynchronously in background without blocking
+        RbacService.invalidateRolePermissions(dbRole.id).catch(() => {})
       }
     } catch (e) {
       logger.warn(`PostgreSQL permissions save skipped/error: ${e.message}`)

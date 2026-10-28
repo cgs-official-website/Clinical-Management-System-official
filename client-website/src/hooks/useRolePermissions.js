@@ -27,13 +27,13 @@ export const useRolePermissions = () => {
   )
 
   const roleIdentifier =
-    user?.role_id ||
     user?.roleId ||
+    user?.role_id ||
     user?.role ||
-    (Array.isArray(user?.roles) ? user?.roles[0] : 'staff') ||
+    (Array.isArray(user?.roles) ? (typeof user?.roles[0] === 'object' ? user?.roles[0]?.id || user?.roles[0]?.name : user?.roles[0]) : 'staff') ||
     'staff'
 
-  // Fetch role permissions on page load/refresh (staleTime: 0 ensures fresh fetch every refresh)
+  // Fetch role permissions on page load/refresh
   const { data: permData, isLoading, refetch } = useQuery({
     queryKey: ['rbac', 'user-permissions', user?.id || 'anon', roleIdentifier],
     queryFn: async () => {
@@ -74,8 +74,8 @@ export const useRolePermissions = () => {
       return { permissions: list, permittedModules: permitted }
     },
     enabled: !!user,
-    staleTime: 5 * 60 * 1000, // Fresh for 5 minutes (invalidated automatically on permission changes)
-    refetchOnWindowFocus: false,
+    staleTime: 10 * 1000,
+    refetchOnWindowFocus: true,
     placeholderData: (prev) => prev,
   })
 
@@ -113,7 +113,7 @@ export const useRolePermissions = () => {
     ? permData
     : (Array.isArray(permData?.permissions) ? permData.permissions : [])
 
-  const permittedModules = Array.isArray(permData?.permittedModules)
+  const rawPermittedModules = Array.isArray(permData?.permittedModules)
     ? permData.permittedModules
     : permissions
         .filter((p) => p && (p.can_view === true || p.canView === true))
@@ -127,6 +127,50 @@ export const useRolePermissions = () => {
           can_edit: Boolean(p.can_edit ?? p.canEdit),
           can_delete: Boolean(p.can_delete ?? p.canDelete),
         }))
+
+  // Fallback to user.permissions / user.effectivePermissions if API list is empty but user already holds active privileges
+  const userEffectivePerms = user?.permissions || user?.effectivePermissions || []
+  let permittedModules = rawPermittedModules
+  if (permittedModules.length === 0 && Array.isArray(userEffectivePerms) && userEffectivePerms.length > 0) {
+    const knownModules = [
+      { key: 'patients', name: 'Patients', icon: 'Users', route: '/app/staff/patients' },
+      { key: 'appointments', name: 'Appointments', icon: 'Calendar', route: '/app/staff/appointments' },
+      { key: 'prescriptions', name: 'Prescriptions', icon: 'Pill', route: '/app/staff/prescriptions' },
+      { key: 'billing', name: 'Billing/Invoices', icon: 'CreditCard', route: '/app/staff/billing' },
+      { key: 'inventory', name: 'Inventory', icon: 'Boxes', route: '/app/staff/inventory' },
+      { key: 'reports', name: 'Reports', icon: 'BarChart3', route: '/app/staff/reports' },
+      { key: 'staff', name: 'Staff', icon: 'ShieldCheck', route: '/app/admin/staff' },
+      { key: 'roles', name: 'Roles & Permissions', icon: 'KeyRound', route: '/app/admin/roles' },
+      { key: 'clinical_config', name: 'Clinical Config', icon: 'Sliders', route: '/app/admin/clinical-config' },
+      { key: 'settings', name: 'Global Settings', icon: 'Sliders', route: '/app/admin/settings' },
+    ]
+    const fallbackList = knownModules
+      .filter((m) =>
+        userEffectivePerms.includes('*') ||
+        userEffectivePerms.includes(`${m.key}.*`) ||
+        userEffectivePerms.includes(`${m.key}.view`)
+      )
+      .map((m) => ({
+        id: m.key,
+        key: m.key,
+        name: m.name,
+        icon: m.icon,
+        route: m.route,
+        can_view: true,
+        can_edit:
+          userEffectivePerms.includes('*') ||
+          userEffectivePerms.includes(`${m.key}.*`) ||
+          userEffectivePerms.includes(`${m.key}.edit`) ||
+          userEffectivePerms.includes(`${m.key}.create`),
+        can_delete:
+          userEffectivePerms.includes('*') ||
+          userEffectivePerms.includes(`${m.key}.*`) ||
+          userEffectivePerms.includes(`${m.key}.delete`),
+      }))
+    if (fallbackList.length > 0) {
+      permittedModules = fallbackList
+    }
+  }
 
   // Check action permissions by route (normalized)
   const normalizeRoute = (r) => {
@@ -146,19 +190,46 @@ export const useRolePermissions = () => {
   const hasViewPermission = (route) => {
     if (isSuperadmin) return true
     const perm = findPermForRoute(route)
-    return Boolean(perm?.can_view)
+    if (perm?.can_view) return true
+    const clean = normalizeRoute(route)
+    return userEffectivePerms.some((p) => {
+      if (p === '*') return true
+      const [mod, act] = p.split('.')
+      if (act === 'view' || act === '*') {
+        return clean.includes(`/${mod}`)
+      }
+      return false
+    })
   }
 
   const hasEditPermission = (route) => {
     if (isSuperadmin) return true
     const perm = findPermForRoute(route)
-    return Boolean(perm?.can_edit)
+    if (perm?.can_edit) return true
+    const clean = normalizeRoute(route)
+    return userEffectivePerms.some((p) => {
+      if (p === '*') return true
+      const [mod, act] = p.split('.')
+      if (act === 'edit' || act === 'create' || act === '*') {
+        return clean.includes(`/${mod}`)
+      }
+      return false
+    })
   }
 
   const hasDeletePermission = (route) => {
     if (isSuperadmin) return true
     const perm = findPermForRoute(route)
-    return Boolean(perm?.can_delete)
+    if (perm?.can_delete) return true
+    const clean = normalizeRoute(route)
+    return userEffectivePerms.some((p) => {
+      if (p === '*') return true
+      const [mod, act] = p.split('.')
+      if (act === 'delete' || act === '*') {
+        return clean.includes(`/${mod}`)
+      }
+      return false
+    })
   }
 
   const hasZeroPermissions = !isSuperadmin && !isAdmin && !isLoading && permittedModules.length === 0

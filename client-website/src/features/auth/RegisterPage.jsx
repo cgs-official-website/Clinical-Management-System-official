@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { Link, useNavigate, useSearchParams, useLocation } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -53,7 +54,11 @@ const registerSchema = z.object({
 export const RegisterPage = () => {
   const navigate = useNavigate()
   const location = useLocation()
+  const queryClient = useQueryClient()
   const [searchParams] = useSearchParams()
+  const [inviteStatus, setInviteStatus] = useState(null)
+  const [isCheckingInvite, setIsCheckingInvite] = useState(false)
+  const [isDirectAccessLoading, setIsDirectAccessLoading] = useState(false)
   const prefillState = location.state || {}
   const [serverError, setServerError] = useState(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -87,12 +92,73 @@ export const RegisterPage = () => {
         email: searchParams.get('email') || '',
         role: searchParams.get('role') || 'Clinical Staff Member',
         department: searchParams.get('department') || '',
+        roleId: searchParams.get('roleId') || '',
         specialty: searchParams.get('specialty') || '',
         clinicName: searchParams.get('clinicName') || 'Aura Health Memorial',
       }
     }
     return null
   }, [inviteToken, typeParam, searchParams])
+
+  // Check invite status on mount if invite link is present
+  useEffect(() => {
+    if (!inviteData?.email && !inviteData?.staffId) return
+    let isMounted = true
+    setIsCheckingInvite(true)
+    api.get('/api/public/staff-invite-status', {
+      params: {
+        email: inviteData.email,
+        staffId: inviteData.staffId || ''
+      }
+    })
+      .then((res) => {
+        if (isMounted) {
+          const statusData = res.data?.data || res.data || {}
+          setInviteStatus(statusData)
+          if (statusData.name && !staffName) {
+            setStaffName(statusData.name)
+          }
+        }
+      })
+      .catch((err) => console.warn('Could not check staff status', err))
+      .finally(() => {
+        if (isMounted) setIsCheckingInvite(false)
+      })
+    return () => { isMounted = false }
+  }, [inviteData?.email, inviteData?.staffId])
+
+  // Handle direct portal access for already created / active staff
+  const handleDirectPortalAccess = async () => {
+    setIsDirectAccessLoading(true)
+    setStaffError(null)
+    try {
+      const response = await api.post('/api/public/staff-portal-access', {
+        staffId: inviteData.staffId,
+        email: inviteData.email,
+      })
+      const resData = response.data
+      const user = resData.user
+      const tokens = resData.tokens
+
+      if (tokens?.accessToken) {
+        queryClient.clear()
+        useAuthStore.getState().setAuth(user, tokens.accessToken, tokens.refreshToken)
+        const roleDisplay = user.roleTitle || user.role || inviteData.role || 'Clinical Staff'
+        notify.success(`Welcome back, ${user.name}! Accessing ${roleDisplay} Portal...`)
+        
+        if (user.isAdmin || user.role === 'ADMIN' || user.userType === 'ADMIN') {
+          navigate('/app/admin/dashboard', { replace: true })
+        } else {
+          navigate('/app/staff/dashboard', { replace: true })
+        }
+      }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Unable to access staff portal directly.'
+      setStaffError(msg)
+    } finally {
+      setIsDirectAccessLoading(false)
+    }
+  }
 
   // Staff registration form state
   const [staffName, setStaffName] = useState(inviteData?.name || '')
@@ -135,6 +201,7 @@ export const RegisterPage = () => {
         email: inviteData.email,
         password: staffPassword,
         role: inviteData.role,
+        roleId: inviteData.roleId,
         department: inviteData.department,
         specialty: inviteData.specialty,
         clinicName: inviteData.clinicName,
@@ -145,9 +212,16 @@ export const RegisterPage = () => {
       const tokens = resData.tokens
 
       if (tokens?.accessToken) {
+        queryClient.clear()
         useAuthStore.getState().setAuth(user, tokens.accessToken, tokens.refreshToken)
-        notify.success(`Welcome to the team, ${user.name}! Your account has been registered and activated.`)
-        navigate('/app/staff/dashboard', { replace: true })
+        const roleDisplay = user.roleTitle || user.role || inviteData.role || 'Clinical Staff'
+        notify.success(`Welcome to the team, ${user.name}! Your account is active. Entering ${roleDisplay} Portal...`)
+        
+        if (user.isAdmin || user.role === 'ADMIN' || user.userType === 'ADMIN') {
+          navigate('/app/admin/dashboard', { replace: true })
+        } else {
+          navigate('/app/staff/dashboard', { replace: true })
+        }
       } else {
         notify.success('Account successfully registered! Please sign in with your new password.')
         navigate('/login', { replace: true })
@@ -378,14 +452,45 @@ export const RegisterPage = () => {
                   <span>Staff Invitation Access</span>
                 </div>
                 <h1 className="font-heading font-extrabold text-2xl sm:text-3xl text-text-primary tracking-tight">
-                  Complete Your Registration
+                  {inviteStatus?.status === 'ACTIVE' ? 'Staff Portal Access & Activation' : 'Complete Your Registration'}
                 </h1>
                 <p className="text-xs sm:text-sm text-text-secondary mt-2">
-                  You have been invited to join <strong className="text-text-primary">{inviteData.clinicName || 'Aura Health Memorial'}</strong>. Confirm your display name and set your private password to activate access.
+                  You have been invited to join <strong className="text-text-primary">{inviteData.clinicName || 'Aura Health Memorial'}</strong> as <strong className="text-primary">{inviteData.role}</strong>.
                 </p>
               </div>
 
               <div className="glass-panel p-6 sm:p-8 rounded-3xl shadow-card border border-border">
+                {inviteStatus?.status === 'ACTIVE' && (
+                  <div className="mb-6 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-400 space-y-3 shadow-sm">
+                    <div className="flex items-center gap-2.5">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-500 shrink-0" />
+                      <div>
+                        <p className="text-xs font-bold text-text-primary">
+                          Staff Account Active
+                        </p>
+                        <p className="text-[11px] text-text-secondary">
+                          This account is already created and activated in the clinical directory.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="md"
+                      isLoading={isDirectAccessLoading}
+                      onClick={handleDirectPortalAccess}
+                      className="w-full font-bold shadow-md bg-emerald-600 hover:bg-emerald-700 text-white"
+                      rightIcon={<ArrowRight className="w-4 h-4" />}
+                    >
+                      Enter {inviteData.role} Portal Directly
+                    </Button>
+                    <div className="relative flex py-1 items-center">
+                      <div className="flex-grow border-t border-border"></div>
+                      <span className="flex-shrink mx-2 text-[10px] uppercase font-bold text-text-muted">Or Update Password Below</span>
+                      <div className="flex-grow border-t border-border"></div>
+                    </div>
+                  </div>
+                )}
                 {staffError && (
                   <div className="mb-5 p-3.5 rounded-xl bg-danger/10 border border-danger/20 text-xs text-danger font-medium flex items-center gap-2.5 animate-in fade-in">
                 <Lock className="w-4 h-4 shrink-0" />
