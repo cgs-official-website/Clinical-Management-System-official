@@ -18,12 +18,31 @@ app.use(helmet({
 }))
 
 // Cross-Origin Resource Sharing
+const configuredOrigins = env.CORS_ORIGIN === '*' ? '*' : env.CORS_ORIGIN.split(',').map((o) => o.trim())
+
 app.use(cors({
-  origin: env.CORS_ORIGIN === '*' ? true : env.CORS_ORIGIN.split(','),
+  origin: (origin, callback) => {
+    // Allow non-browser requests (mobile apps, curl, server-to-server)
+    if (!origin) return callback(null, true)
+
+    if (configuredOrigins === '*') return callback(null, true)
+
+    // Allow any localhost / 127.0.0.1 port for local development (5173, 5174, 3000, etc.)
+    if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+      return callback(null, true)
+    }
+
+    if (configuredOrigins.includes(origin)) {
+      return callback(null, true)
+    }
+
+    callback(new Error(`Origin ${origin} not allowed by CORS policy`))
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'x-user-email', 'x-user-role', 'X-User-Email', 'X-User-Role']
 }))
+app.options('*', cors())
 
 // Gzip Compression
 app.use(compression())
