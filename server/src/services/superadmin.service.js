@@ -1,5 +1,6 @@
+import os from 'os'
 import { prisma, checkDatabaseHealth } from '../config/prisma.js'
-import { redis, pubsub } from '../config/redis.js'
+import { redis, pubsub, checkRedisHealth } from '../config/redis.js'
 import { logger } from '../utils/logger.js'
 import { AuthService } from './auth.service.js'
 import { AdminService } from './admin.service.js'
@@ -635,31 +636,48 @@ export class SuperadminService {
   }
 
   /**
-   * System health metrics (Database, Redis, Memory, Uptime)
+   * System health metrics (Database, Redis, Memory, Uptime, CPU)
    */
   static async getSystemHealth() {
     const dbHealth = await checkDatabaseHealth()
-    let redisHealth = { status: 'healthy', latencyMs: 1 }
+    const redisHealth = await checkRedisHealth()
 
-    const t0 = Date.now()
+    // Measure CPU usage over a short 50ms interval
+    let cpuUsagePercent = 0.5
     try {
-      await redis.set('health:ping', 'pong', 'EX', 5)
-      redisHealth.latencyMs = Date.now() - t0
-    } catch (e) {
-      redisHealth = { status: 'degraded', error: e.message }
+      const startCpu = process.cpuUsage()
+      const startTime = Date.now()
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      const diffCpu = process.cpuUsage(startCpu)
+      const durationMs = Math.max(1, Date.now() - startTime)
+      const cpus = os.cpus()?.length || 1
+      const totalCpuMs = (diffCpu.user + diffCpu.system) / 1000
+      const calculated = (totalCpuMs / (durationMs * cpus)) * 100
+      cpuUsagePercent = Number(Math.min(100, Math.max(0.1, calculated)).toFixed(1))
+    } catch {
+      cpuUsagePercent = 0.5
     }
 
+    const overallStatus = dbHealth.status === 'healthy'
+      ? (redisHealth.status === 'healthy' ? 'operational' : 'degraded')
+      : 'down'
+
     return {
-      status: dbHealth.status === 'healthy' ? 'operational' : 'degraded',
+      status: overallStatus,
       timestamp: new Date().toISOString(),
       uptimeSeconds: Math.floor(process.uptime()),
+      apiLatencyMs: dbHealth.latencyMs,
       database: dbHealth,
+      databaseStatus: dbHealth.status === 'healthy' ? 'CONNECTED' : 'DOWN',
       redis: redisHealth,
+      redisStatus: redisHealth.status === 'healthy' ? 'CONNECTED' : 'DEGRADED',
       memory: {
         rssMB: Math.round(process.memoryUsage().rss / (1024 * 1024)),
         heapUsedMB: Math.round(process.memoryUsage().heapUsed / (1024 * 1024)),
         heapTotalMB: Math.round(process.memoryUsage().heapTotal / (1024 * 1024))
-      }
+      },
+      memoryUsageMb: Math.round(process.memoryUsage().heapUsed / (1024 * 1024)),
+      cpuUsagePercent
     }
   }
 

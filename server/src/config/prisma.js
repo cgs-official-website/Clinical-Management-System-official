@@ -14,11 +14,12 @@ if (env.NODE_ENV !== 'production') {
 }
 
 export const checkDatabaseHealth = async () => {
+  const start = Date.now()
   try {
     await prisma.$queryRaw`SELECT 1`
-    return { status: 'healthy', latencyMs: 1 }
+    return { status: 'healthy', latencyMs: Math.max(1, Date.now() - start) }
   } catch (error) {
-    return { status: 'unhealthy', error: error.message }
+    return { status: 'down', latencyMs: Math.max(1, Date.now() - start), error: error.message }
   }
 }
 

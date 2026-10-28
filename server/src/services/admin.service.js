@@ -1407,7 +1407,6 @@ export class AdminService {
       slotDurationMinutes: 30,
       bufferBetweenSlotsMinutes: 5,
       allowTelehealth: true,
-      maxAdvanceBookingDays: 60,
       departments: [
         'Cardiology',
         'Diagnostic Medicine',

@@ -56,6 +56,9 @@ router.put('/admins/:id', SuperadminController.updateAdmin)
 router.get('/settings', SuperadminController.getSettings)
 router.put('/settings', SuperadminController.updateSettings)
 router.get('/audit-logs', SuperadminController.getAuditLogs)
+router.get('/audit-logs/filters', SuperadminController.getAuditLogFilters)
+router.get('/audit-logs/export', SuperadminController.exportAuditLogs)
+router.get('/audit-logs/:id', SuperadminController.getAuditLogById)
 router.get('/health', SuperadminController.getHealth)
 
 // Superadmin DB Notifications
