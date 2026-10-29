@@ -6,7 +6,8 @@ import { NotFoundError } from '../utils/errors.js'
 export class SuperadminController {
   static async getStats(req, res, next) {
     try {
-      const stats = await SuperadminService.getDashboardStats()
+      const dateRange = String(req.query.dateRange || '6M').toUpperCase()
+      const stats = await SuperadminService.getDashboardStats({ dateRange })
       return res.status(200).json({
         success: true,
         data: stats
@@ -36,10 +37,10 @@ export class SuperadminController {
         clinicCategoryId: t.clinicCategoryId || t.clinicCategory?.id || null,
         clinicCategory: t.clinicCategory
           ? {
-              id: t.clinicCategory.id,
-              name: t.clinicCategory.name,
-              description: t.clinicCategory.description,
-            }
+            id: t.clinicCategory.id,
+            name: t.clinicCategory.name,
+            description: t.clinicCategory.description,
+          }
           : null,
         patientsCount: t.stats?.patients || 0,
         staffCount: t.stats?.users || 0,
@@ -337,8 +338,8 @@ export class SuperadminController {
         typeof search === 'string'
           ? search.trim()
           : Array.isArray(search)
-          ? String(search[0] || '').trim()
-          : ''
+            ? String(search[0] || '').trim()
+            : ''
       const data = await SuperadminService.getClinicCategories({ search: searchStr, isActive: activeFilter })
       return res.status(200).json({
         success: true,

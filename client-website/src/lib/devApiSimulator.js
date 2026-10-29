@@ -1682,12 +1682,12 @@ export const handleSimulatedRequest = async (config) => {
         activeSessions: 184,
         systemHealth: '99.99% Operational',
         revenueTrends: [
-          { month: 'Apr', revenue: 195001, clinics: Math.max(1, totalClinics - 4) },
-          { month: 'May', revenue: 215001, clinics: Math.max(2, totalClinics - 3) },
-          { month: 'Jun', revenue: 240000, clinics: Math.max(3, totalClinics - 2) },
-          { month: 'Jul', revenue: 260000, clinics: Math.max(4, totalClinics - 1) },
-          { month: 'Aug', revenue: 275001, clinics: Math.max(5, totalClinics) },
-          { month: 'Sep', revenue: monthlyRecurringRevenue, clinics: totalClinics },
+          { month: 'Apr', revenue: 195001, clinics: Math.max(1, totalClinics - 4), newClinics: 1 },
+          { month: 'May', revenue: 215001, clinics: Math.max(2, totalClinics - 3), newClinics: 1 },
+          { month: 'Jun', revenue: 240000, clinics: Math.max(3, totalClinics - 2), newClinics: 1 },
+          { month: 'Jul', revenue: 260000, clinics: Math.max(4, totalClinics - 1), newClinics: 1 },
+          { month: 'Aug', revenue: 275001, clinics: Math.max(5, totalClinics), newClinics: 1 },
+          { month: 'Sep', revenue: monthlyRecurringRevenue, clinics: totalClinics, newClinics: 1 },
         ],
       },
     ]
@@ -2037,10 +2037,10 @@ export const handleSimulatedRequest = async (config) => {
         (l.action?.includes('CREATE') || l.action?.includes('INVITED')
           ? 'CREATE'
           : l.action?.includes('UPDATE')
-          ? 'UPDATE'
-          : l.action?.includes('DELETE')
-          ? 'DELETE'
-          : 'OTHER'),
+            ? 'UPDATE'
+            : l.action?.includes('DELETE')
+              ? 'DELETE'
+              : 'OTHER'),
       module: l.module || 'System',
       description: l.description || l.details || `${l.actorEmail} performed ${l.action} on ${l.module}`,
       clinicName: l.clinicName || 'System-Wide',

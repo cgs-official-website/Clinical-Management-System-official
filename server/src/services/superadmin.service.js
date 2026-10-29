@@ -9,40 +9,47 @@ import { ConflictError, NotFoundError, ValidationError } from '../utils/errors.j
 
 export class SuperadminService {
   /**
-   * Global dashboard statistics across all tenants
+   * Global dashboard statistics across all tenants.
+   *
+   * dateRange controls the time window of the trend charts and of the
+   * "growth" figures: 30D (daily points), 90D (weekly), 6M and 1Y (monthly).
    */
-  static async getDashboardStats() {
-    const [
-      totalTenants,
-      activeTenants,
-      totalUsers,
-      totalPatients,
-      paidInvoices,
-      recentTenants,
-      activeTenantsList
-    ] = await Promise.all([
-      prisma.tenant.count().catch(() => 0),
-      prisma.tenant.count({ where: { status: 'ACTIVE' } }).catch(() => 0),
-      prisma.user.count().catch(() => 0),
-      prisma.patient.count().catch(() => 0),
-      prisma.invoice.findMany({
-        where: { status: 'PAID' },
-        select: { amount: true }
-      }).catch(() => []),
-      prisma.tenant.findMany({
-        take: 5,
-        orderBy: { createdAt: 'desc' },
-        include: { _count: { select: { users: true, patients: true } } }
-      }).catch(() => []),
-      prisma.tenant.findMany({
-        where: { status: 'ACTIVE' },
-        select: { plan: true }
-      }).catch(() => [])
-    ])
+  static async getDashboardStats({ dateRange = '6M' } = {}) {
+    const RANGES = {
+      '30D': { unit: 'day', count: 30 },
+      '90D': { unit: 'week', count: 13 },
+      '6M': { unit: 'month', count: 6 },
+      '1Y': { unit: 'month', count: 12 }
+    }
+    const range = RANGES[String(dateRange).toUpperCase()] ? String(dateRange).toUpperCase() : '6M'
+    const { unit, count } = RANGES[range]
 
-    const totalRevenueInINR = paidInvoices.reduce((acc, inv) => acc + (inv.amount || 0), 0)
+    const now = new Date()
+    const DAY = 24 * 60 * 60 * 1000
 
-    // Tiered MRR estimate (Starter / Professional / Enterprise)
+    // Build bucket boundaries: each bucket = (start, end], oldest first.
+    const buckets = []
+    for (let i = count - 1; i >= 0; i--) {
+      let start
+      let end
+      let label
+      if (unit === 'month') {
+        start = new Date(now.getFullYear(), now.getMonth() - i, 1)
+        end = i === 0 ? now : new Date(now.getFullYear(), now.getMonth() - i + 1, 1)
+        label = start.toLocaleString('en-US', {
+          month: 'short',
+          ...(range === '1Y' ? { year: '2-digit' } : {})
+        })
+      } else {
+        const step = unit === 'week' ? 7 * DAY : DAY
+        end = new Date(now.getTime() - i * step)
+        start = new Date(end.getTime() - step)
+        label = end.toLocaleString('en-US', { day: 'numeric', month: 'short' })
+      }
+      buckets.push({ start, end, label })
+    }
+    const rangeStart = buckets[0].start
+
     const planPriceFor = (plan = '') => {
       const p = String(plan).toUpperCase()
       if (p.includes('ENTERPRISE')) return 65000
@@ -51,16 +58,86 @@ export class SuperadminService {
       if (p.includes('TRIAL')) return 0
       return 15000
     }
-    const calculatedMRR = activeTenantsList.reduce((sum, t) => sum + planPriceFor(t.plan), 0)
+
+    const [
+      totalTenants,
+      totalStaff,
+      totalAdmins,
+      totalPatients,
+      paidInvoices,
+      recentTenants,
+      tenants,
+      liveSessions
+    ] = await Promise.all([
+      prisma.tenant.count().catch(() => 0),
+      // Clinical accounts = every user that belongs to a clinic (excludes platform superadmins)
+      prisma.user.count({ where: { userType: { not: 'SUPERADMIN' } } }).catch(() => 0),
+      prisma.user.count({ where: { userType: 'ADMIN' } }).catch(() => 0),
+      prisma.patient.count().catch(() => 0),
+      prisma.invoice.findMany({ where: { status: 'PAID' }, select: { amount: true } }).catch(() => []),
+      prisma.tenant.findMany({
+        take: 5,
+        orderBy: { createdAt: 'desc' },
+        include: { _count: { select: { users: true, patients: true } } }
+      }).catch(() => []),
+      prisma.tenant.findMany({ select: { plan: true, status: true, createdAt: true } }).catch(() => []),
+      // A live session = a refresh token that is neither revoked nor expired
+      prisma.refreshToken.findMany({
+        where: { revokedAt: null, expiresAt: { gt: now } },
+        select: { userId: true },
+        distinct: ['userId']
+      }).catch(() => [])
+    ])
+
+    const activeList = tenants.filter((t) => t.status === 'ACTIVE')
+    const activeTenants = activeList.length
+    const totalRevenueInINR = paidInvoices.reduce((acc, inv) => acc + (inv.amount || 0), 0)
+
+    const mrrAt = (date) =>
+      activeList
+        .filter((t) => new Date(t.createdAt) <= date)
+        .reduce((sum, t) => sum + planPriceFor(t.plan), 0)
+
+    const currentMRR = mrrAt(now)
+
+    // Trend points: MRR and active-clinic count at the end of each bucket,
+    // plus how many clinics were onboarded inside that bucket.
+    const revenueTrends = buckets.map((b) => ({
+      month: b.label,
+      revenue: mrrAt(b.end),
+      clinics: activeList.filter((t) => new Date(t.createdAt) <= b.end).length,
+      newClinics: activeList.filter((t) => {
+        const c = new Date(t.createdAt)
+        return c > b.start && c <= b.end
+      }).length
+    }))
+
+    // Growth over the selected window: MRR now vs MRR at the start of the window.
+    const startMRR = mrrAt(rangeStart)
+    const mrrGrowthPercentage =
+      startMRR > 0
+        ? Math.round(((currentMRR - startMRR) / startMRR) * 1000) / 10
+        : currentMRR > 0 ? 100 : 0
+
+    const newClinicsInRange = activeList.filter((t) => new Date(t.createdAt) > rangeStart).length
 
     return {
       kpis: {
+        dateRange: range,
         totalTenants,
         activeTenants,
-        totalUsers,
+        newClinicsInRange,
+        totalUsers: totalStaff,
+        totalStaff,
+        totalAdmins,
         totalPatients,
         totalRevenueINR: totalRevenueInINR,
-        mrrINR: calculatedMRR,
+        mrrINR: currentMRR,
+        monthlyRecurringRevenue: currentMRR,
+        mrrGrowthPercentage,
+        activeSessions: liveSessions.length,
+        systemHealth: 'Operational',
+        revenueTrends,
         currency: 'INR',
         currencySymbol: '₹'
       },
@@ -879,17 +956,17 @@ export class SuperadminService {
       typeof search === 'string'
         ? search.trim()
         : Array.isArray(search)
-        ? String(search[0] || '').trim()
-        : ''
+          ? String(search[0] || '').trim()
+          : ''
 
     const activeBool =
       typeof isActive === 'boolean'
         ? isActive
         : isActive === 'true'
-        ? true
-        : isActive === 'false'
-        ? false
-        : undefined
+          ? true
+          : isActive === 'false'
+            ? false
+            : undefined
 
     const where = {}
     if (cleanSearch) {

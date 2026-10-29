@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-query'
 import {
   Building2,
   Users,
   ShieldCheck,
   TrendingUp,
+  TrendingDown,
   DollarSign,
   Activity,
   HeartPulse,
@@ -30,12 +31,29 @@ import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { usePermissions } from '../../hooks/usePermissions'
 
+const RANGE_OPTIONS = [
+  { value: '30D', label: '30D', title: 'Last 30 days (daily)', long: 'last 30 days' },
+  { value: '90D', label: '90D', title: 'Last 90 days (weekly)', long: 'last 90 days' },
+  { value: '6M', label: '6M', title: 'Last 6 months (monthly)', long: 'last 6 months' },
+  { value: '1Y', label: '1Y', title: 'Last 12 months (monthly)', long: 'last 12 months' },
+]
+
+const formatINR = (n) => `₹${Number(n || 0).toLocaleString('en-IN')}`
+
+const EmptyChart = ({ message }) => (
+  <div className="h-full w-full flex items-center justify-center text-xs text-text-secondary">
+    {message}
+  </div>
+)
+
 export const SuperadminDashboard = () => {
   const queryClient = useQueryClient()
   const { isSuperadmin } = usePermissions()
   const [dateRange, setDateRange] = useState('6M')
 
-  const { data: kpis, isLoading, isError, refetch } = useQuery({
+  const rangeMeta = RANGE_OPTIONS.find((r) => r.value === dateRange) || RANGE_OPTIONS[2]
+
+  const { data: kpis, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: ['superadmin', 'kpis', dateRange],
     queryFn: async () => {
       const res = await api.get('/api/superadmin/kpis', { params: { dateRange } })
@@ -50,10 +68,13 @@ export const SuperadminDashboard = () => {
         mrrGrowthPercentage: k.mrrGrowthPercentage ?? 0,
         activeSessions: k.activeSessions ?? 0,
         systemHealth: k.systemHealth ?? 'Operational',
+        newClinicsInRange: k.newClinicsInRange ?? 0,
         revenueTrends: k.revenueTrends ?? [],
       }
     },
     enabled: !!isSuperadmin,
+    placeholderData: keepPreviousData, // keep old charts visible while a new range loads
+    refetchInterval: 30000, // keep numbers (sessions, MRR) fresh
     retry: (failureCount, error) => {
       if (error?.response?.status === 403) return false
       return failureCount < 2
@@ -148,16 +169,18 @@ export const SuperadminDashboard = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          {['30D', '90D', '6M', '1Y'].map((range) => (
+          {RANGE_OPTIONS.map((range) => (
             <button
-              key={range}
-              onClick={() => setDateRange(range)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${dateRange === range
+              key={range.value}
+              onClick={() => setDateRange(range.value)}
+              title={range.title}
+              aria-pressed={dateRange === range.value}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-colors ${dateRange === range.value
                 ? 'bg-primary text-white shadow-sm'
                 : 'bg-surface border border-border text-text-secondary hover:text-text-primary'
                 }`}
             >
-              {range}
+              {range.label}
             </button>
           ))}
         </div>
@@ -217,7 +240,10 @@ export const SuperadminDashboard = () => {
             <Badge variant="success" size="sm" dot>
               {kpis.activeTenants} Active
             </Badge>
-            <span className="text-text-secondary text-[11px] truncate">100% provisioning</span>
+            <span className="text-text-secondary text-[11px] truncate">
+              {kpis.totalClinics > 0 ? Math.round((kpis.activeTenants / kpis.totalClinics) * 100) : 0}% provisioning
+              {kpis.newClinicsInRange > 0 ? ` · +${kpis.newClinicsInRange} new` : ''}
+            </span>
           </div>
         </div>
 
@@ -252,11 +278,20 @@ export const SuperadminDashboard = () => {
             </div>
           </div>
           <div className="font-heading font-extrabold text-2xl sm:text-3xl text-text-primary truncate">
-            ₹{kpis.monthlyRecurringRevenue?.toLocaleString('en-IN')}
+            {formatINR(kpis.monthlyRecurringRevenue)}
           </div>
-          <div className="mt-2 flex items-center gap-1.5 text-xs text-success font-semibold truncate">
-            <TrendingUp className="w-3.5 h-3.5 shrink-0" />
-            <span className="truncate">+{kpis.mrrGrowthPercentage}% this quarter</span>
+          <div
+            className={`mt-2 flex items-center gap-1.5 text-xs font-semibold truncate ${kpis.mrrGrowthPercentage < 0 ? 'text-danger' : 'text-success'}`}
+          >
+            {kpis.mrrGrowthPercentage < 0 ? (
+              <TrendingDown className="w-3.5 h-3.5 shrink-0" />
+            ) : (
+              <TrendingUp className="w-3.5 h-3.5 shrink-0" />
+            )}
+            <span className="truncate">
+              {kpis.mrrGrowthPercentage > 0 ? '+' : ''}
+              {kpis.mrrGrowthPercentage}% in {rangeMeta.long}
+            </span>
           </div>
         </div>
 
@@ -294,40 +329,52 @@ export const SuperadminDashboard = () => {
               </p>
             </div>
             <Badge variant="primary" size="sm">
-              Live Feed
+              {isFetching ? 'Updating…' : rangeMeta.title}
             </Badge>
           </div>
 
           <div className="h-72 w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={kpis.revenueTrends} margin={{ top: 10, right: 15, left: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#26A689" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#26A689" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.15)" vertical={false} />
-                <XAxis dataKey="month" stroke="rgb(var(--color-text-secondary))" fontSize={11} tickLine={false} />
-                <YAxis stroke="rgb(var(--color-text-secondary))" fontSize={11} tickLine={false} width={45} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgb(var(--color-surface))',
-                    borderColor: 'rgb(var(--color-border))',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#26A689"
-                  strokeWidth={2.5}
-                  fillOpacity={1}
-                  fill="url(#revenueGrad)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {kpis.revenueTrends.length === 0 ? (
+              <EmptyChart message="No revenue data for this period yet" />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={kpis.revenueTrends} margin={{ top: 10, right: 15, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#26A689" stopOpacity={0.4} />
+                      <stop offset="95%" stopColor="#26A689" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.15)" vertical={false} />
+                  <XAxis dataKey="month" stroke="rgb(var(--color-text-secondary))" fontSize={11} tickLine={false} interval="preserveStartEnd" minTickGap={16} />
+                  <YAxis
+                    stroke="rgb(var(--color-text-secondary))"
+                    fontSize={11}
+                    tickLine={false}
+                    width={55}
+                    allowDecimals={false}
+                    tickFormatter={(v) => (v >= 1000 ? `${Math.round(v / 1000)}k` : v)}
+                  />
+                  <Tooltip
+                    formatter={(v) => [formatINR(v), 'MRR']}
+                    contentStyle={{
+                      backgroundColor: 'rgb(var(--color-surface))',
+                      borderColor: 'rgb(var(--color-border))',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#26A689"
+                    strokeWidth={2.5}
+                    fillOpacity={1}
+                    fill="url(#revenueGrad)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -335,30 +382,35 @@ export const SuperadminDashboard = () => {
         <div className="p-6 rounded-2xl border border-border bg-surface shadow-soft flex flex-col justify-between min-w-0">
           <div>
             <h3 className="font-heading font-bold text-base text-text-primary mb-1">
-              Active Tenants
+              New Clinics Onboarded
             </h3>
             <p className="text-xs text-text-secondary mb-6">
-              New clinics successfully partitioned
+              Clinics provisioned in the {rangeMeta.long}
             </p>
           </div>
 
           <div className="h-60 w-full min-w-0">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={kpis.revenueTrends} margin={{ top: 5, right: 15, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.15)" vertical={false} />
-                <XAxis dataKey="month" stroke="rgb(var(--color-text-secondary))" fontSize={11} tickLine={false} />
-                <YAxis stroke="rgb(var(--color-text-secondary))" fontSize={11} tickLine={false} width={30} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'rgb(var(--color-surface))',
-                    borderColor: 'rgb(var(--color-border))',
-                    borderRadius: '12px',
-                    fontSize: '12px',
-                  }}
-                />
-                <Bar dataKey="clinics" fill="#3B82F6" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {kpis.revenueTrends.length === 0 ? (
+              <EmptyChart message="No clinics onboarded yet" />
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={kpis.revenueTrends} margin={{ top: 5, right: 15, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.15)" vertical={false} />
+                  <XAxis dataKey="month" stroke="rgb(var(--color-text-secondary))" fontSize={11} tickLine={false} interval="preserveStartEnd" minTickGap={16} />
+                  <YAxis stroke="rgb(var(--color-text-secondary))" fontSize={11} tickLine={false} width={30} allowDecimals={false} />
+                  <Tooltip
+                    formatter={(v) => [v, 'New clinics']}
+                    contentStyle={{
+                      backgroundColor: 'rgb(var(--color-surface))',
+                      borderColor: 'rgb(var(--color-border))',
+                      borderRadius: '12px',
+                      fontSize: '12px',
+                    }}
+                  />
+                  <Bar dataKey="newClinics" fill="#3B82F6" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
