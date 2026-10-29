@@ -122,7 +122,7 @@ export class SuperadminController {
   static async getAuditLogs(req, res, next) {
     try {
       const page = parseInt(req.query.page, 10) || 1
-      const limit = parseInt(req.query.limit, 10) || 20
+      const limit = parseInt(req.query.limit, 10) || 10
       const {
         tenantId,
         clinicId,
@@ -131,6 +131,7 @@ export class SuperadminController {
         module,
         action,
         role,
+        period,
         from,
         to,
         search,
@@ -145,6 +146,7 @@ export class SuperadminController {
         module: module || entityType,
         action,
         role,
+        period,
         from,
         to,
         search,
@@ -203,6 +205,7 @@ export class SuperadminController {
         module,
         action,
         role,
+        period,
         from,
         to,
         search,
@@ -217,6 +220,7 @@ export class SuperadminController {
         module: module || entityType,
         action,
         role,
+        period,
         from,
         to,
         search,

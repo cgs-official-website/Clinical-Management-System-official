@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import React, { useState, useEffect } from 'react'
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import {
   ShieldCheck,
@@ -11,16 +11,56 @@ import {
   ArrowDown,
   SlidersHorizontal,
   Eye,
+  Copy,
+  Check,
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { EmptyState } from '../../components/ui/EmptyState'
 import { SkeletonTable } from '../../components/ui/Skeleton'
+import { Pagination } from '../../components/ui/Pagination'
 import { notify } from '../../components/ui/Toast'
 import { AuditLogStatCards } from './components/AuditLogStatCards'
 import { AuditLogFilterPanel } from './components/AuditLogFilterPanel'
 import { AuditRecordInspector } from './AuditRecordInspector'
+
+export const summarizeState = (state) => {
+  if (!state || typeof state !== 'object') return []
+  const isUuid = (str) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(str))
+  const SKIP = new Set([
+    'updatedfields',
+    'keysupdated',
+    'fields',
+    'password',
+    'token',
+    'otp',
+    'secret',
+    'id',
+    'createdat',
+    'updatedat',
+  ])
+  const chips = []
+  for (const [key, val] of Object.entries(state)) {
+    if (val === null || val === undefined || val === '') continue
+    if (SKIP.has(key.toLowerCase())) continue
+    if (typeof val === 'string' && isUuid(val)) continue
+    let strVal = ''
+    if (Array.isArray(val)) {
+      if (val.length === 0) continue
+      strVal = val.map((v) => (typeof v === 'object' ? '{…}' : String(v))).join(', ')
+    } else if (typeof val === 'object') {
+      strVal = '{…}'
+    } else {
+      strVal = String(val)
+    }
+    if (strVal.length > 25) strVal = strVal.slice(0, 22) + '…'
+    chips.push({ key, val: strVal })
+    if (chips.length >= 3) break
+  }
+  return chips
+}
 
 const formatRelativeTime = (isoString) => {
   if (!isoString) return ''
@@ -98,7 +138,7 @@ export const AuditLogsPage = () => {
   const period = searchParams.get('period') || (from || to ? 'CUSTOM' : 'ALL')
   const sort = searchParams.get('sort') || 'desc'
   const page = parseInt(searchParams.get('page') || '1', 10)
-  const limit = parseInt(searchParams.get('limit') || '20', 10)
+  const limit = parseInt(searchParams.get('limit') || '10', 10)
 
   // Query filter options from server (cached 5 min)
   const { data: filterOptionsRes, isLoading: isLoadingFilters } = useQuery({
@@ -135,25 +175,24 @@ export const AuditLogsPage = () => {
       if (module && module !== 'ALL') q.set('module', module)
       if (action && action !== 'ALL') q.set('action', action)
       if (clinicId && clinicId !== 'ALL') q.set('clinicId', clinicId)
+      if (period) q.set('period', period)
       if (from) q.set('from', from)
       if (to) q.set('to', to)
       if (sort) q.set('sort', sort)
 
       const res = await api.get(`/api/superadmin/audit-logs?${q.toString()}`)
-      return res.data?.data || res.data
+      return res.data
     },
-    keepPreviousData: true,
+    placeholderData: keepPreviousData,
   })
 
   // Normalize response envelope
-  const logs = Array.isArray(logsResponse)
-    ? logsResponse
-    : logsResponse?.data || logsResponse?.logs || []
+  const logs = logsResponse?.data || logsResponse?.logs || (Array.isArray(logsResponse) ? logsResponse : [])
   const pagination = logsResponse?.pagination || {
     page,
     limit,
     total: logs.length,
-    totalPages: 1,
+    totalPages: Math.ceil(logs.length / limit) || 1,
   }
   const stats = logsResponse?.stats || null
 
@@ -174,6 +213,13 @@ export const AuditLogsPage = () => {
       { replace: true }
     )
   }
+
+  // Clamp page to totalPages if URL page exceeds available pages
+  useEffect(() => {
+    if (pagination.totalPages > 0 && page > pagination.totalPages) {
+      updateParams({ page: pagination.totalPages })
+    }
+  }, [page, pagination.totalPages])
 
   const handleSearchChange = (val) => {
     updateParams({ search: val, page: 1 })
@@ -240,6 +286,7 @@ export const AuditLogsPage = () => {
       if (module && module !== 'ALL') q.set('module', module)
       if (action && action !== 'ALL') q.set('action', action)
       if (clinicId && clinicId !== 'ALL') q.set('clinicId', clinicId)
+      if (period) q.set('period', period)
       if (from) q.set('from', from)
       if (to) q.set('to', to)
       if (sort) q.set('sort', sort)
@@ -309,7 +356,7 @@ export const AuditLogsPage = () => {
             isLoading={isExporting}
             leftIcon={<FileSpreadsheet className="w-4 h-4" />}
           >
-            Export Excel
+            Export All
           </Button>
         </div>
       </div>
@@ -372,7 +419,7 @@ export const AuditLogsPage = () => {
         {/* Query State Displays */}
         {isLoading ? (
           <div className="p-4">
-            <SkeletonTable rows={8} cols={7} />
+            <SkeletonTable rows={8} cols={8} />
           </div>
         ) : isError ? (
           <div className="p-12 text-center flex flex-col items-center justify-center space-y-3">
@@ -397,7 +444,7 @@ export const AuditLogsPage = () => {
             />
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className={`overflow-x-auto ${isFetching && !isLoading ? 'opacity-60' : ''} transition-opacity duration-200`}>
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b border-border bg-surface/50 text-[11px] font-bold uppercase tracking-wider text-text-secondary select-none">
@@ -414,10 +461,12 @@ export const AuditLogsPage = () => {
                       )}
                     </div>
                   </th>
+                  <th className="py-3 px-3">Record ID</th>
                   <th className="py-3 px-4">Performed By</th>
                   <th className="py-3 px-4">Action</th>
                   <th className="py-3 px-4">Module</th>
                   <th className="py-3 px-4">Target Record / Description</th>
+                  <th className="py-3 px-4">IP / Device</th>
                   <th className="py-3 px-4">Clinic Scope</th>
                   <th className="py-3 px-3 text-center">Actions</th>
                 </tr>
@@ -426,6 +475,7 @@ export const AuditLogsPage = () => {
                 {logs.map((log) => {
                   const actionBadgeClass = getActionBadgeClass(log.actionType)
                   const initials = getInitials(log.actorName)
+                  const stateChips = summarizeState(log.afterState || log.payload)
 
                   return (
                     <tr
@@ -444,7 +494,23 @@ export const AuditLogsPage = () => {
                         </div>
                       </td>
 
-                      {/* 2. Performed By */}
+                      {/* 2. Record ID */}
+                      <td className="py-3.5 px-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(log.id)
+                            notify.success('Record ID copied!')
+                          }}
+                          className="font-mono text-[11px] text-text-secondary hover:text-primary transition-colors inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-border/60 hover:bg-surface-muted"
+                          title={`Copy full ID: ${log.id}`}
+                        >
+                          <span>{log.id ? log.id.slice(0, 8) : '—'}</span>
+                          <Copy className="w-3 h-3 opacity-60" />
+                        </button>
+                      </td>
+
+                      {/* 3. Performed By */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="flex items-center gap-2.5">
                           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/20 to-primary/40 text-primary font-bold text-xs flex items-center justify-center shrink-0 border border-primary/20 shadow-soft">
@@ -466,7 +532,7 @@ export const AuditLogsPage = () => {
                         </div>
                       </td>
 
-                      {/* 3. Action */}
+                      {/* 4. Action */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div>
                           <span
@@ -480,14 +546,14 @@ export const AuditLogsPage = () => {
                         </div>
                       </td>
 
-                      {/* 4. Module */}
+                      {/* 5. Module */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-medium bg-surface text-text-primary border border-border">
                           {log.module}
                         </span>
                       </td>
 
-                      {/* 5. Description */}
+                      {/* 6. Description & State Chips */}
                       <td className="py-3.5 px-4 max-w-md">
                         <div
                           className="text-text-primary text-xs leading-relaxed line-clamp-2"
@@ -495,16 +561,40 @@ export const AuditLogsPage = () => {
                         >
                           {log.description}
                         </div>
+                        {stateChips.length > 0 && (
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1.5">
+                            {stateChips.map((chip, idx) => (
+                              <span
+                                key={idx}
+                                className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-surface-muted border border-border text-text-secondary"
+                                title={`${chip.key}: ${chip.val}`}
+                              >
+                                <span className="font-semibold text-text-primary mr-1">{chip.key}:</span>
+                                <span className="truncate max-w-[120px]">{chip.val}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </td>
 
-                      {/* 6. Clinic Scope */}
+                      {/* 7. IP / Device */}
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        <div className="font-mono text-xs text-text-primary">
+                          {log.ipAddress || '—'}
+                        </div>
+                        <div className="text-[10px] text-text-secondary truncate max-w-[120px]" title={log.device}>
+                          {log.device || '—'}
+                        </div>
+                      </td>
+
+                      {/* 8. Clinic Scope */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <span className="text-xs font-semibold text-text-primary">
                           {log.clinicName}
                         </span>
                       </td>
 
-                      {/* 7. Actions (Inspect Record) */}
+                      {/* 9. Actions (Inspect Record) */}
                       <td className="py-3.5 px-3 text-center whitespace-nowrap">
                         <button
                           type="button"
@@ -529,63 +619,14 @@ export const AuditLogsPage = () => {
 
         {/* 5. Pagination Bar */}
         {!isLoading && !isError && logs.length > 0 && (
-          <div className="px-6 py-4 border-t border-border bg-surface/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="text-xs text-text-secondary font-medium">
-              Showing <span className="text-text-primary font-semibold">{startRecord}</span> to{' '}
-              <span className="text-text-primary font-semibold">{endRecord}</span> of{' '}
-              <span className="text-text-primary font-semibold">
-                {pagination.total.toLocaleString()}
-              </span>{' '}
-              audit entries
-            </div>
-
-            <div className="flex items-center gap-2 self-center sm:self-auto">
-              <Button
-                variant="secondary"
-                size="xs"
-                disabled={pagination.page <= 1}
-                onClick={() => handlePageChange(pagination.page - 1)}
-              >
-                Previous
-              </Button>
-
-              <div className="flex items-center gap-1">
-                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                  let pNum = i + 1
-                  if (pagination.totalPages > 5 && pagination.page > 3) {
-                    pNum = pagination.page - 2 + i
-                    if (pNum > pagination.totalPages) {
-                      pNum = pagination.totalPages - 4 + i
-                    }
-                  }
-                  const isCurrent = pNum === pagination.page
-                  return (
-                    <button
-                      key={pNum}
-                      type="button"
-                      onClick={() => handlePageChange(pNum)}
-                      className={`w-7 h-7 rounded-lg text-xs font-semibold transition-all ${
-                        isCurrent
-                          ? 'bg-primary text-white shadow-sm'
-                          : 'bg-surface hover:bg-border/60 text-text-secondary hover:text-text-primary border border-border'
-                      }`}
-                    >
-                      {pNum}
-                    </button>
-                  )
-                })}
-              </div>
-
-              <Button
-                variant="secondary"
-                size="xs"
-                disabled={pagination.page >= pagination.totalPages}
-                onClick={() => handlePageChange(pagination.page + 1)}
-              >
-                Next
-              </Button>
-            </div>
-          </div>
+          <Pagination
+            page={pagination.page}
+            totalPages={pagination.totalPages}
+            total={pagination.total}
+            limit={pagination.limit}
+            onPageChange={handlePageChange}
+            entryLabel="audit entries"
+          />
         )}
       </div>
 

@@ -311,7 +311,9 @@ export class SuperadminService {
       actorId,
       action: 'TENANT_SUSPENDED',
       entityType: 'Tenant',
-      entityId: tenantId
+      entityId: tenantId,
+      details: { status: 'SUSPENDED' },
+      beforeState: { status: 'ACTIVE' }
     })
 
     return {
@@ -622,9 +624,11 @@ export class SuperadminService {
       entityType: 'Tenant',
       entityId: tenantId,
       details: {
+        status: 'ACTIVE',
         clinicCategoryId: tenant.clinicCategoryId,
         clinicCategoryName: tenant.clinicCategory?.name || 'Legacy Generic'
-      }
+      },
+      beforeState: { status: tenant.status }
     })
 
     // Real-time broadcast and cache invalidation
@@ -672,7 +676,8 @@ export class SuperadminService {
       action: 'TENANT_REJECTED',
       entityType: 'Tenant',
       entityId: tenantId,
-      details: { rejectionReason: reason }
+      details: { status: 'REJECTED', rejectionReason: reason },
+      beforeState: { status: tenant.status }
     })
 
     return {
@@ -703,7 +708,9 @@ export class SuperadminService {
       actorId,
       action: 'TENANT_DECOMMISSIONED',
       entityType: 'Tenant',
-      entityId: tenantId
+      entityId: tenantId,
+      details: { name: tenant.name, status: 'DECOMMISSIONED' },
+      beforeState: { name: tenant.name, status: tenant.status }
     })
 
     return {
@@ -1110,7 +1117,8 @@ export class SuperadminService {
       action: 'CLINIC_CATEGORY_UPDATED',
       entityType: 'ClinicCategory',
       entityId: id,
-      details: { name: updated.name },
+      details: { name: updated.name, ...data },
+      beforeState: category
     })
 
     return updated
@@ -1168,6 +1176,7 @@ export class SuperadminService {
         deletedRoleTemplates: category._count?.roleTemplates || 0,
         deletedCategoryModules: category._count?.categoryModules || 0,
       },
+      beforeState: category
     })
 
     return {

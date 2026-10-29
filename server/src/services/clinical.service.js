@@ -238,7 +238,8 @@ export class ClinicalService {
       action: 'PATIENT_UPDATED',
       entityType: 'Patient',
       entityId: id,
-      details: data
+      details: data,
+      beforeState: existing
     }).catch(() => { })
 
     const birthYear = updated.dob ? new Date(updated.dob).getFullYear() : 1990
@@ -268,7 +269,9 @@ export class ClinicalService {
       actorId,
       action: 'PATIENT_DELETED',
       entityType: 'Patient',
-      entityId: id
+      entityId: id,
+      details: { fullName: existing.fullName, mrn: existing.mrn },
+      beforeState: existing
     }).catch(() => { })
 
     return { success: true, message: 'Patient removed successfully' }
@@ -621,7 +624,8 @@ export class ClinicalService {
       action: 'APPOINTMENT_UPDATED',
       entityType: 'Appointment',
       entityId: id,
-      details: data
+      details: data,
+      beforeState: existing
     }).catch(() => { })
 
     return {

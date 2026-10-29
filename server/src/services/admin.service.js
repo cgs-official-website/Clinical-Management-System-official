@@ -736,7 +736,8 @@ export class AdminService {
       action: 'ROLE_PERMISSIONS_UPDATED',
       entityType: 'Role',
       entityId: role.id,
-      details: { roleName: role.name, updatedPermissions: permissionCodes }
+      details: { roleName: role.name, updatedPermissions: permissionCodes },
+      beforeState: role
     })
 
     return this.getRoleById(role.id, tenantId)
@@ -772,7 +773,8 @@ export class AdminService {
       action: 'ROLE_DELETED',
       entityType: 'Role',
       entityId: roleId,
-      details: { name: role.name }
+      details: { name: role.name },
+      beforeState: role
     })
 
     return { success: true, message: 'Role deleted successfully' }
@@ -1272,7 +1274,8 @@ export class AdminService {
       action: 'STAFF_UPDATED',
       entityType: 'User',
       entityId: staffId,
-      details: { updatedFields: Object.keys(data) }
+      details: { updatedFields: Object.keys(data), ...data },
+      beforeState: existingUser
     })
 
     return this.getStaffMemberById(staffId, resolvedTenantId)
@@ -1304,7 +1307,8 @@ export class AdminService {
       action: 'STAFF_DELETED',
       entityType: 'User',
       entityId: staffId,
-      details: { email: user.email }
+      details: { email: user.email, fullName: user.fullName },
+      beforeState: user
     })
 
     return { success: true, message: 'Staff member removed successfully' }
@@ -1529,8 +1533,10 @@ export class AdminService {
       entityId: key,
       details: {
         slotDurationMinutes: merged.slotDurationMinutes,
-        departmentsCount: merged.departments?.length
-      }
+        departmentsCount: merged.departments?.length,
+        ...newConfig
+      },
+      beforeState: current
     }).catch(() => { })
 
     return merged
@@ -1840,7 +1846,8 @@ export class AdminService {
       action: 'CLINIC_SETTINGS_UPDATED',
       entityType: 'TenantSettings',
       entityId: resolvedTenantId || 'global',
-      details: { keysUpdated: Object.keys(payload) }
+      details: { keysUpdated: Object.keys(payload), ...payload },
+      beforeState: current
     }).catch(() => { })
 
     return merged

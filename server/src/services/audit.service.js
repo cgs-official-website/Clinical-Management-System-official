@@ -37,46 +37,186 @@ export const deriveActionType = (action = '') => {
 }
 
 /**
+ * Strips sensitive fields recursively from state objects
+ */
+export const stripSensitiveFields = (obj) => {
+  if (!obj || typeof obj !== 'object') return obj
+  if (Array.isArray(obj)) return obj.map(stripSensitiveFields)
+  const SENSITIVE_KEYS = new Set([
+    'password',
+    'passwordhash',
+    'password_hash',
+    'token',
+    'refreshtoken',
+    'refresh_token',
+    'accesstoken',
+    'access_token',
+    'otp',
+    'secret',
+    'clientsecret',
+    'client_secret',
+    'authorization'
+  ])
+  const cleaned = {}
+  for (const [key, val] of Object.entries(obj)) {
+    if (SENSITIVE_KEYS.has(key.toLowerCase())) {
+      continue
+    }
+    if (val !== null && typeof val === 'object') {
+      cleaned[key] = stripSensitiveFields(val)
+    } else {
+      cleaned[key] = val
+    }
+  }
+  return cleaned
+}
+
+/**
+ * Resolves actor name, email, and role consistently without fake fallback names
+ */
+export const resolveActorInfo = (log) => {
+  let actorRole = 'SYSTEM'
+  let actorName = 'System'
+  let actorEmail = '—'
+
+  if (log?.actor) {
+    actorName = log.actor.fullName || 'User'
+    actorEmail = log.actor.email || '—'
+    if (log.actor.userType === 'SUPERADMIN') actorRole = 'SUPERADMIN'
+    else if (log.actor.userType === 'ADMIN') actorRole = 'ADMIN'
+    else if (log.actor.userRoles && log.actor.userRoles.length > 0 && log.actor.userRoles[0]?.role?.name) {
+      actorRole = log.actor.userRoles[0].role.name
+    } else {
+      actorRole = log.actor.userType || 'STAFF'
+    }
+  } else if (log?.actorUserId) {
+    const shortId = String(log.actorUserId).length > 8 ? log.actorUserId.slice(0, 8) : log.actorUserId
+    actorName = `Deleted user (${shortId})`
+    actorEmail = `deleted (${shortId})`
+    actorRole = 'DELETED'
+  }
+
+  return { actorName, actorEmail, actorRole }
+}
+
+/**
  * Builds a readable sentence description from real data only
  */
 export const buildDescription = (log, actorName, actorRole) => {
-  const actionUpper = String(log.action || '').toUpperCase()
-  const entityType = log.entityType || 'record'
-  const actorLabel = `${actorName} (${actorRole})`
+  try {
+    if (!log) return ''
+    const actionUpper = String(log.action || '').toUpperCase()
+    const entityType = log.entityType || 'record'
+    const actorLabel = `${actorName || 'System'} (${actorRole || 'SYSTEM'})`
 
-  // 1. Check for updated fields array
-  if (log.afterState && typeof log.afterState === 'object') {
-    const fields = log.afterState.updatedFields || log.afterState.keysUpdated || log.afterState.fields
-    if (Array.isArray(fields) && fields.length > 0) {
-      return `${actorLabel} updated ${entityType}: ${fields.join(', ')}`
+    // Verb determination
+    let verb = 'modified'
+    if (actionUpper.includes('INVITED')) verb = 'invited'
+    else if (actionUpper.includes('CREATE') || actionUpper.includes('PROVISION')) verb = 'created'
+    else if (actionUpper.includes('SUSPEND')) verb = 'suspended'
+    else if (actionUpper.includes('REJECT')) verb = 'rejected'
+    else if (actionUpper.includes('DECOMMISSION')) verb = 'decommissioned'
+    else if (actionUpper.includes('DELETE') || actionUpper.includes('REMOVE')) verb = 'deleted'
+    else if (actionUpper.includes('ASSIGN')) verb = 'assigned'
+    else if (actionUpper.includes('UPDATE')) verb = 'updated'
+    else if (actionUpper.includes('LOGIN')) verb = 'authenticated via'
+
+    const after = log.afterState && typeof log.afterState === 'object' ? log.afterState : null
+    const before = log.beforeState && typeof log.beforeState === 'object' ? log.beforeState : null
+
+    // 1. If explicit details string
+    if (typeof after?.details === 'string') {
+      return `${actorLabel} ${verb} ${entityType}: ${after.details}`
     }
-  }
 
-  // 2. Verb determination
-  let verb = 'modified'
-  if (actionUpper.includes('INVITED')) verb = 'invited'
-  else if (actionUpper.includes('CREATE') || actionUpper.includes('PROVISION')) verb = 'created'
-  else if (actionUpper.includes('SUSPEND')) verb = 'suspended'
-  else if (actionUpper.includes('REJECT')) verb = 'rejected'
-  else if (actionUpper.includes('DECOMMISSION')) verb = 'decommissioned'
-  else if (actionUpper.includes('DELETE') || actionUpper.includes('REMOVE')) verb = 'deleted'
-  else if (actionUpper.includes('ASSIGN')) verb = 'assigned'
-  else if (actionUpper.includes('UPDATE')) verb = 'updated'
-  else if (actionUpper.includes('LOGIN')) verb = 'authenticated via'
+    // 2. Check for explicit updatedFields/keysUpdated/fields
+    if (after) {
+      const updatedFields = after.updatedFields || after.keysUpdated || after.fields
+      if (Array.isArray(updatedFields) && updatedFields.length > 0) {
+        const fieldDetails = updatedFields
+          .map((f) => {
+            if (after[f] !== undefined && after[f] !== null) {
+              const valStr = typeof after[f] === 'object' ? '{…}' : String(after[f]).slice(0, 40)
+              return `${f} (${valStr})`
+            }
+            return f
+          })
+          .join(', ')
+        return `${actorLabel} updated ${entityType}: ${fieldDetails}`
+      }
+    }
 
-  // 3. Name or role name if available
-  if (log.afterState?.name) {
-    return `${actorLabel} ${verb} ${entityType} "${log.afterState.name}"`
-  }
-  if (log.afterState?.roleName) {
-    return `${actorLabel} ${verb} ${entityType} "${log.afterState.roleName}"`
-  }
-  if (typeof log.afterState?.details === 'string') {
-    return `${actorLabel}: ${log.afterState.details}`
-  }
+    // 3. Primary label preference
+    const state = after || before || {}
+    let primaryLabel = null
+    const PRIMARY_KEYS = ['fullName', 'name', 'roleName', 'categoryName', 'email', 'mrn', 'title']
+    for (const pk of PRIMARY_KEYS) {
+      if (state[pk] && typeof state[pk] === 'string' && state[pk].trim()) {
+        primaryLabel = state[pk].trim()
+        break
+      }
+    }
 
-  // 4. Fallback readable verb sentence
-  return `${actorLabel} ${verb} ${entityType}`
+    // 4. Collect up to 4 other scalar key: value pairs
+    const isUuid = (str) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(str))
+    const SKIP_KEYS = new Set([
+      'updatedfields',
+      'keysupdated',
+      'fields',
+      'password',
+      'token',
+      'otp',
+      'secret',
+      'id',
+      'createdat',
+      'updatedat'
+    ])
+
+    const entries = []
+    let uuidFallback = null
+
+    for (const [key, val] of Object.entries(state)) {
+      if (val === null || val === undefined || val === '') continue
+      const lowerKey = key.toLowerCase()
+      if (SKIP_KEYS.has(lowerKey)) continue
+      if (primaryLabel && state[key] === primaryLabel) continue
+
+      if (typeof val === 'string' && isUuid(val)) {
+        if (!uuidFallback) uuidFallback = `${key}: ${val.slice(0, 8)}…`
+        continue
+      }
+
+      if (Array.isArray(val)) {
+        if (val.length === 0) continue
+        const joined = val.map((v) => (typeof v === 'object' ? '{…}' : String(v))).join(', ')
+        const truncated = joined.length > 40 ? joined.slice(0, 37) + '…' : joined
+        entries.push(`${key}: [${truncated}]`)
+      } else if (typeof val === 'object') {
+        entries.push(`${key}: {…}`)
+      } else {
+        const valStr = String(val)
+        const truncated = valStr.length > 40 ? valStr.slice(0, 37) + '…' : valStr
+        entries.push(`${key}: ${truncated}`)
+      }
+
+      if (entries.length >= 4) break
+    }
+
+    if (entries.length === 0 && !primaryLabel && uuidFallback) {
+      entries.push(uuidFallback)
+    }
+
+    let result = `${actorLabel} ${verb} ${entityType}`
+    if (primaryLabel) {
+      result += ` "${primaryLabel}"`
+    }
+    if (entries.length > 0) {
+      result += ` (${entries.join(', ')})`
+    }
+    return result
+  } catch (err) {
+    return `${actorName || 'User'} performed ${log?.action || 'action'} on ${log?.entityType || 'record'}`
+  }
 }
 
 export class AuditService {
@@ -90,6 +230,7 @@ export class AuditService {
     entityType,
     entityId = null,
     details = null,
+    beforeState = null,
     ipAddress = null,
     userAgent = null
   }) {
@@ -128,6 +269,9 @@ export class AuditService {
         }
       }
 
+      const rawAfter = details ? (typeof details === 'object' ? details : { details }) : null
+      const rawBefore = beforeState ? (typeof beforeState === 'object' ? beforeState : { beforeState }) : null
+
       return await prisma.auditLog.create({
         data: {
           tenantId: validTenantId,
@@ -135,7 +279,8 @@ export class AuditService {
           action,
           entityType,
           entityId: entityId ? String(entityId) : null,
-          afterState: details ? (typeof details === 'object' ? details : { details }) : null,
+          beforeState: stripSensitiveFields(rawBefore),
+          afterState: stripSensitiveFields(rawAfter),
           ip: resolvedIp ? normalizeIp(resolvedIp) : null,
           userAgent: resolvedUserAgent
         }
@@ -157,6 +302,7 @@ export class AuditService {
     module = null,
     action = null,
     role = null,
+    period = null,
     from = null,
     to = null,
     search = null
@@ -187,26 +333,62 @@ export class AuditService {
       }
     }
 
-    if (from || to) {
+    // Time period and date filtering
+    // When period is 'ALL', explicitly ensure NO date filters are applied (full history)
+    if (period === 'ALL') {
+      // Intentionally no createdAt filter
+    } else if (period === 'TODAY' && !from && !to) {
+      const todayStart = new Date()
+      todayStart.setHours(0, 0, 0, 0)
+      const todayEnd = new Date()
+      todayEnd.setHours(23, 59, 59, 999)
+      where.createdAt = { gte: todayStart, lte: todayEnd }
+    } else if (period === '7D' && !from && !to) {
+      const past = new Date()
+      past.setDate(past.getDate() - 7)
+      past.setHours(0, 0, 0, 0)
+      const todayEnd = new Date()
+      todayEnd.setHours(23, 59, 59, 999)
+      where.createdAt = { gte: past, lte: todayEnd }
+    } else if (period === '30D' && !from && !to) {
+      const past = new Date()
+      past.setDate(past.getDate() - 30)
+      past.setHours(0, 0, 0, 0)
+      const todayEnd = new Date()
+      todayEnd.setHours(23, 59, 59, 999)
+      where.createdAt = { gte: past, lte: todayEnd }
+    } else if (from || to) {
       where.createdAt = {}
+      let fromDate = null
+      let toDate = null
       if (from) {
-        const fromDate = new Date(from)
+        fromDate = new Date(from)
         if (!isNaN(fromDate.getTime())) {
           if (typeof from === 'string' && from.length === 10) {
-            fromDate.setUTCHours(0, 0, 0, 0)
+            fromDate.setHours(0, 0, 0, 0)
           }
-          where.createdAt.gte = fromDate
+        } else {
+          fromDate = null
         }
       }
       if (to) {
-        const toDate = new Date(to)
+        toDate = new Date(to)
         if (!isNaN(toDate.getTime())) {
           if (typeof to === 'string' && to.length === 10) {
-            toDate.setUTCHours(23, 59, 59, 999)
+            toDate.setHours(23, 59, 59, 999)
           }
-          where.createdAt.lte = toDate
+        } else {
+          toDate = null
         }
       }
+      if (fromDate && toDate && fromDate > toDate) {
+        const tmp = fromDate
+        fromDate = toDate
+        toDate = tmp
+      }
+      if (fromDate) where.createdAt.gte = fromDate
+      if (toDate) where.createdAt.lte = toDate
+      if (!fromDate && !toDate) delete where.createdAt
     }
 
     if (search && search.trim()) {
@@ -234,15 +416,16 @@ export class AuditService {
     module = null,
     action = null,
     role = null,
+    period = null,
     from = null,
     to = null,
     search = null,
     sort = 'desc',
     page = 1,
-    limit = 20
+    limit = 10
   } = {}) {
     const pageNum = Math.max(1, parseInt(page, 10) || 1)
-    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 20))
+    const limitNum = Math.max(1, Math.min(100, parseInt(limit, 10) || 10))
     const skip = (pageNum - 1) * limitNum
 
     const where = this.buildWhereClause({
@@ -253,6 +436,7 @@ export class AuditService {
       module,
       action,
       role,
+      period,
       from,
       to,
       search
@@ -260,9 +444,11 @@ export class AuditService {
 
     const sortOrder = sort === 'asc' ? 'asc' : 'desc'
 
-    // Server's UTC start of day
-    const todayUtc = new Date()
-    todayUtc.setUTCHours(0, 0, 0, 0)
+    // Local / facility start and end of day
+    const todayStart = new Date()
+    todayStart.setHours(0, 0, 0, 0)
+    const todayEnd = new Date()
+    todayEnd.setHours(23, 59, 59, 999)
 
     const effectiveTenantId = tenantId || clinicId
 
@@ -280,11 +466,11 @@ export class AuditService {
       }),
       // Filtered records count matching query
       prisma.auditLog.count({ where }),
-      // Today's activity since 00:00 UTC
+      // Today's activity across facility
       prisma.auditLog.count({
         where: {
           ...(effectiveTenantId && effectiveTenantId !== 'ALL' ? { tenantId: effectiveTenantId } : {}),
-          createdAt: { gte: todayUtc }
+          createdAt: { gte: todayStart, lte: todayEnd }
         }
       }),
       // Security alerts count
@@ -294,21 +480,23 @@ export class AuditService {
           OR: SECURITY_ALERT_CONDITIONS.prismaOr
         }
       }),
-      // Count of distinct actors in the filtered range
-      prisma.auditLog.findMany({
+      // Count of distinct actors in the filtered range using groupBy
+      prisma.auditLog.groupBy({
+        by: ['actorUserId'],
         where: {
           ...where,
           actorUserId: { not: null }
-        },
-        distinct: ['actorUserId'],
-        select: { actorUserId: true }
+        }
       }),
-      // Actual paginated data
+      // Actual paginated data with stable secondary sort
       prisma.auditLog.findMany({
         where,
         skip,
         take: limitNum,
-        orderBy: { createdAt: sortOrder },
+        orderBy: [
+          { createdAt: sortOrder },
+          { id: sortOrder }
+        ],
         include: {
           actor: {
             select: {
@@ -362,22 +550,7 @@ export class AuditService {
   static formatRecord(log) {
     if (!log) return null
 
-    // Determine actor role
-    let actorRole = 'SYSTEM'
-    if (log.actor) {
-      if (log.actor.userType === 'SUPERADMIN') actorRole = 'SUPERADMIN'
-      else if (log.actor.userType === 'ADMIN') actorRole = 'ADMIN'
-      else if (log.actor.userRoles && log.actor.userRoles.length > 0 && log.actor.userRoles[0]?.role?.name) {
-        actorRole = log.actor.userRoles[0].role.name
-      } else {
-        actorRole = log.actor.userType || 'STAFF'
-      }
-    } else if (log.actorUserId) {
-      actorRole = 'STAFF'
-    }
-
-    const actorName = log.actor?.fullName || (log.actorUserId ? 'Admin User' : 'System')
-    const actorEmail = log.actor?.email || (log.actorUserId ? 'admin@clinic.io' : 'system@clinic.io')
+    const { actorName, actorEmail, actorRole } = resolveActorInfo(log)
     const actionType = deriveActionType(log.action)
     const description = buildDescription(log, actorName, actorRole)
     const dateObj = new Date(log.createdAt)
@@ -529,27 +702,16 @@ export class AuditService {
     })
 
     const rows = rawLogs.map((log) => {
-      let actorRole = 'SYSTEM'
-      if (log.actor) {
-        if (log.actor.userType === 'SUPERADMIN') actorRole = 'SUPERADMIN'
-        else if (log.actor.userType === 'ADMIN') actorRole = 'ADMIN'
-        else if (log.actor.userRoles && log.actor.userRoles.length > 0 && log.actor.userRoles[0]?.role?.name) {
-          actorRole = log.actor.userRoles[0].role.name
-        } else {
-          actorRole = log.actor.userType || 'STAFF'
-        }
-      } else if (log.actorUserId) {
-        actorRole = 'STAFF'
-      }
-
-      const actorName = log.actor?.fullName || (log.actorUserId ? 'Admin User' : 'System')
-      const actorEmail = log.actor?.email || (log.actorUserId ? 'admin@clinic.io' : 'system@clinic.io')
+      const { actorName, actorEmail, actorRole } = resolveActorInfo(log)
       const description = buildDescription(log, actorName, actorRole)
 
       const dateObj = new Date(log.createdAt)
       const formattedTimestamp = !isNaN(dateObj.getTime())
         ? dateObj.toISOString().replace('T', ' ').substring(0, 19)
         : String(log.createdAt)
+
+      const state = log.afterState || log.beforeState || {}
+      const details = typeof state === 'string' ? state : JSON.stringify(state)
 
       return {
         Timestamp: formattedTimestamp,
@@ -558,7 +720,11 @@ export class AuditService {
         Role: actorRole,
         Action: log.action,
         Module: log.entityType || 'General',
+        'Entity ID': log.entityId || '—',
         Description: description,
+        Details: details,
+        'IP Address': log.ip ? normalizeIp(log.ip) : '—',
+        Device: formatDevice(log.userAgent),
         Clinic: log.tenant?.name || 'System-Wide'
       }
     })

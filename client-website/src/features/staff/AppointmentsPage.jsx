@@ -20,6 +20,48 @@ const DoctorVitalsReportModal = lazy(() =>
   import('./components/DoctorVitalsReportModal').then((m) => ({ default: m.DoctorVitalsReportModal }))
 )
 
+export const APPOINTMENT_STATUS_OPTIONS = [
+  { value: 'SCHEDULED', label: 'Scheduled' },
+  { value: 'CONFIRMED', label: 'Confirmed' },
+  { value: 'IN_PROGRESS', label: 'In Progress' },
+  { value: 'COMPLETED', label: 'Completed' },
+]
+
+export const normalizeAppointmentStatus = (status) => {
+  if (!status) return 'SCHEDULED'
+  const upper = String(status).toUpperCase().replace(/[\s-]/g, '_').trim()
+  if (upper === 'IN_PROGRESS' || upper === 'INPROGRESS') return 'IN_PROGRESS'
+  if (upper === 'CONFIRMED') return 'CONFIRMED'
+  if (upper === 'COMPLETED') return 'COMPLETED'
+  if (upper === 'CANCELLED') return 'CANCELLED'
+  if (upper === 'CHECKED_IN') return 'CHECKED_IN'
+  if (upper === 'NO_SHOW') return 'NO_SHOW'
+  return upper
+}
+
+export const formatAppointmentStatusLabel = (status) => {
+  const norm = normalizeAppointmentStatus(status)
+  switch (norm) {
+    case 'SCHEDULED': return 'Scheduled'
+    case 'CONFIRMED': return 'Confirmed'
+    case 'IN_PROGRESS': return 'In Progress'
+    case 'COMPLETED': return 'Completed'
+    case 'CHECKED_IN': return 'Checked In'
+    case 'CANCELLED': return 'Cancelled'
+    case 'NO_SHOW': return 'No Show'
+    default: return String(status)
+  }
+}
+
+export const getAppointmentBadgeVariant = (status) => {
+  const norm = normalizeAppointmentStatus(status)
+  if (norm === 'IN_PROGRESS') return 'info'
+  if (norm === 'COMPLETED') return 'success'
+  if (norm === 'CONFIRMED') return 'primary'
+  if (norm === 'CANCELLED' || norm === 'NO_SHOW') return 'danger'
+  return 'primary'
+}
+
 export const AppointmentsPage = () => {
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
@@ -167,14 +209,56 @@ export const AppointmentsPage = () => {
     onError: () => notify.error('Failed to book appointment.'),
   })
 
+  const [updatingAptId, setUpdatingAptId] = useState(null)
+
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }) => {
+      setUpdatingAptId(id)
       const res = await api.put(`/api/staff/appointments/${id}`, { status })
-      return res.data
+      return res.data?.data || res.data
+    },
+    onMutate: async ({ id, status }) => {
+      await queryClient.cancelQueries({ queryKey: ['staff', 'appointments'] })
+      const previousData = queryClient.getQueryData(['staff', 'appointments'])
+
+      queryClient.setQueryData(['staff', 'appointments'], (old) => {
+        if (!old) return old
+        const updateItem = (item) => (item.id === id ? { ...item, status } : item)
+        if (Array.isArray(old)) {
+          return old.map(updateItem)
+        }
+        if (Array.isArray(old.appointments)) {
+          return {
+            ...old,
+            appointments: old.appointments.map(updateItem),
+            data: Array.isArray(old.data) ? old.data.map(updateItem) : old.data,
+          }
+        }
+        if (Array.isArray(old.data)) {
+          return {
+            ...old,
+            data: old.data.map(updateItem),
+          }
+        }
+        return old
+      })
+
+      return { previousData }
     },
     onSuccess: (updated) => {
+      const updatedStatus = updated?.status || 'updated'
+      notify.success(`Appointment status updated to ${formatAppointmentStatusLabel(updatedStatus)}.`)
+    },
+    onError: (err, variables, context) => {
+      if (context?.previousData) {
+        queryClient.setQueryData(['staff', 'appointments'], context.previousData)
+      }
+      const msg = err.response?.data?.message || err.message || 'Failed to update appointment status.'
+      notify.error(msg)
+    },
+    onSettled: () => {
+      setUpdatingAptId(null)
       queryClient.invalidateQueries({ queryKey: ['staff', 'appointments'] })
-      notify.info(`Appointment status updated to ${updated.status}.`)
     },
   })
 
@@ -307,17 +391,11 @@ export const AppointmentsPage = () => {
                         </span>
                       )}
                       <Badge
-                        variant={
-                          apt.status === 'In-Progress'
-                            ? 'info'
-                            : apt.status === 'Completed'
-                            ? 'success'
-                            : 'primary'
-                        }
+                        variant={getAppointmentBadgeVariant(apt.status)}
                         size="sm"
                         dot
                       >
-                        {apt.status}
+                        {formatAppointmentStatusLabel(apt.status)}
                       </Badge>
                     </div>
                   </div>
@@ -364,17 +442,32 @@ export const AppointmentsPage = () => {
 
                 {/* Status Action Buttons */}
                 <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
-                  <Select
-                    value={apt.status}
-                    onChange={(e) => statusMutation.mutate({ id: apt.id, status: e.target.value })}
-                    className="!py-1 !text-xs !rounded-lg"
-                    options={[
-                      { value: 'Scheduled', label: 'Scheduled' },
-                      { value: 'Confirmed', label: 'Confirmed' },
-                      { value: 'In-Progress', label: 'In-Progress' },
-                      { value: 'Completed', label: 'Completed' },
-                    ]}
-                  />
+                  <div className="relative flex-1">
+                    <Select
+                      value={normalizeAppointmentStatus(apt.status)}
+                      disabled={updatingAptId === apt.id}
+                      onChange={(e) => {
+                        const nextStatus = e.target.value
+                        if (nextStatus && nextStatus !== normalizeAppointmentStatus(apt.status)) {
+                          statusMutation.mutate({ id: apt.id, status: nextStatus })
+                        }
+                      }}
+                      className="!py-1 !text-xs !rounded-lg"
+                      options={
+                        APPOINTMENT_STATUS_OPTIONS.some(
+                          (opt) => opt.value === normalizeAppointmentStatus(apt.status)
+                        )
+                          ? APPOINTMENT_STATUS_OPTIONS
+                          : [
+                              ...APPOINTMENT_STATUS_OPTIONS,
+                              {
+                                value: normalizeAppointmentStatus(apt.status),
+                                label: formatAppointmentStatusLabel(apt.status),
+                              },
+                            ]
+                      }
+                    />
+                  </div>
 
                   <Button
                     variant="ghost"

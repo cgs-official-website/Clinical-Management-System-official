@@ -16,7 +16,9 @@ import {
   AlertTriangle,
   RefreshCw,
   ArrowRight,
-  FileText
+  FileText,
+  Globe,
+  Laptop
 } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Badge } from '../../components/ui/Badge'
@@ -120,10 +122,69 @@ export const formatInspectorTime = (isoString) => {
   }).format(d)
 }
 
+export const renderFormattedValue = (val) => {
+  if (val === null || val === undefined) {
+    return <span className="text-text-secondary/50 italic">—</span>
+  }
+  if (typeof val === 'boolean') {
+    return (
+      <span
+        className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+          val
+            ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+            : 'bg-rose-500/15 text-rose-600 dark:text-rose-400'
+        }`}
+      >
+        {String(val)}
+      </span>
+    )
+  }
+  if (Array.isArray(val)) {
+    if (val.length === 0) return <span className="text-text-secondary/50 italic">[] (empty)</span>
+    return (
+      <div className="flex flex-wrap gap-1">
+        {val.map((item, idx) => (
+          <span
+            key={idx}
+            className="px-1.5 py-0.5 rounded bg-surface-muted border border-border text-[11px] font-mono"
+          >
+            {typeof item === 'object' ? JSON.stringify(item) : String(item)}
+          </span>
+        ))}
+      </div>
+    )
+  }
+  if (typeof val === 'object') {
+    return (
+      <pre className="text-[11px] whitespace-pre-wrap bg-surface-muted/50 p-2 rounded-lg border border-border/50 max-h-48 overflow-y-auto">
+        {JSON.stringify(val, null, 2)}
+      </pre>
+    )
+  }
+  const str = String(val)
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(str)) {
+    const d = new Date(str)
+    if (!isNaN(d.getTime())) {
+      return (
+        <span title={str} className="font-mono text-text-primary">
+          {d.toLocaleString('en-GB', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          })}
+        </span>
+      )
+    }
+  }
+  return <span className="font-mono text-text-primary break-all">{str}</span>
+}
 
 export const AuditRecordInspector = ({ record, isOpen, onClose }) => {
   const [viewRawJson, setViewRawJson] = useState(false)
-  const [copied, setCopied] = useState(false)
+  const [copiedKey, setCopiedKey] = useState(null)
 
   // Close on Escape key and lock body scroll
   useEffect(() => {
@@ -183,12 +244,12 @@ export const AuditRecordInspector = ({ record, isOpen, onClose }) => {
   const actionBadgeClass = getActionBadgeClass(merged.actionType)
   const actionTypeLabel = getActionTypeLabel(merged.actionType)
 
-  const handleCopy = (content) => {
+  const handleCopy = (content, key = 'default') => {
     try {
       const text = typeof content === 'string' ? content : JSON.stringify(content, null, 2)
       navigator.clipboard.writeText(text)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
+      setCopiedKey(key)
+      setTimeout(() => setCopiedKey(null), 2000)
     } catch {
       // Ignore clipboard error
     }
@@ -260,7 +321,7 @@ export const AuditRecordInspector = ({ record, isOpen, onClose }) => {
             </div>
           </div>
 
-          {/* 6 Info Cards Grid */}
+          {/* 9 Info Cards Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             {/* Card 1: Performed By */}
             <div className="p-4 rounded-2xl border border-border bg-surface shadow-soft flex flex-col justify-between space-y-2">
@@ -321,8 +382,27 @@ export const AuditRecordInspector = ({ record, isOpen, onClose }) => {
                 <div className="font-heading font-bold text-sm text-text-primary">
                   {merged.entityType || '—'}
                 </div>
-                <div className="text-xs font-mono text-text-secondary mt-1 truncate" title={merged.entityId}>
-                  {merged.entityId ? `ID: ${merged.entityId}` : '—'}
+                <div className="flex items-center justify-between gap-1 mt-1">
+                  <span
+                    className="text-xs font-mono text-text-secondary truncate select-all"
+                    title={merged.entityId}
+                  >
+                    {merged.entityId ? `ID: ${merged.entityId}` : '—'}
+                  </span>
+                  {merged.entityId && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(merged.entityId, 'entityId')}
+                      className="p-1 text-text-secondary hover:text-text-primary hover:bg-border/40 rounded transition-colors shrink-0"
+                      title="Copy Entity ID"
+                    >
+                      {copiedKey === 'entityId' ? (
+                        <Check className="w-3 h-3 text-emerald-500" />
+                      ) : (
+                        <Copy className="w-3 h-3" />
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -386,6 +466,77 @@ export const AuditRecordInspector = ({ record, isOpen, onClose }) => {
                 </div>
               </div>
             </div>
+
+            {/* Card 7: IP Address */}
+            <div className="p-4 rounded-2xl border border-border bg-surface shadow-soft flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">
+                  IP Address
+                </span>
+                <div className="p-1.5 rounded-lg bg-cyan-500/10 text-cyan-500">
+                  <Globe className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div>
+                <div className="font-mono text-xs font-bold text-text-primary break-all">
+                  {merged.ipAddress || merged.ip || '—'}
+                </div>
+                <div className="text-xs text-text-secondary mt-1">
+                  Client IP Address
+                </div>
+              </div>
+            </div>
+
+            {/* Card 8: Device */}
+            <div className="p-4 rounded-2xl border border-border bg-surface shadow-soft flex flex-col justify-between space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">
+                  Device
+                </span>
+                <div className="p-1.5 rounded-lg bg-orange-500/10 text-orange-500">
+                  <Laptop className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div>
+                <div className="font-heading font-bold text-sm text-text-primary">
+                  {merged.device || 'Unknown Device'}
+                </div>
+                <div className="text-xs text-text-secondary mt-1">
+                  Client Platform
+                </div>
+              </div>
+            </div>
+
+            {/* Card 9: User Agent */}
+            <div className="p-4 rounded-2xl border border-border bg-surface shadow-soft flex flex-col justify-between space-y-2 sm:col-span-2 lg:col-span-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">
+                  User Agent
+                </span>
+                {merged.userAgent && (
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(merged.userAgent, 'ua')}
+                    className="p-1 text-text-secondary hover:text-text-primary hover:bg-border/40 rounded transition-colors"
+                    title="Copy User Agent"
+                  >
+                    {copiedKey === 'ua' ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                )}
+              </div>
+              <div>
+                <div
+                  className="text-xs font-mono text-text-secondary line-clamp-2 break-all"
+                  title={merged.userAgent}
+                >
+                  {merged.userAgent || '—'}
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Change Details Section */}
@@ -420,30 +571,36 @@ export const AuditRecordInspector = ({ record, isOpen, onClose }) => {
                   <h3 className="font-heading font-bold text-sm text-text-primary flex items-center gap-2">
                     <span>Change Details</span>
                     <span className="text-xs font-normal text-text-secondary">
-                      {hasBothStates ? '(Before & After Comparison)' : '(State Snapshot)'}
+                      {hasBothStates
+                        ? '(Before & After Comparison)'
+                        : hasAfter
+                        ? '(Created State Record)'
+                        : '(Deleted State Snapshot)'}
                     </span>
                   </h3>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {!hasBothStates && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setViewRawJson((prev) => !prev)}
-                      leftIcon={viewRawJson ? <List className="w-3.5 h-3.5" /> : <Code2 className="w-3.5 h-3.5" />}
-                    >
-                      {viewRawJson ? 'Key-Value View' : 'Raw JSON'}
-                    </Button>
-                  )}
-
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleCopy(hasBothStates ? { before: beforeState, after: afterState } : (afterState || beforeState))}
-                    leftIcon={copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                    onClick={() =>
+                      handleCopy(
+                        hasBothStates
+                          ? { before: beforeState, after: afterState }
+                          : afterState || beforeState,
+                        'stateDiff'
+                      )
+                    }
+                    leftIcon={
+                      copiedKey === 'stateDiff' ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )
+                    }
                   >
-                    {copied ? 'Copied' : 'Copy'}
+                    {copiedKey === 'stateDiff' ? 'Copied' : 'Copy State'}
                   </Button>
                 </div>
               </div>
@@ -463,13 +620,24 @@ export const AuditRecordInspector = ({ record, isOpen, onClose }) => {
                       {diffKeys.map((k) => {
                         const valBefore = beforeState[k]
                         const valAfter = afterState[k]
-                        const isChanged = JSON.stringify(valBefore) !== JSON.stringify(valAfter)
+                        const isAdded = valBefore === undefined && valAfter !== undefined
+                        const isRemoved = valBefore !== undefined && valAfter === undefined
+                        const isChanged =
+                          !isAdded &&
+                          !isRemoved &&
+                          JSON.stringify(valBefore) !== JSON.stringify(valAfter)
 
                         return (
                           <tr
                             key={k}
                             className={`transition-colors ${
-                              isChanged ? 'bg-amber-500/5 dark:bg-amber-500/10' : 'hover:bg-border/20'
+                              isChanged
+                                ? 'bg-amber-500/5 dark:bg-amber-500/10'
+                                : isAdded
+                                ? 'bg-emerald-500/5 dark:bg-emerald-500/10'
+                                : isRemoved
+                                ? 'bg-rose-500/5 dark:bg-rose-500/10'
+                                : 'hover:bg-border/20'
                             }`}
                           >
                             <td className="py-2.5 px-3.5 font-semibold text-text-primary align-top break-all">
@@ -480,29 +648,23 @@ export const AuditRecordInspector = ({ record, isOpen, onClose }) => {
                                     diff
                                   </span>
                                 )}
+                                {isAdded && (
+                                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                                    added
+                                  </span>
+                                )}
+                                {isRemoved && (
+                                  <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-rose-500/20 text-rose-600 dark:text-rose-400">
+                                    removed
+                                  </span>
+                                )}
                               </div>
                             </td>
                             <td className="py-2.5 px-3.5 text-text-secondary align-top break-all">
-                              {valBefore !== undefined ? (
-                                typeof valBefore === 'object' && valBefore !== null ? (
-                                  <pre className="text-[11px] whitespace-pre-wrap">{JSON.stringify(valBefore, null, 2)}</pre>
-                                ) : (
-                                  String(valBefore)
-                                )
-                              ) : (
-                                <span className="text-text-secondary/50 italic">—</span>
-                              )}
+                              {renderFormattedValue(valBefore)}
                             </td>
                             <td className="py-2.5 px-3.5 text-text-primary font-medium align-top break-all">
-                              {valAfter !== undefined ? (
-                                typeof valAfter === 'object' && valAfter !== null ? (
-                                  <pre className="text-[11px] whitespace-pre-wrap">{JSON.stringify(valAfter, null, 2)}</pre>
-                                ) : (
-                                  String(valAfter)
-                                )
-                              ) : (
-                                <span className="text-text-secondary/50 italic">—</span>
-                              )}
+                              {renderFormattedValue(valAfter)}
                             </td>
                           </tr>
                         )
@@ -510,13 +672,8 @@ export const AuditRecordInspector = ({ record, isOpen, onClose }) => {
                     </tbody>
                   </table>
                 </div>
-              ) : viewRawJson ? (
-                /* Raw JSON Viewer */
-                <pre className="p-4 rounded-xl border border-border bg-surface-muted/60 dark:bg-surface-muted/40 font-mono text-xs text-text-primary overflow-x-auto leading-relaxed max-h-72">
-                  {JSON.stringify(afterState || beforeState, null, 2)}
-                </pre>
               ) : (
-                /* Key-Value List Viewer */
+                /* Key-Value List Viewer for Single State (CREATE or DELETE) */
                 <div className="rounded-xl border border-border overflow-hidden divide-y divide-border">
                   {Object.entries(afterState || beforeState || {}).map(([key, val]) => (
                     <div
@@ -527,22 +684,67 @@ export const AuditRecordInspector = ({ record, isOpen, onClose }) => {
                         {key}
                       </span>
                       <div className="font-mono text-text-primary sm:w-2/3 break-all">
-                        {val === null || val === undefined ? (
-                          <span className="text-text-secondary/50 italic">—</span>
-                        ) : typeof val === 'object' ? (
-                          <pre className="text-[11px] whitespace-pre-wrap bg-surface-muted/40 p-2 rounded-lg border border-border/50">
-                            {JSON.stringify(val, null, 2)}
-                          </pre>
-                        ) : (
-                          String(val)
-                        )}
+                        {renderFormattedValue(val)}
                       </div>
                     </div>
                   ))}
                 </div>
               )}
             </div>
-          ) : null}
+          ) : (
+            /* Friendly empty message when neither state snapshot exists */
+            <div className="p-6 rounded-2xl border border-dashed border-border bg-surface-muted/30 text-center space-y-2">
+              <div className="p-3 rounded-full bg-border/40 w-fit mx-auto text-text-secondary">
+                <FileText className="w-5 h-5" />
+              </div>
+              <p className="text-sm font-semibold text-text-primary">
+                No state snapshot recorded for this action
+              </p>
+              <p className="text-xs text-text-secondary max-w-sm mx-auto">
+                This event ({merged.action}) does not capture payload changes or was recorded prior to state diff logging.
+              </p>
+            </div>
+          )}
+
+          {/* Collapsible Raw JSON Viewer Section */}
+          <div className="rounded-2xl border border-border bg-surface shadow-soft overflow-hidden">
+            <div className="p-4 flex items-center justify-between gap-3 bg-surface-muted/30 border-b border-border">
+              <div className="flex items-center gap-2">
+                <Code2 className="w-4 h-4 text-primary" />
+                <span className="font-heading font-bold text-xs uppercase tracking-wider text-text-primary">
+                  Raw Audit Record Payload
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleCopy(merged, 'rawJson')}
+                  leftIcon={
+                    copiedKey === 'rawJson' ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )
+                  }
+                >
+                  {copiedKey === 'rawJson' ? 'Copied' : 'Copy Payload'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setViewRawJson((prev) => !prev)}
+                >
+                  {viewRawJson ? 'Hide' : 'Expand'}
+                </Button>
+              </div>
+            </div>
+            {viewRawJson && (
+              <pre className="p-4 font-mono text-xs text-text-primary overflow-x-auto leading-relaxed max-h-72 bg-surface-muted/60 dark:bg-surface-muted/40">
+                {JSON.stringify(merged, null, 2)}
+              </pre>
+            )}
+          </div>
         </div>
 
         {/* 3. Footer */}
