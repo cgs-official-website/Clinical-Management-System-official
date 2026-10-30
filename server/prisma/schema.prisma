@@ -45,6 +45,10 @@ model Tenant {
   auditLogs       AuditLog[]
   roleTemplates   RoleTemplate[]
   tenantModules   TenantModule[]
+  ecgRecords      EcgRecord[]
+  echoReports     EchoReport[]
+  cathLabProcedures CathLabProcedure[]
+  cardiacRiskAssessments CardiacRiskAssessment[]
 
   @@index([clinicCategoryId])
   @@map("tenants")
@@ -292,6 +296,10 @@ model Patient {
   appointments   Appointment[]
   prescriptions  Prescription[]
   invoices       Invoice[]
+  ecgRecords     EcgRecord[]
+  echoReports    EchoReport[]
+  cathLabProcedures CathLabProcedure[]
+  cardiacRiskAssessments CardiacRiskAssessment[]
 
   @@index([tenantId])
   @@index([mrn])
@@ -597,3 +605,145 @@ model Notification {
 }
 
 
+
+
+// -------------------------------------------------------------
+// CARDIOLOGY CATEGORY CLINICAL RECORDS
+// -------------------------------------------------------------
+
+model EcgRecord {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  patientId     String    @map("patient_id")
+  ecgNumber     String    @map("ecg_number")
+  acquiredAt    DateTime  @default(now()) @map("acquired_at")
+  rhythm        String
+  heartRate     Int       @map("heart_rate")
+  prInterval    Int?      @map("pr_interval")
+  qrsDuration   Int?      @map("qrs_duration")
+  qtcInterval   Int?      @map("qtc_interval")
+  axis          String?
+  stSegment     String?   @map("st_segment")
+  leadFindings  Json      @default("[]") @map("lead_findings")
+  priority      String    @default("ROUTINE")
+  status        String    @default("REQUIRES_REVIEW")
+  cardiologist  String?
+  signedOffAt   DateTime? @map("signed_off_at")
+  signedOffBy   String?   @map("signed_off_by")
+  createdBy     String?   @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient       Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, ecgNumber])
+  @@index([tenantId])
+  @@index([patientId])
+  @@index([acquiredAt])
+  @@map("ecg_records")
+}
+
+model EchoReport {
+  id            String    @id @default(uuid())
+  tenantId      String    @map("tenant_id")
+  patientId     String    @map("patient_id")
+  reportNumber  String    @map("report_number")
+  studyDate     DateTime  @map("study_date")
+  modality      String    @default("Transthoracic Echocardiogram (TTE)")
+  indication    String?
+  sonographer   String?
+  cardiologist  String?
+  efPercent     Int       @map("ef_percent")
+  lvedd         Float?
+  lvesd         Float?
+  ivsd          Float?
+  pwd           Float?
+  laVolumeIndex Float?    @map("la_volume_index")
+  valves        Json      @default("[]")
+  wallMotion    String?   @map("wall_motion")
+  conclusions   Json      @default("[]")
+  status        String    @default("DRAFT")
+  finalizedAt   DateTime? @map("finalized_at")
+  createdBy     String?   @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  tenant        Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient       Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, reportNumber])
+  @@index([tenantId])
+  @@index([patientId])
+  @@index([studyDate])
+  @@map("echo_reports")
+}
+
+model CathLabProcedure {
+  id                String    @id @default(uuid())
+  tenantId          String    @map("tenant_id")
+  patientId         String    @map("patient_id")
+  caseNumber        String    @map("case_number")
+  lab               String
+  procedure         String
+  scheduledStart    DateTime  @map("scheduled_start")
+  scheduledEnd      DateTime  @map("scheduled_end")
+  interventionalist String?
+  scrubNurse        String?   @map("scrub_nurse")
+  radiologicTech    String?   @map("radiologic_tech")
+  accessSite        String?   @map("access_site")
+  contrastAgent     String?   @map("contrast_agent")
+  fluoroscopyMinutes Float?   @map("fluoroscopy_minutes")
+  urgency           String    @default("ELECTIVE")
+  status            String    @default("SCHEDULED")
+  intraOpNotes      String?   @map("intra_op_notes")
+  startedAt         DateTime? @map("started_at")
+  completedAt       DateTime? @map("completed_at")
+  createdBy         String?   @map("created_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient           Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, caseNumber])
+  @@index([tenantId])
+  @@index([patientId])
+  @@index([scheduledStart])
+  @@map("cath_lab_procedures")
+}
+
+model CardiacRiskAssessment {
+  id               String   @id @default(uuid())
+  tenantId         String   @map("tenant_id")
+  patientId        String   @map("patient_id")
+  assessedAt       DateTime @default(now()) @map("assessed_at")
+  age              Int
+  sex              String
+  race             String   @default("OTHER")
+  sbp              Int
+  totalCholesterol Int      @map("total_cholesterol")
+  hdl              Int
+  ldl              Int?
+  diabetes         Boolean  @default(false)
+  smoker           Boolean  @default(false)
+  onBpTreatment    Boolean  @default(false) @map("on_bp_treatment")
+  onStatin         Boolean  @default(false) @map("on_statin")
+  onAspirin        Boolean  @default(false) @map("on_aspirin")
+  cacScore         Int?     @map("cac_score")
+  scorePercent     Float    @map("score_percent")
+  riskCategory     String   @map("risk_category")
+  recommendation   String?
+  physician        String?
+  createdBy        String?  @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient          Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@index([assessedAt])
+  @@map("cardiac_risk_assessments")
+}

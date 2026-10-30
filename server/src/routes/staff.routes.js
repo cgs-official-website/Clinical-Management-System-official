@@ -6,6 +6,7 @@ import { authenticateToken } from '../middlewares/auth.middleware.js'
 import { requirePermission, requireAnyPermission } from '../middlewares/rbac.middleware.js'
 import { validateRequest } from '../middlewares/validate.middleware.js'
 import multer from 'multer'
+import cardioRoutes from './cardio.routes.js'
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -15,6 +16,9 @@ const upload = multer({
 const router = Router()
 
 router.use(authenticateToken)
+
+// Cardiology category: ECG, Echo, Cath Lab, Cardiac Risk
+router.use('/cardio', cardioRoutes)
 
 /* =========================================================================
  * VALIDATION SCHEMAS
