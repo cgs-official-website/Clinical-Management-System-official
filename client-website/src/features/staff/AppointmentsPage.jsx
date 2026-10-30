@@ -120,7 +120,7 @@ export const AppointmentsPage = () => {
         const res = await api.get('/api/staff/doctors')
         const list = res.data?.doctors || res.data?.data || []
         if (Array.isArray(list) && list.length > 0) return list
-      } catch (err) {}
+      } catch (err) { }
       try {
         const res = await api.get('/api/admin/staff')
         const staff = res.data?.staff || res.data?.data || []
@@ -146,7 +146,7 @@ export const AppointmentsPage = () => {
             value: d.name || d.fullName,
           }))
         }
-      } catch (e) {}
+      } catch (e) { }
       return []
     },
     staleTime: 60 * 1000,
@@ -276,8 +276,8 @@ export const AppointmentsPage = () => {
   return (
     <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-        <div>
+      <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
           <h1 className="font-heading font-extrabold text-xl sm:text-2xl text-text-primary">
             Clinical Scheduling & Appointments
           </h1>
@@ -286,18 +286,17 @@ export const AppointmentsPage = () => {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2.5 sm:gap-3 w-full xl:w-auto xl:shrink-0">
           {/* View Mode Toggle */}
           <div className="p-1 rounded-xl bg-surface border border-border flex items-center justify-center gap-1">
             {['Day', 'Week', 'Month'].map((mode) => (
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
-                className={`flex-1 sm:flex-none px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                  viewMode === mode
+                className={`flex-1 sm:flex-none px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${viewMode === mode
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
-                }`}
+                  }`}
               >
                 {mode}
               </button>
@@ -459,12 +458,12 @@ export const AppointmentsPage = () => {
                         )
                           ? APPOINTMENT_STATUS_OPTIONS
                           : [
-                              ...APPOINTMENT_STATUS_OPTIONS,
-                              {
-                                value: normalizeAppointmentStatus(apt.status),
-                                label: formatAppointmentStatusLabel(apt.status),
-                              },
-                            ]
+                            ...APPOINTMENT_STATUS_OPTIONS,
+                            {
+                              value: normalizeAppointmentStatus(apt.status),
+                              label: formatAppointmentStatusLabel(apt.status),
+                            },
+                          ]
                       }
                     />
                   </div>
