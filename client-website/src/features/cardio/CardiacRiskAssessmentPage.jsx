@@ -370,11 +370,26 @@ export const CardiacRiskAssessmentPage = () => {
 
           {/* Live result */}
           <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-2">
-            {!inputsValid && (
-              <p className="text-xs text-text-secondary">
-                Fill age, systolic BP, total cholesterol and HDL to see the 10-year risk.
-              </p>
-            )}
+            {!inputsValid && (() => {
+              const issues = []
+              const check = (label, value, limits, unit = '') => {
+                if (value === '' || value === undefined || value === null) return
+                if (!inRange(Number(value), limits)) {
+                  issues.push(`${label} must be ${limits[0]}-${limits[1]}${unit}`)
+                }
+              }
+              check('Age', form.age, LIMITS.age, ' years')
+              check('Systolic BP', form.sbp, LIMITS.sbp, ' mmHg')
+              check('Total cholesterol', form.totalCholesterol, LIMITS.totalCholesterol, ' mg/dL')
+              check('HDL', form.hdl, LIMITS.hdl, ' mg/dL')
+              return (
+                <p className="text-xs text-text-secondary">
+                  {issues.length > 0
+                    ? `Cannot calculate: ${issues.join('; ')}. This calculator is valid only for ages 40-79.`
+                    : 'Fill age (40-79), systolic BP, total cholesterol and HDL to see the 10-year risk.'}
+                </p>
+              )
+            })()}
             {inputsValid && preview.isFetching && <p className="text-xs text-text-secondary">Calculating...</p>}
             {inputsValid && preview.isError && (
               <p className="text-xs text-danger">{errorMessage(preview.error)}</p>
