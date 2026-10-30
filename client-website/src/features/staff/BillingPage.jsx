@@ -1,25 +1,32 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CreditCard, DollarSign, Plus, CheckCircle, Clock } from 'lucide-react'
+import { CreditCard, DollarSign, Plus, CheckCircle, Clock, Printer, Ban } from 'lucide-react'
 import { api } from '../../lib/api'
 import { DataTable } from '../../components/ui/DataTable'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { Input } from '../../components/ui/Input'
+import { Select } from '../../components/ui/Select'
+import { ConfirmDialog } from '../../components/ui/ConfirmDialog'
 import { notify } from '../../components/ui/Toast'
+import { printReceipt } from '../../lib/printReceipt'
 
 export const BillingPage = () => {
   const queryClient = useQueryClient()
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [payTarget, setPayTarget] = useState(null) // invoice row being marked as paid
+  const [payMethod, setPayMethod] = useState('Cash')
+  const [voidTarget, setVoidTarget] = useState(null) // invoice row being voided
 
   const initialFormData = {
     patientName: '',
     amount: '',
     insuranceCoverage: '',
     patientResponsibility: '',
-    paymentMethod: 'Credit Card',
+    paymentMethod: 'Cash',
+    status: 'PENDING',
   }
   const [formData, setFormData] = useState(initialFormData)
 
@@ -56,6 +63,22 @@ export const BillingPage = () => {
     },
     onError: (err) => {
       notify.error(err.response?.data?.message || err.message || 'Failed to create invoice.')
+    },
+  })
+
+  const statusMutation = useMutation({
+    mutationFn: async ({ id, paymentStatus, paymentMethod }) => {
+      const res = await api.patch(`/api/staff/billing/${id}/status`, { paymentStatus, paymentMethod })
+      return res.data
+    },
+    onSuccess: (_, vars) => {
+      queryClient.invalidateQueries({ queryKey: ['staff', 'billing'] })
+      notify.success(vars.paymentStatus === 'PAID' ? 'Payment recorded. Invoice marked as PAID.' : 'Invoice voided.')
+      setPayTarget(null)
+      setVoidTarget(null)
+    },
+    onError: (err) => {
+      notify.error(err.response?.data?.message || err.message || 'Failed to update invoice status.')
     },
   })
 
@@ -109,11 +132,71 @@ export const BillingPage = () => {
       key: 'status',
       label: 'Payment Status',
       render: (val) => {
-        const isPaid = (val || '').toUpperCase() === 'PAID'
+        const st = (val || 'PENDING').toUpperCase()
         return (
-          <Badge variant={isPaid ? 'success' : 'warning'} size="sm" dot>
+          <Badge variant={st === 'PAID' ? 'success' : st === 'VOID' ? 'danger' : 'warning'} size="sm" dot>
             {val || 'PENDING'}
           </Badge>
+        )
+      },
+    },
+    {
+      key: 'print',
+      label: 'Receipt',
+      render: (_, row) => (
+        <Button
+          variant="secondary"
+          size="xs"
+          leftIcon={<Printer className="w-3.5 h-3.5" />}
+          onClick={() =>
+            printReceipt({
+              invoiceNumber: row.invoiceNumber,
+              date: row.createdAt,
+              patientName: row.patientName,
+              paymentMethod: row.paymentMethod,
+              status: row.status || row.paymentStatus,
+              items:
+                Array.isArray(row.items) && row.items.length > 0
+                  ? row.items.map((it) => ({ description: it.description, amount: it.fee }))
+                  : [{ description: 'Medical services', amount: row.amount }],
+              total: row.amount,
+            })
+          }
+        >
+          Print
+        </Button>
+      ),
+    },
+    {
+      key: 'actions',
+      label: 'Action',
+      render: (_, row) => {
+        const st = String(row.status || row.paymentStatus || 'PENDING').toUpperCase()
+        if (st !== 'PENDING') {
+          return <span className="text-[11px] text-text-secondary">{st === 'PAID' ? 'Completed' : 'Cancelled'}</span>
+        }
+        return (
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="primary"
+              size="xs"
+              leftIcon={<CheckCircle className="w-3.5 h-3.5" />}
+              onClick={() => {
+                setPayMethod(row.paymentMethod || 'Cash')
+                setPayTarget(row)
+              }}
+            >
+              Mark Paid
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              leftIcon={<Ban className="w-3.5 h-3.5" />}
+              onClick={() => setVoidTarget(row)}
+            >
+              Void
+            </Button>
+          </div>
         )
       },
     },
@@ -170,6 +253,8 @@ export const BillingPage = () => {
               amount: parseFloat(formData.amount) || 0,
               insuranceCoverage: parseFloat(formData.insuranceCoverage) || 0,
               patientResponsibility: parseFloat(formData.patientResponsibility) || 0,
+              status: formData.status,
+              paymentMethod: formData.status === 'PAID' ? formData.paymentMethod : undefined,
             }
             createInvoiceMutation.mutate(payload)
           }}
@@ -238,6 +323,30 @@ export const BillingPage = () => {
             />
           </div>
 
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Select
+              label="Payment Status"
+              value={formData.status}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+              options={[
+                { value: 'PENDING', label: 'Pending (bill now, collect later)' },
+                { value: 'PAID', label: 'Paid (payment received now)' },
+              ]}
+            />
+            {formData.status === 'PAID' && (
+              <Select
+                label="Payment Method"
+                value={formData.paymentMethod}
+                onChange={(e) => setFormData({ ...formData, paymentMethod: e.target.value })}
+                options={[
+                  { value: 'Cash', label: 'Cash' },
+                  { value: 'UPI', label: 'UPI' },
+                  { value: 'Card', label: 'Card' },
+                ]}
+              />
+            )}
+          </div>
+
           <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-border">
             <Button variant="secondary" size="sm" type="button" onClick={() => setIsInvoiceOpen(false)}>
               Cancel
@@ -248,6 +357,61 @@ export const BillingPage = () => {
           </div>
         </form>
       </Modal>
+
+      {/* Mark as Paid Modal */}
+      <Modal
+        isOpen={!!payTarget}
+        onClose={() => setPayTarget(null)}
+        maxWidth="max-w-md"
+        title="Record Payment"
+        description={payTarget ? `Invoice ${payTarget.invoiceNumber} • ${payTarget.patientName}` : ''}
+      >
+        <div className="space-y-4">
+          <div className="p-4 rounded-xl border border-primary/25 bg-primary/5 flex items-center justify-between">
+            <span className="text-sm font-bold text-text-primary">Amount to collect</span>
+            <span className="text-xl font-extrabold text-primary">
+              ₹{Number(payTarget?.patientResponsibility ?? payTarget?.amount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+            </span>
+          </div>
+          <Select
+            label="Payment Method"
+            value={payMethod}
+            onChange={(e) => setPayMethod(e.target.value)}
+            options={[
+              { value: 'Cash', label: 'Cash' },
+              { value: 'UPI', label: 'UPI' },
+              { value: 'Card', label: 'Card' },
+              { value: 'Insurance', label: 'Insurance' },
+            ]}
+          />
+          <div className="pt-4 flex items-center justify-end gap-2.5 border-t border-border">
+            <Button variant="secondary" size="sm" onClick={() => setPayTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              isLoading={statusMutation.isPending}
+              onClick={() =>
+                statusMutation.mutate({ id: payTarget.id, paymentStatus: 'PAID', paymentMethod: payMethod })
+              }
+            >
+              Confirm Payment Received
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Void Confirmation */}
+      <ConfirmDialog
+        isOpen={!!voidTarget}
+        onClose={() => setVoidTarget(null)}
+        onConfirm={() => statusMutation.mutate({ id: voidTarget.id, paymentStatus: 'VOID' })}
+        isLoading={statusMutation.isPending}
+        title="Void this invoice?"
+        message={voidTarget ? `Invoice ${voidTarget.invoiceNumber} for ${voidTarget.patientName} will be cancelled and cannot be collected.` : ''}
+        confirmText="Yes, Void Invoice"
+      />
     </div>
   )
 }
