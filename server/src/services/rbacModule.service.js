@@ -18,7 +18,6 @@ export const MODULE_METADATA = {
   dental_chart: { name: 'Dental Chart (Tooth Diagram)', icon: 'Tooth', route: '/app/dental/chart', defaultOrder: 3 },
   treatment_plans: { name: 'Treatment Plans', icon: 'ClipboardList', route: '/app/dental/treatment-plans', defaultOrder: 4 },
   xray_records: { name: 'X-Ray Records', icon: 'FileImage', route: '/app/dental/xrays', defaultOrder: 5 },
-  orthodontics: { name: 'Orthodontics Tracker', icon: 'Smile', route: '/app/dental/orthodontics', defaultOrder: 6 },
   implant_registry: { name: 'Implant Registry', icon: 'Layers', route: '/app/dental/implants', defaultOrder: 7 },
   prescriptions: { name: 'Prescriptions', icon: 'Pill', route: '/app/staff/prescriptions', defaultOrder: 8 },
   billing: { name: 'Billing/Invoices', icon: 'CreditCard', route: '/app/staff/billing', defaultOrder: 9 },
@@ -45,8 +44,6 @@ const DEFAULT_MODULES = [
   { id: 'd0000001-0000-0000-0000-000000000001', key: 'dental_chart', name: 'Dental Chart (Tooth Diagram)', icon: 'Tooth', route: '/app/dental/chart', displayOrder: 3 },
   { id: 'd0000002-0000-0000-0000-000000000002', key: 'treatment_plans', name: 'Treatment Plans', icon: 'ClipboardList', route: '/app/dental/treatment-plans', displayOrder: 4 },
   { id: 'd0000003-0000-0000-0000-000000000003', key: 'xray_records', name: 'X-Ray Records', icon: 'FileImage', route: '/app/dental/xrays', displayOrder: 5 },
-  { id: 'd0000004-0000-0000-0000-000000000004', key: 'orthodontics', name: 'Orthodontics Tracker', icon: 'Smile', route: '/app/dental/orthodontics', displayOrder: 6 },
-  { id: 'd0000005-0000-0000-0000-000000000005', key: 'implant_registry', name: 'Implant Registry', icon: 'Layers', route: '/app/dental/implants', displayOrder: 7 },
   { id: 'a3333333-3333-3333-3333-333333333333', key: 'prescriptions', name: 'Prescriptions', icon: 'Pill', route: '/app/staff/prescriptions', displayOrder: 8 },
   { id: 'a4444444-4444-4444-4444-444444444444', key: 'billing', name: 'Billing/Invoices', icon: 'CreditCard', route: '/app/staff/billing', displayOrder: 9 },
   { id: 'a5555555-5555-5555-5555-555555555555', key: 'inventory', name: 'Inventory', icon: 'Boxes', route: '/app/staff/inventory', displayOrder: 10 },
@@ -562,19 +559,19 @@ export class RbacModuleService {
           prisma.rolePermission.deleteMany({ where: { roleId: dbRole.id } }),
           ...(uniquePermIds.length > 0
             ? [
-                prisma.rolePermission.createMany({
-                  data: uniquePermIds.map((permId) => ({
-                    roleId: dbRole.id,
-                    permissionId: permId
-                  })),
-                  skipDuplicates: true
-                })
-              ]
+              prisma.rolePermission.createMany({
+                data: uniquePermIds.map((permId) => ({
+                  roleId: dbRole.id,
+                  permissionId: permId
+                })),
+                skipDuplicates: true
+              })
+            ]
             : [])
         ])
 
         // Invalidate Redis cache asynchronously in background without blocking
-        RbacService.invalidateRolePermissions(dbRole.id).catch(() => {})
+        RbacService.invalidateRolePermissions(dbRole.id).catch(() => { })
       }
     } catch (e) {
       logger.warn(`PostgreSQL permissions save skipped/error: ${e.message}`)
@@ -587,7 +584,7 @@ export class RbacModuleService {
         roleId: resolvedId,
         timestamp: Date.now()
       }))
-    } catch {}
+    } catch { }
 
     // Return the updated permissions list for confirmation
     return this.getPermissionsByRole(resolvedId)

@@ -178,7 +178,7 @@ export class ClinicalService {
       entityType: 'Patient',
       entityId: patient.id,
       details: { fullName: patient.fullName, mrn: patient.medicalRecordNumber || patient.mrn || mrn, phone: patient.phoneNumber || patient.phone || phone }
-    }).catch(() => {})
+    }).catch(() => { })
 
     const birthYear = patient.dob ? new Date(patient.dob).getFullYear() : 1990
     return {
@@ -1335,6 +1335,7 @@ export class ClinicalService {
             tenantId: targetTenantId,
             patientId,
             appointmentId: data.appointmentId || null,
+            tokenNumber: data.tokenNumber ? String(data.tokenNumber).trim() : null,
             invoiceNumber,
             amount: totalAmount,
             insuranceCoverage: parseFloat(data.insuranceCoverage || data.insuranceCoverageAmount) || 0,

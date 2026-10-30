@@ -32,18 +32,6 @@ const DENTAL_MODULES = [
     displayOrder: 5,
   },
   {
-    key: 'orthodontics',
-    name: 'Orthodontics Tracker',
-    description: 'Bracket alignments, clear aligner progression, cephalometric tracing, and wire sequencing',
-    displayOrder: 6,
-  },
-  {
-    key: 'implant_registry',
-    name: 'Implant Registry',
-    description: 'Fixture tracking, osseointegration stages, torque logging, and abutment components',
-    displayOrder: 7,
-  },
-  {
     key: 'prescriptions',
     name: 'Prescriptions',
     description: 'Dental pharmaceuticals, analgesics, antibiotics, and post-op care guidance',

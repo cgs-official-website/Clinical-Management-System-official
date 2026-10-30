@@ -23,21 +23,6 @@ import { notify } from '../../components/ui/Toast'
 
 const COLORS = ['#26A689', '#3B82F6', '#F59E0B', '#EC4899', '#8B5CF6']
 
-const DEFAULT_WORKLOAD = [
-  { department: 'Cardiology', patients: 184, procedures: 42, satisfaction: 98 },
-  { department: 'Diagnostic Med', patients: 142, procedures: 36, satisfaction: 96 },
-  { department: 'Emergency', patients: 260, procedures: 95, satisfaction: 94 },
-  { department: 'Pediatrics', patients: 112, procedures: 18, satisfaction: 99 },
-  { department: 'Orthopedics', patients: 88, procedures: 29, satisfaction: 97 },
-]
-
-const DEFAULT_REVENUE = [
-  { name: 'Consultations', value: 45 },
-  { name: 'Diagnostics & Imaging', value: 28 },
-  { name: 'In-office Procedures', value: 17 },
-  { name: 'Pharmacy Dispensing', value: 10 },
-]
-
 export const AdminReportsPage = () => {
   const [department, setDepartment] = useState('All')
   const [dateFilter, setDateFilter] = useState('Quarter')
@@ -51,11 +36,9 @@ export const AdminReportsPage = () => {
         })
         return res.data?.data || res.data
       } catch (err) {
-        console.warn('Failed to fetch live reports, using fallback analytics:', err.message)
-        return {
-          departmentWorkload: DEFAULT_WORKLOAD,
-          revenueByService: DEFAULT_REVENUE,
-        }
+        // Never show invented numbers: surface the error and render empty charts instead
+        notify.error(err?.response?.data?.error?.message || 'Could not load reports. Please try again.')
+        return { departmentWorkload: [], revenueByService: [] }
       }
     },
     staleTime: 30000,

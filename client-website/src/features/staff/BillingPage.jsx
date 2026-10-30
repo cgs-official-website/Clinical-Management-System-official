@@ -153,6 +153,7 @@ export const BillingPage = () => {
               invoiceNumber: row.invoiceNumber,
               date: row.createdAt,
               patientName: row.patientName,
+              tokenNumber: row.tokenNumber,
               paymentMethod: row.paymentMethod,
               status: row.status || row.paymentStatus,
               items:

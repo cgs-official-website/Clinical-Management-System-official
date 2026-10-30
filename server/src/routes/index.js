@@ -11,6 +11,7 @@ import { PermissionController } from '../controllers/permission.controller.js'
 
 import chatRoutes from './chat.routes.js'
 import pharmacyRoutes from './pharmacy.routes.js'
+import dentalRoutes from './dental.routes.js'
 
 const router = Router()
 
@@ -42,6 +43,9 @@ router.get('/roles', PermissionController.getRoles)
 
 // Pharmacy & Inventory Management (Bulk Import, Stock Movements, Compliance)
 router.use('/pharmacy', pharmacyRoutes)
+
+// Dental Care (Chart, Treatment Plans, X-Rays, Lab Orders)
+router.use('/dental', dentalRoutes)
 
 // Staff Clinical Operations (Patients, Appointments, Prescriptions, Billing, Inventory)
 router.use('/staff', staffRoutes)

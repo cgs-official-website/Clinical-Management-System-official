@@ -85,6 +85,7 @@ const createPrescriptionSchema = z.object({
 const createInvoiceSchema = z.object({
   patientId: z.string().optional(),
   appointmentId: z.string().optional(),
+  tokenNumber: z.string().optional().nullable(),
   patientName: z.string().optional(),
   name: z.string().optional(),
   patientPhone: z.string().optional(),

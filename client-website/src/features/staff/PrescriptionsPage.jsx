@@ -111,6 +111,7 @@ export const PrescriptionsPage = () => {
     {
       key: 'tokenNumber',
       label: 'Token #',
+      className: 'whitespace-nowrap min-w-[110px] w-[110px]',
       render: (val, row) => {
         const token =
           val ||
@@ -119,11 +120,11 @@ export const PrescriptionsPage = () => {
             ? row.notes.match(/\[Token:\s*([^\]]+)\]/)?.[1]
             : null)
         return token ? (
-          <span className="px-2 py-0.5 rounded-lg bg-primary/10 border border-primary/20 text-primary font-mono font-extrabold text-xs">
-            {token}
+          <span className="inline-flex items-center justify-center whitespace-nowrap px-3 py-1 rounded-lg bg-primary/10 border border-primary/20 text-primary font-mono font-extrabold text-xs leading-none tracking-wide">
+            {String(token).trim()}
           </span>
         ) : (
-          <span className="text-[11px] text-text-muted font-mono">--</span>
+          <span className="inline-flex items-center justify-center min-w-[3.5rem] text-[11px] text-text-muted font-mono">--</span>
         )
       },
     },

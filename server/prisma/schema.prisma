@@ -32,7 +32,7 @@ model Tenant {
   clinicCategoryId String?        @map("clinic_category_id")
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
-
+  auto_bill_specialty Boolean     @default(false)
   clinicCategory  ClinicCategory? @relation(fields: [clinicCategoryId], references: [id], onDelete: SetNull)
   users           User[]
   roles           Role[]
@@ -49,6 +49,13 @@ model Tenant {
   echoReports     EchoReport[]
   cathLabProcedures CathLabProcedure[]
   cardiacRiskAssessments CardiacRiskAssessment[]
+  toothRecords    ToothRecord[]
+  treatmentPlans  TreatmentPlan[]
+  xrayRecords     XrayRecord[]
+  labOrders       LabOrder[]
+  physioTreatmentPlans  PhysioTreatmentPlan[]
+  physioExercises       PhysioExercise[]
+  physioProgressNotes   PhysioProgressNote[]
 
   @@index([clinicCategoryId])
   @@map("tenants")
@@ -300,6 +307,13 @@ model Patient {
   echoReports    EchoReport[]
   cathLabProcedures CathLabProcedure[]
   cardiacRiskAssessments CardiacRiskAssessment[]
+  toothRecords   ToothRecord[]
+  treatmentPlans TreatmentPlan[]
+  xrayRecords    XrayRecord[]
+  labOrders      LabOrder[]
+  physioTreatmentPlans PhysioTreatmentPlan[]
+  physioExercises      PhysioExercise[]
+  physioProgressNotes  PhysioProgressNote[]
 
   @@index([tenantId])
   @@index([mrn])
@@ -746,4 +760,207 @@ model CardiacRiskAssessment {
   @@index([patientId])
   @@index([assessedAt])
   @@map("cardiac_risk_assessments")
+}
+
+
+
+// =========================================================================
+// DENTAL CARE MODULES
+// =========================================================================
+
+// One current record per tooth (Universal numbering 1-32) per patient
+model ToothRecord {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  patientId     String   @map("patient_id")
+  toothNo       Int      @map("tooth_no")
+  status        String   @default("HEALTHY") // HEALTHY | CARIES | RESTORED | CROWN | ROOT_CANAL | IMPLANT | MISSING
+  surfaces      Json     @default("[]")      // ["M","O","D","B","L"]
+  notes         String?
+  probingDepths Json?    @map("probing_depths") // { DB, B, MB, DL, L, ML } in mm
+  updatedBy     String?  @map("updated_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient       Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, toothNo])
+  @@index([tenantId])
+  @@index([patientId])
+  @@map("tooth_records")
+}
+
+model TreatmentPlan {
+  id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id")
+  patientId  String   @map("patient_id")
+  name       String
+  status     String   @default("ACTIVE") // DRAFT | ACTIVE | COMPLETED | CANCELLED
+  invoiceId  String?  @map("invoice_id")
+  createdBy  String?  @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  items      TreatmentPlanItem[]
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@map("treatment_plans")
+}
+
+model TreatmentPlanItem {
+  id                String   @id @default(uuid())
+  planId            String   @map("plan_id")
+  phase             String   @default("Phase 1")
+  code              String?  // procedure / billing code
+  description       String
+  toothNo           String?  @map("tooth_no") // "14", "14 (MO)", "All"
+  fee               Float    @default(0)
+  insuranceCoverage Float    @default(0) @map("insurance_coverage")
+  status            String   @default("PLANNED") // PLANNED | ACCEPTED | IN_PROGRESS | COMPLETED
+  sortOrder         Int      @default(0) @map("sort_order")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  plan              TreatmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId])
+  @@map("treatment_plan_items")
+}
+
+model XrayRecord {
+  id          String   @id @default(uuid())
+  tenantId    String   @map("tenant_id")
+  patientId   String   @map("patient_id")
+  scanType    String   @map("scan_type") // Panoramic (OPG) | Periapical (IOPA) | Bitewing | CBCT | Cephalometric
+  region      String?
+  toothNo     String?  @map("tooth_no")
+  takenAt     DateTime @default(now()) @map("taken_at")
+  radiologist String?
+  findings    String?
+  status      String   @default("PENDING") // PENDING | VERIFIED
+  createdBy   String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient     Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@map("xray_records")
+}
+
+model LabOrder {
+  id        String    @id @default(uuid())
+  tenantId  String    @map("tenant_id")
+  patientId String    @map("patient_id")
+  orderNo   String    @map("order_no")
+  lab       String
+  workType  String    @map("work_type") // Crown | Bridge | Denture | Veneer | Night Guard ...
+  material  String?
+  toothNo   String?   @map("tooth_no")
+  shade     String?
+  dueDate   DateTime? @map("due_date")
+  status    String    @default("DRAFT") // DRAFT | SENT | IN_PROGRESS | RECEIVED | FITTED | CANCELLED
+  notes     String?
+  createdBy String?   @map("created_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient   Patient   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, orderNo])
+  @@index([tenantId])
+  @@index([patientId])
+  @@map("lab_orders")
+}
+
+// =========================================================================
+// PHYSIOTHERAPY MODULES
+// (tables are prefixed physio_ so they never clash with dental treatment_plans)
+// =========================================================================
+
+// Treatment / Session Plans (e.g. "Rotator Cuff Post-Surgical Rehab")
+model PhysioTreatmentPlan {
+  id                String   @id @default(uuid())
+  tenantId          String   @map("tenant_id")
+  patientId         String   @map("patient_id")
+  title             String
+  status            String   @default("ACTIVE") // DRAFT | ACTIVE | IN_PROGRESS | COMPLETED | CANCELLED
+  totalSessions     Int      @default(0) @map("total_sessions")
+  sessionsCompleted Int      @default(0) @map("sessions_completed")
+  startDate         DateTime? @map("start_date")
+  therapist         String?
+  // [{ name, sessions, status, modalities: [] }]
+  phases            Json     @default("[]")
+  notes             String?
+  createdBy         String?  @map("created_by")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  tenant            Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient           Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@map("physio_treatment_plans")
+}
+
+// Exercise Program Tracker (home exercise program per patient)
+model PhysioExercise {
+  id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id")
+  patientId      String   @map("patient_id")
+  name           String
+  target         String?  // target muscle / joint
+  sets           Int      @default(3)
+  reps           String?  // "15 reps (5s hold)"
+  resistance     String?
+  frequency      String?  // "2x Daily"
+  difficulty     String   @default("Moderate") // Easy | Moderate | Hard
+  completedToday Boolean  @default(false) @map("completed_today")
+  adherenceRate  Int      @default(0) @map("adherence_rate") // percent 0-100
+  isActive       Boolean  @default(true) @map("is_active")
+  createdBy      String?  @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient        Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@map("physio_exercises")
+}
+
+// Progress / Recovery Notes (SOAP + ROM + pain score)
+model PhysioProgressNote {
+  id            String   @id @default(uuid())
+  tenantId      String   @map("tenant_id")
+  patientId     String   @map("patient_id")
+  sessionNumber Int      @default(1) @map("session_number")
+  noteDate      DateTime @default(now()) @map("note_date")
+  therapist     String?
+  subjective    String?
+  objective     String?
+  assessment    String?
+  plan          String?
+  // [{ joint, value, change }]
+  romMetrics    Json     @default("[]") @map("rom_metrics")
+  painScore     Int?     @map("pain_score") // VAS 0-10
+  createdBy     String?  @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient       Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([patientId])
+  @@index([noteDate])
+  @@map("physio_progress_notes")
 }

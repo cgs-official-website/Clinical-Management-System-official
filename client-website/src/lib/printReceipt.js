@@ -44,6 +44,7 @@ export const printReceipt = (receipt = {}) => {
   .r{text-align:right;white-space:nowrap}
   .total td{border-top:1px solid #111;font-weight:bold;font-size:15px;padding-top:8px}
   .paid{display:inline-block;border:2px solid #0a8f5a;color:#0a8f5a;padding:2px 10px;border-radius:6px;font-weight:bold;letter-spacing:1px;margin-top:8px}
+  .token{display:inline-block;border:1px solid #111;border-radius:4px;padding:0 8px;font-family:monospace;letter-spacing:1px}
   .foot{text-align:center;margin-top:16px;color:#666;font-size:11px}
 </style></head><body><div class="box">
   <h1>Pharmacy Receipt</h1>
@@ -51,7 +52,7 @@ export const printReceipt = (receipt = {}) => {
   <div class="muted">Date: ${esc(dateStr)}</div>
   <hr>
   <div>Patient: <b>${esc(receipt.patientName || '-')}</b></div>
-  ${receipt.tokenNumber ? `<div>Token: <b>${esc(receipt.tokenNumber)}</b></div>` : ''}
+  ${receipt.tokenNumber ? `<div>Token No: <b class="token">${esc(receipt.tokenNumber)}</b></div>` : ''}
   ${receipt.servedBy ? `<div class="muted">Dispensed by: ${esc(receipt.servedBy)}</div>` : ''}
   <hr>
   <table>
@@ -79,8 +80,13 @@ export const printReceipt = (receipt = {}) => {
     doc.write(html)
     doc.close()
 
+    // print() must run exactly ONCE. Previously both iframe.onload and a 400ms fallback timer
+    // called it, so the browser opened a second print dialog after the user pressed Cancel.
+    let printed = false
     const cleanup = () => setTimeout(() => iframe.parentNode && iframe.parentNode.removeChild(iframe), 1000)
-    iframe.onload = () => {
+    const doPrint = () => {
+        if (printed) return
+        printed = true
         try {
             iframe.contentWindow.focus()
             iframe.contentWindow.print()
@@ -88,17 +94,9 @@ export const printReceipt = (receipt = {}) => {
             cleanup()
         }
     }
-    // Some browsers do not fire onload for document.write content
-    setTimeout(() => {
-        if (iframe.parentNode) {
-            try {
-                iframe.contentWindow.focus()
-                iframe.contentWindow.print()
-            } finally {
-                cleanup()
-            }
-        }
-    }, 400)
+    iframe.onload = doPrint
+    // Some browsers do not fire onload for document.write content; the `printed` flag prevents a double call
+    setTimeout(doPrint, 400)
 }
 
 export default printReceipt

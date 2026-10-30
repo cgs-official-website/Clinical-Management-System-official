@@ -52,7 +52,6 @@ const PatientFlowPage = lazy(() => import('../features/staff/PatientFlowPage'))
 const DentalChartPage = lazy(() => import('../features/dental/DentalChartPage'))
 const TreatmentPlansPage = lazy(() => import('../features/dental/TreatmentPlansPage'))
 const XrayRecordsPage = lazy(() => import('../features/dental/XrayRecordsPage'))
-const OrthodonticsPage = lazy(() => import('../features/dental/OrthodonticsPage'))
 const ImplantRegistryPage = lazy(() => import('../features/dental/ImplantRegistryPage'))
 const LabOrdersPage = lazy(() => import('../features/dental/LabOrdersPage'))
 
@@ -530,26 +529,6 @@ export const router = createBrowserRouter([
           <RequireModuleView route="/app/dental/xrays">
             <Suspense fallback={<PageLoader />}>
               <XrayRecordsPage />
-            </Suspense>
-          </RequireModuleView>
-        ),
-      },
-      {
-        path: 'dental/orthodontics',
-        element: (
-          <RequireModuleView route="/app/dental/orthodontics">
-            <Suspense fallback={<PageLoader />}>
-              <OrthodonticsPage />
-            </Suspense>
-          </RequireModuleView>
-        ),
-      },
-      {
-        path: 'dental/implants',
-        element: (
-          <RequireModuleView route="/app/dental/implants">
-            <Suspense fallback={<PageLoader />}>
-              <ImplantRegistryPage />
             </Suspense>
           </RequireModuleView>
         ),
