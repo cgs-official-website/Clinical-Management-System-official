@@ -62,6 +62,10 @@ const createAppointmentSchema = z.object({
 
 const createPrescriptionSchema = z.object({
   patientId: z.string().optional(),
+  appointmentId: z.string().optional(),
+  tokenNumber: z.string().optional(),
+  doctorName: z.string().optional(),
+  status: z.string().optional(),
   patientName: z.string().optional(),
   name: z.string().optional(),
   doctorId: z.string().optional(),
@@ -76,6 +80,7 @@ const createPrescriptionSchema = z.object({
 
 const createInvoiceSchema = z.object({
   patientId: z.string().optional(),
+  appointmentId: z.string().optional(),
   patientName: z.string().optional(),
   name: z.string().optional(),
   patientPhone: z.string().optional(),

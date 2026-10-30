@@ -1,6 +1,7 @@
 import React, { useState, lazy, Suspense } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Calendar as CalendarIcon, Clock, Plus, Video, MapPin, User, ChevronLeft, ChevronRight, Activity, Stethoscope, Hash } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, Plus, Video, MapPin, User, ChevronLeft, ChevronRight, Activity, Stethoscope, Hash, Pill } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
@@ -11,6 +12,7 @@ import { notify } from '../../components/ui/Toast'
 import { Skeleton } from '../../components/ui/Skeleton'
 import { useAuthStore } from '../../store/useAuthStore'
 import { PermissionAction } from '../../components/common/PermissionAction'
+import { useRolePermissions } from '../../hooks/useRolePermissions'
 
 // Lazy load dialog modals on demand
 const PatientDetailsTriageModal = lazy(() =>
@@ -20,51 +22,30 @@ const DoctorVitalsReportModal = lazy(() =>
   import('./components/DoctorVitalsReportModal').then((m) => ({ default: m.DoctorVitalsReportModal }))
 )
 
-export const APPOINTMENT_STATUS_OPTIONS = [
+const STATUS_OPTIONS = [
   { value: 'SCHEDULED', label: 'Scheduled' },
   { value: 'CONFIRMED', label: 'Confirmed' },
-  { value: 'IN_PROGRESS', label: 'In Progress' },
+  { value: 'CHECKED_IN', label: 'Checked-In' },
+  { value: 'IN_PROGRESS', label: 'In-Progress' },
   { value: 'COMPLETED', label: 'Completed' },
+  { value: 'CANCELLED', label: 'Cancelled' },
+  { value: 'NO_SHOW', label: 'No-Show' },
 ]
 
-export const normalizeAppointmentStatus = (status) => {
-  if (!status) return 'SCHEDULED'
-  const upper = String(status).toUpperCase().replace(/[\s-]/g, '_').trim()
-  if (upper === 'IN_PROGRESS' || upper === 'INPROGRESS') return 'IN_PROGRESS'
-  if (upper === 'CONFIRMED') return 'CONFIRMED'
-  if (upper === 'COMPLETED') return 'COMPLETED'
-  if (upper === 'CANCELLED') return 'CANCELLED'
-  if (upper === 'CHECKED_IN') return 'CHECKED_IN'
-  if (upper === 'NO_SHOW') return 'NO_SHOW'
-  return upper
-}
+const normalizeStatus = (s) =>
+  String(s || 'SCHEDULED').toUpperCase().replace(/[\s-]/g, '_')
 
-export const formatAppointmentStatusLabel = (status) => {
-  const norm = normalizeAppointmentStatus(status)
-  switch (norm) {
-    case 'SCHEDULED': return 'Scheduled'
-    case 'CONFIRMED': return 'Confirmed'
-    case 'IN_PROGRESS': return 'In Progress'
-    case 'COMPLETED': return 'Completed'
-    case 'CHECKED_IN': return 'Checked In'
-    case 'CANCELLED': return 'Cancelled'
-    case 'NO_SHOW': return 'No Show'
-    default: return String(status)
-  }
-}
-
-export const getAppointmentBadgeVariant = (status) => {
-  const norm = normalizeAppointmentStatus(status)
-  if (norm === 'IN_PROGRESS') return 'info'
-  if (norm === 'COMPLETED') return 'success'
-  if (norm === 'CONFIRMED') return 'primary'
-  if (norm === 'CANCELLED' || norm === 'NO_SHOW') return 'danger'
-  return 'primary'
-}
+const statusLabel = (s) =>
+  STATUS_OPTIONS.find((o) => o.value === normalizeStatus(s))?.label || s
 
 export const AppointmentsPage = () => {
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
+  const navigate = useNavigate()
+  const { hasEditPermission } = useRolePermissions()
+  const canWriteRx = hasEditPermission('/app/staff/prescriptions')
+  // Holds the appointment that was just marked Completed (drives the "Write prescription?" dialog)
+  const [rxPrompt, setRxPrompt] = useState(null)
   const [viewMode, setViewMode] = useState('Day')
   const [isBookOpen, setIsBookOpen] = useState(false)
   const [isTriageOpen, setIsTriageOpen] = useState(false)
@@ -120,7 +101,7 @@ export const AppointmentsPage = () => {
         const res = await api.get('/api/staff/doctors')
         const list = res.data?.doctors || res.data?.data || []
         if (Array.isArray(list) && list.length > 0) return list
-      } catch (err) {}
+      } catch (err) { }
       try {
         const res = await api.get('/api/admin/staff')
         const staff = res.data?.staff || res.data?.data || []
@@ -146,7 +127,7 @@ export const AppointmentsPage = () => {
             value: d.name || d.fullName,
           }))
         }
-      } catch (e) {}
+      } catch (e) { }
       return []
     },
     staleTime: 60 * 1000,
@@ -209,56 +190,24 @@ export const AppointmentsPage = () => {
     onError: () => notify.error('Failed to book appointment.'),
   })
 
-  const [updatingAptId, setUpdatingAptId] = useState(null)
-
   const statusMutation = useMutation({
     mutationFn: async ({ id, status }) => {
-      setUpdatingAptId(id)
       const res = await api.put(`/api/staff/appointments/${id}`, { status })
-      return res.data?.data || res.data
+      return res.data
     },
-    onMutate: async ({ id, status }) => {
-      await queryClient.cancelQueries({ queryKey: ['staff', 'appointments'] })
-      const previousData = queryClient.getQueryData(['staff', 'appointments'])
-
-      queryClient.setQueryData(['staff', 'appointments'], (old) => {
-        if (!old) return old
-        const updateItem = (item) => (item.id === id ? { ...item, status } : item)
-        if (Array.isArray(old)) {
-          return old.map(updateItem)
-        }
-        if (Array.isArray(old.appointments)) {
-          return {
-            ...old,
-            appointments: old.appointments.map(updateItem),
-            data: Array.isArray(old.data) ? old.data.map(updateItem) : old.data,
-          }
-        }
-        if (Array.isArray(old.data)) {
-          return {
-            ...old,
-            data: old.data.map(updateItem),
-          }
-        }
-        return old
-      })
-
-      return { previousData }
-    },
-    onSuccess: (updated) => {
-      const updatedStatus = updated?.status || 'updated'
-      notify.success(`Appointment status updated to ${formatAppointmentStatusLabel(updatedStatus)}.`)
-    },
-    onError: (err, variables, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData(['staff', 'appointments'], context.previousData)
-      }
-      const msg = err.response?.data?.message || err.message || 'Failed to update appointment status.'
-      notify.error(msg)
-    },
-    onSettled: () => {
-      setUpdatingAptId(null)
+    onSuccess: (updated, variables) => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'appointments'] })
+      notify.info(`Appointment status updated to ${statusLabel(updated.status)}.`)
+
+      // Appointment completed -> offer to write the prescription (only if user may create Rx)
+      if (normalizeStatus(updated.status) === 'COMPLETED' && canWriteRx && variables?.apt) {
+        setRxPrompt({
+          appointmentId: variables.apt.id,
+          patientId: variables.apt.patientId || '',
+          patientName: variables.apt.patientName || updated.patientName || '',
+          tokenNumber: variables.tokenNum || '',
+        })
+      }
     },
   })
 
@@ -293,11 +242,10 @@ export const AppointmentsPage = () => {
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
-                className={`flex-1 sm:flex-none px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                  viewMode === mode
+                className={`flex-1 sm:flex-none px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${viewMode === mode
                     ? 'bg-primary text-white shadow-sm'
                     : 'text-text-secondary hover:text-text-primary'
-                }`}
+                  }`}
               >
                 {mode}
               </button>
@@ -391,11 +339,17 @@ export const AppointmentsPage = () => {
                         </span>
                       )}
                       <Badge
-                        variant={getAppointmentBadgeVariant(apt.status)}
+                        variant={
+                          normalizeStatus(apt.status) === 'IN_PROGRESS'
+                            ? 'info'
+                            : normalizeStatus(apt.status) === 'COMPLETED'
+                              ? 'success'
+                              : 'primary'
+                        }
                         size="sm"
                         dot
                       >
-                        {formatAppointmentStatusLabel(apt.status)}
+                        {statusLabel(apt.status)}
                       </Badge>
                     </div>
                   </div>
@@ -442,32 +396,14 @@ export const AppointmentsPage = () => {
 
                 {/* Status Action Buttons */}
                 <div className="mt-4 pt-3 border-t border-border flex items-center justify-between gap-2">
-                  <div className="relative flex-1">
-                    <Select
-                      value={normalizeAppointmentStatus(apt.status)}
-                      disabled={updatingAptId === apt.id}
-                      onChange={(e) => {
-                        const nextStatus = e.target.value
-                        if (nextStatus && nextStatus !== normalizeAppointmentStatus(apt.status)) {
-                          statusMutation.mutate({ id: apt.id, status: nextStatus })
-                        }
-                      }}
-                      className="!py-1 !text-xs !rounded-lg"
-                      options={
-                        APPOINTMENT_STATUS_OPTIONS.some(
-                          (opt) => opt.value === normalizeAppointmentStatus(apt.status)
-                        )
-                          ? APPOINTMENT_STATUS_OPTIONS
-                          : [
-                              ...APPOINTMENT_STATUS_OPTIONS,
-                              {
-                                value: normalizeAppointmentStatus(apt.status),
-                                label: formatAppointmentStatusLabel(apt.status),
-                              },
-                            ]
-                      }
-                    />
-                  </div>
+                  <Select
+                    value={normalizeStatus(apt.status)}
+                    onChange={(e) =>
+                      statusMutation.mutate({ id: apt.id, status: e.target.value, apt, tokenNum })
+                    }
+                    className="!py-1 !text-xs !rounded-lg"
+                    options={STATUS_OPTIONS}
+                  />
 
                   <Button
                     variant="ghost"
@@ -654,6 +590,42 @@ export const AppointmentsPage = () => {
       )}
 
       {/* Doctor Vitals Review & Prescription Modal */}
+      {/* Completed -> Write prescription prompt */}
+      <Modal
+        isOpen={!!rxPrompt}
+        onClose={() => setRxPrompt(null)}
+        title="Appointment completed"
+        maxWidth="max-w-md"
+      >
+        <div className="flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <Pill className="w-5 h-5" />
+          </div>
+          <p className="text-sm text-text-secondary leading-relaxed">
+            Consultation for <span className="font-semibold text-text-primary">{rxPrompt?.patientName}</span> is
+            marked as completed. Do you want to write the prescription now?
+          </p>
+        </div>
+        <div className="mt-6 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5 pt-4 border-t border-border">
+          <Button variant="secondary" size="sm" onClick={() => setRxPrompt(null)} className="w-full sm:w-auto">
+            Later
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            leftIcon={<Pill className="w-4 h-4" />}
+            className="w-full sm:w-auto"
+            onClick={() => {
+              const payload = rxPrompt
+              setRxPrompt(null)
+              navigate('/app/staff/prescriptions', { state: { newRx: payload } })
+            }}
+          >
+            Write Prescription
+          </Button>
+        </div>
+      </Modal>
+
       {selectedDoctorApt && (
         <Suspense fallback={null}>
           <DoctorVitalsReportModal

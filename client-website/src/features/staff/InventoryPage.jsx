@@ -220,10 +220,10 @@ export const InventoryPage = () => {
             val === 'H1' || val === 'X'
               ? 'danger'
               : val === 'H'
-              ? 'warning'
-              : val === 'G'
-              ? 'info'
-              : 'neutral'
+                ? 'warning'
+                : val === 'G'
+                  ? 'info'
+                  : 'neutral'
           }
         >
           {val || 'OTC'}
@@ -361,11 +361,10 @@ export const InventoryPage = () => {
       <div className="flex items-center gap-2 border-b border-border pb-2">
         <button
           onClick={() => setActiveTab('inventory')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 ${
-            activeTab === 'inventory'
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 ${activeTab === 'inventory'
               ? 'bg-primary text-white shadow-sm'
               : 'text-text-secondary hover:text-text-primary hover:bg-surface'
-          }`}
+            }`}
         >
           <Boxes className="w-3.5 h-3.5" />
           <span>Dispensary Stock Batches ({inventory.length})</span>
@@ -373,11 +372,10 @@ export const InventoryPage = () => {
 
         <button
           onClick={() => setActiveTab('prescriptions')}
-          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 ${
-            activeTab === 'prescriptions'
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-colors flex items-center gap-2 ${activeTab === 'prescriptions'
               ? 'bg-emerald-600 text-white shadow-sm'
               : 'text-text-secondary hover:text-text-primary hover:bg-surface'
-          }`}
+            }`}
         >
           <Pill className="w-3.5 h-3.5" />
           <span>Prescription Dispensing Queue</span>
@@ -490,12 +488,12 @@ export const InventoryPage = () => {
           setIsAddOpen(false)
           setFormErrors({})
         }}
-        maxWidth="max-w-2xl"
+        maxWidth="max-w-3xl"
         title="Receive New Pharmacy Stock"
         description="Record newly delivered pharmaceutical batches into clinic inventory."
       >
         <form onSubmit={handleSubmitAdd} className="flex flex-col">
-          <div className="space-y-5 max-h-[68vh] overflow-y-auto pr-1">
+          <div className="space-y-4">
             {/* Section 1: Item Details */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
@@ -505,7 +503,7 @@ export const InventoryPage = () => {
                 <div className="flex-1 h-px bg-border" />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-3">
                 <Input
                   label="Item Code"
                   placeholder="MED-0001"
@@ -549,22 +547,9 @@ export const InventoryPage = () => {
                   ))}
                   <option value="__NEW__">+ Add new category</option>
                 </Select>
-                <Input
-                  label="Unit"
-                  placeholder="Tablets"
-                  required
-                  className="h-10"
-                  helperText="Tablets, Bottles, Strips"
-                  value={formData.unit}
-                  error={formErrors.unit}
-                  onChange={(e) => {
-                    setFormData({ ...formData, unit: e.target.value })
-                    if (formErrors.unit) setFormErrors({ ...formErrors, unit: null })
-                  }}
-                />
 
                 {formData.category === '__NEW__' && (
-                  <div className="sm:col-span-2 animate-in fade-in duration-200">
+                  <div className="sm:col-span-3 animate-in fade-in duration-200">
                     <Input
                       label="New Category Name"
                       placeholder="e.g. Analgesics"
@@ -591,7 +576,7 @@ export const InventoryPage = () => {
                 <div className="flex-1 h-px bg-border" />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-3">
                 <Input
                   label="Stock Quantity"
                   type="number"
@@ -607,13 +592,24 @@ export const InventoryPage = () => {
                   }}
                 />
                 <Input
+                  label="Unit"
+                  placeholder="Tablets / Strips"
+                  required
+                  className="h-10"
+                  value={formData.unit}
+                  error={formErrors.unit}
+                  onChange={(e) => {
+                    setFormData({ ...formData, unit: e.target.value })
+                    if (formErrors.unit) setFormErrors({ ...formErrors, unit: null })
+                  }}
+                />
+                <Input
                   label="Reorder Level"
                   type="number"
-                  placeholder="50"
+                  placeholder="Alert below (e.g. 50)"
                   min="0"
                   required
                   className="h-10"
-                  helperText="Alert when stock falls below this"
                   value={formData.minReorderThreshold}
                   error={formErrors.minReorderThreshold}
                   onChange={(e) => {
@@ -658,7 +654,7 @@ export const InventoryPage = () => {
                 <div className="flex-1 h-px bg-border" />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-3">
                 <Input
                   label="Unit Cost (₹)"
                   type="number"
@@ -693,7 +689,7 @@ export const InventoryPage = () => {
             </div>
           </div>
 
-          <div className="pt-4 mt-5 flex items-center justify-end gap-2.5 border-t border-border shrink-0">
+          <div className="sticky bottom-0 -mx-4 -mb-4 sm:-mx-6 sm:-mb-6 px-4 sm:px-6 py-3.5 mt-4 bg-surface border-t border-border flex items-center justify-end gap-2.5 shrink-0">
             <Button
               variant="secondary"
               size="sm"
