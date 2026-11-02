@@ -11,6 +11,16 @@ generator client {
 // 1. TENANCY & AUTHENTICATION
 // -------------------------------------------------------------
 
+enum LabPaymentMode {
+  PAY_BEFORE_TEST
+  PAY_AT_FINAL_BILL
+}
+
+enum PerItemBillTiming {
+  ON_ORDER
+  ON_COMPLETE
+}
+
 enum TenantStatus {
   ACTIVE
   PENDING
@@ -30,9 +40,13 @@ model Tenant {
   contactEmail    String?
   rejectionReason String?         @map("rejection_reason")
   clinicCategoryId String?        @map("clinic_category_id")
+  autoBillSpecialty Boolean       @default(false) @map("auto_bill_specialty")
+  labPaymentMode    LabPaymentMode    @default(PAY_AT_FINAL_BILL) @map("lab_payment_mode")
+  perItemBillTiming PerItemBillTiming @default(ON_COMPLETE) @map("per_item_bill_timing")
+  allowCreditDispense Boolean     @default(false) @map("allow_credit_dispense")
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
-  auto_bill_specialty Boolean     @default(false)
+
   clinicCategory  ClinicCategory? @relation(fields: [clinicCategoryId], references: [id], onDelete: SetNull)
   users           User[]
   roles           Role[]
@@ -50,12 +64,18 @@ model Tenant {
   cathLabProcedures CathLabProcedure[]
   cardiacRiskAssessments CardiacRiskAssessment[]
   toothRecords    ToothRecord[]
-  treatmentPlans  TreatmentPlan[]
+  dentalTreatmentPlans DentalTreatmentPlan[]
   xrayRecords     XrayRecord[]
   labOrders       LabOrder[]
   physioTreatmentPlans  PhysioTreatmentPlan[]
   physioExercises       PhysioExercise[]
   physioProgressNotes   PhysioProgressNote[]
+  pendingCharges  PendingCharge[]
+  serviceCatalogItems ServiceCatalogItem[]
+  clinicalOrders      ClinicalOrder[]
+  orderResults        OrderResult[]
+  treatmentPlans      TreatmentPlan[]
+  paymentRecords      PaymentRecord[]
 
   @@index([clinicCategoryId])
   @@map("tenants")
@@ -93,6 +113,10 @@ model User {
   userRoles     UserRole[]
   staffProfile  StaffProfile?
   auditLogs     AuditLog[]
+  stockMovementsHandled StockMovement[]
+  orderedClinicalOrders ClinicalOrder[] @relation("OrderedByUser")
+  resultsEntered        OrderResult[]   @relation("ResultEnteredBy")
+  resultsVerified       OrderResult[]   @relation("ResultVerifiedBy")
 
   @@index([tenantId])
   @@index([email])
@@ -308,12 +332,15 @@ model Patient {
   cathLabProcedures CathLabProcedure[]
   cardiacRiskAssessments CardiacRiskAssessment[]
   toothRecords   ToothRecord[]
-  treatmentPlans TreatmentPlan[]
+  dentalTreatmentPlans DentalTreatmentPlan[]
   xrayRecords    XrayRecord[]
   labOrders      LabOrder[]
   physioTreatmentPlans PhysioTreatmentPlan[]
   physioExercises      PhysioExercise[]
   physioProgressNotes  PhysioProgressNote[]
+  pendingCharges PendingCharge[]
+  clinicalOrders ClinicalOrder[]
+  treatmentPlans TreatmentPlan[]
 
   @@index([tenantId])
   @@index([mrn])
@@ -353,6 +380,9 @@ model Appointment {
   department     Department?       @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   prescriptions  Prescription[]
   invoices       Invoice[]
+  pendingCharges PendingCharge[]
+  clinicalOrders ClinicalOrder[]
+  treatmentPlans TreatmentPlan[]
 
   @@index([tenantId])
   @@index([patientId])
@@ -374,6 +404,7 @@ model Prescription {
 
   appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
   patient       Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  items         PrescriptionItem[]
 
   @@index([patientId])
   @@index([appointmentId])
@@ -392,12 +423,18 @@ model Invoice {
   patientId             String        @map("patient_id")
   appointmentId         String?       @map("appointment_id")
   invoiceNumber         String        @unique @map("invoice_number")
+  tokenNumber           String?       @map("token_number")
   amount                Float
   insuranceCoverage     Float         @default(0) @map("insurance_coverage")
   patientResponsibility Float         @default(0) @map("patient_responsibility")
   status                InvoiceStatus @default(PENDING)
   paymentMethod         String?       @map("payment_method")
   dueDate               DateTime?     @map("due_date")
+  subtotal              Float         @default(0)
+  taxAmount             Float         @default(0) @map("tax_amount")
+  discountAmount        Float         @default(0) @map("discount_amount")
+  advanceAdjusted       Float         @default(0) @map("advance_adjusted")
+  isSupplementary       Boolean       @default(false) @map("is_supplementary")
   createdAt             DateTime      @default(now()) @map("created_at")
 
   tenant                Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -411,15 +448,35 @@ model Invoice {
   @@map("invoices")
 }
 
+enum InvoiceItemSourceType {
+  CONSULTATION
+  DIAGNOSTIC
+  PROCEDURE
+  SESSION
+  PACKAGE
+  MEDICINE
+  DENTAL
+  CARDIO
+  PHYSIO
+  LAB
+  OTHER
+}
+
 model InvoiceItem {
   id          String   @id @default(uuid())
   invoiceId   String   @map("invoice_id")
   description String
   code        String?  // CPT or local billing code
   fee         Float
+  qty         Int      @default(1)
+  unitPrice   Float    @default(0) @map("unit_price")
+  gstRate     Float    @default(0) @map("gst_rate")
+  sourceType  InvoiceItemSourceType? @map("source_type")
+  sourceId    String?                @map("source_id")
 
   invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
+  @@unique([invoiceId, sourceType, sourceId])
   @@index([invoiceId])
   @@map("invoice_items")
 }
@@ -462,6 +519,8 @@ model InventoryItem {
 
   tenant              Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   stockMovements       StockMovement[]
+  batches              Batch[]
+  prescriptionItems    PrescriptionItem[]
 
   @@unique([tenantId, itemCode])
   @@index([tenantId])
@@ -480,11 +539,17 @@ model StockMovement {
   batchNumber     String?  @map("batch_number")
   handledBy       String?  @map("handled_by")
   importBatchId   String?  @map("import_batch_id")
+  batchId         String?  @map("batch_id")
+  prescriptionItemId String? @map("prescription_item_id")
+  userId          String?  @map("user_id")
   notes           String?
   createdAt       DateTime @default(now()) @map("created_at")
 
   tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   inventoryItem   InventoryItem @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  batch           Batch?         @relation(fields: [batchId], references: [id], onDelete: SetNull)
+  prescriptionItem PrescriptionItem? @relation(fields: [prescriptionItemId], references: [id], onDelete: SetNull)
+  user            User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([inventoryItemId])
@@ -540,6 +605,7 @@ model ClinicCategory {
   tenants         Tenant[]
   roleTemplates   ClinicCategoryRoleTemplate[]
   categoryModules ClinicCategoryModule[]
+  serviceCatalogItems ServiceCatalogItem[]
 
   @@map("clinic_categories")
 }
@@ -763,7 +829,6 @@ model CardiacRiskAssessment {
 }
 
 
-
 // =========================================================================
 // DENTAL CARE MODULES
 // =========================================================================
@@ -791,7 +856,7 @@ model ToothRecord {
   @@map("tooth_records")
 }
 
-model TreatmentPlan {
+model DentalTreatmentPlan {
   id         String   @id @default(uuid())
   tenantId   String   @map("tenant_id")
   patientId  String   @map("patient_id")
@@ -804,14 +869,14 @@ model TreatmentPlan {
 
   tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   patient    Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
-  items      TreatmentPlanItem[]
+  items      DentalTreatmentPlanItem[]
 
   @@index([tenantId])
   @@index([patientId])
-  @@map("treatment_plans")
+  @@map("dental_treatment_plans")
 }
 
-model TreatmentPlanItem {
+model DentalTreatmentPlanItem {
   id                String   @id @default(uuid())
   planId            String   @map("plan_id")
   phase             String   @default("Phase 1")
@@ -824,10 +889,10 @@ model TreatmentPlanItem {
   sortOrder         Int      @default(0) @map("sort_order")
   createdAt         DateTime @default(now()) @map("created_at")
 
-  plan              TreatmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  plan              DentalTreatmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
 
   @@index([planId])
-  @@map("treatment_plan_items")
+  @@map("dental_treatment_plan_items")
 }
 
 model XrayRecord {
@@ -881,7 +946,7 @@ model LabOrder {
 
 // =========================================================================
 // PHYSIOTHERAPY MODULES
-// (tables are prefixed physio_ so they never clash with dental treatment_plans)
+// (tables are prefixed physio_ so they never clash with dental_treatment_plans)
 // =========================================================================
 
 // Treatment / Session Plans (e.g. "Rotator Cuff Post-Surgical Rehab")
@@ -963,4 +1028,273 @@ model PhysioProgressNote {
   @@index([patientId])
   @@index([noteDate])
   @@map("physio_progress_notes")
+}
+
+// =========================================================================
+// BILLING / ORDERS / PHARMACY EXTENSIONS (from latest team schema)
+// =========================================================================
+
+enum PendingChargeStatus {
+  PENDING
+  BILLED
+  VOID
+}
+
+model PendingCharge {
+  id            String                @id @default(uuid())
+  tenantId      String                @map("tenant_id")
+  patientId     String                @map("patient_id")
+  appointmentId String?               @map("appointment_id")
+  sourceType    InvoiceItemSourceType @map("source_type")
+  sourceId      String                @map("source_id")
+  description   String
+  qty           Int                   @default(1)
+  unitPrice     Float                 @map("unit_price")
+  gstRate       Float                 @default(0) @map("gst_rate")
+  status        PendingChargeStatus   @default(PENDING)
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  tenant        Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient       Patient               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment   Appointment?          @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, appointmentId, status])
+  @@index([patientId])
+  @@map("pending_charges")
+}
+
+model PrescriptionItem {
+  id              String          @id @default(uuid())
+  prescriptionId  String          @map("prescription_id")
+  inventoryItemId String?         @map("inventory_item_id")
+  medicineName    String          @map("medicine_name")
+  qty             Int             @default(1)
+  dosage          String
+  dispensedQty    Int             @default(0) @map("dispensed_qty")
+  dispensedAt     DateTime?       @map("dispensed_at")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  prescription    Prescription    @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+  inventoryItem   InventoryItem?  @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  stockMovements  StockMovement[]
+
+  @@index([prescriptionId])
+  @@index([inventoryItemId])
+  @@map("prescription_items")
+}
+
+model Batch {
+  id              String          @id @default(uuid())
+  inventoryItemId String          @map("inventory_item_id")
+  batchNo         String          @map("batch_no")
+  expiry          DateTime
+  qtyOnHand       Int             @default(0) @map("qty_on_hand")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+
+  inventoryItem   InventoryItem   @relation(fields: [inventoryItemId], references: [id], onDelete: Cascade)
+  stockMovements  StockMovement[]
+
+  @@unique([inventoryItemId, batchNo])
+  @@index([inventoryItemId, expiry])
+  @@map("batches")
+}
+
+model IdempotencyKey {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  tenantId  String?  @map("tenant_id")
+  action    String
+  response  Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([key])
+  @@map("idempotency_keys")
+}
+
+enum ServiceCatalogItemKind {
+  DIAGNOSTIC
+  PROCEDURE
+  SESSION
+  PACKAGE
+  CONSULTATION
+  OTHER
+}
+
+enum ServiceBillingMode {
+  PER_ITEM
+  PACKAGE
+  PLAN
+}
+
+model ServiceCatalogItem {
+  id               String                 @id @default(uuid())
+  tenantId         String                 @map("tenant_id")
+  categoryId       String?                @map("category_id")
+  moduleKey        String?                @map("module_key")
+  code             String
+  name             String
+  kind             ServiceCatalogItemKind
+  price            Float                  @default(0)
+  gstRate          Float                  @default(0) @map("gst_rate")
+  requiresResult   Boolean                @default(false) @map("requires_result")
+  billingMode      ServiceBillingMode     @default(PER_ITEM) @map("billing_mode")
+  sessionsIncluded Int                    @default(1) @map("sessions_included")
+  isExternal       Boolean                @default(false) @map("is_external")
+  isActive         Boolean                @default(true) @map("is_active")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+
+  tenant           Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category         ClinicCategory?        @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  orders           ClinicalOrder[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+  @@index([categoryId])
+  @@index([moduleKey])
+  @@map("service_catalog_items")
+}
+
+enum ClinicalOrderStatus {
+  ORDERED
+  SAMPLE_COLLECTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ClinicalOrderPaymentStatus {
+  UNBILLED
+  BILLED
+  PAID
+}
+
+model ClinicalOrder {
+  id                 String                      @id @default(uuid())
+  tenantId           String                      @map("tenant_id")
+  patientId          String                      @map("patient_id")
+  appointmentId      String                      @map("appointment_id")
+  orderedById        String                      @map("ordered_by_id")
+  catalogItemId      String                      @map("catalog_item_id")
+  qty                Int                         @default(1)
+  unitPriceSnapshot  Float                       @map("unit_price_snapshot")
+  sessionsIncluded   Int                         @default(1) @map("sessions_included")
+  sessionsCompleted  Int                         @default(0) @map("sessions_completed")
+  gstRateSnapshot    Float                       @default(0) @map("gst_rate_snapshot")
+  status             ClinicalOrderStatus         @default(ORDERED)
+  paymentStatus      ClinicalOrderPaymentStatus  @default(UNBILLED) @map("payment_status")
+  notes              String?                     @db.Text
+  createdAt          DateTime                    @default(now()) @map("created_at")
+  updatedAt          DateTime                    @updatedAt @map("updated_at")
+
+  tenant             Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient            Patient                     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment        Appointment                 @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  orderedBy          User                        @relation("OrderedByUser", fields: [orderedById], references: [id])
+  catalogItem        ServiceCatalogItem          @relation(fields: [catalogItemId], references: [id])
+  results            OrderResult[]
+
+  @@index([tenantId, appointmentId])
+  @@index([tenantId, patientId])
+  @@index([tenantId, status])
+  @@index([tenantId, paymentStatus])
+  @@map("clinical_orders")
+}
+
+enum OrderResultType {
+  LAB_VALUES
+  REPORT
+  SESSION_NOTE
+  IMAGE
+}
+
+model OrderResult {
+  id                 String          @id @default(uuid())
+  orderId            String          @map("order_id")
+  tenantId           String          @map("tenant_id")
+  resultType         OrderResultType @default(LAB_VALUES) @map("result_type")
+  values             Json?           @default("[]")
+  remarks            String?         @db.Text
+  attachmentUrl      String?         @map("attachment_url")
+  linkedRecordType   String?         @map("linked_record_type")
+  linkedRecordId     String?         @map("linked_record_id")
+  enteredById        String?         @map("entered_by_id")
+  verifiedById       String?         @map("verified_by_id")
+  verifiedAt         DateTime?       @map("verified_at")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+
+  order              ClinicalOrder   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  tenant             Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  enteredBy          User?           @relation("ResultEnteredBy", fields: [enteredById], references: [id], onDelete: SetNull)
+  verifiedBy         User?           @relation("ResultVerifiedBy", fields: [verifiedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, orderId])
+  @@index([tenantId, linkedRecordType, linkedRecordId])
+  @@map("order_results")
+}
+
+enum TreatmentProcedureStatus {
+  PLANNED
+  DONE
+}
+
+// Billing-linked treatment plan (team's latest). Dental clinical plan lives in DentalTreatmentPlan.
+model TreatmentPlan {
+  id              String                   @id @default(uuid())
+  tenantId        String                   @map("tenant_id")
+  patientId       String                   @map("patient_id")
+  appointmentId   String?                  @map("appointment_id")
+  title           String                   @default("Dental Treatment Plan")
+  advanceAmount   Float                    @default(0) @map("advance_amount")
+  status          String                   @default("ACTIVE")
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
+
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  patient         Patient                  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  appointment     Appointment?             @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
+  procedures      TreatmentPlanProcedure[]
+  payments        PaymentRecord[]
+
+  @@index([tenantId, patientId])
+  @@map("treatment_plans")
+}
+
+model TreatmentPlanProcedure {
+  id              String                   @id @default(uuid())
+  planId          String                   @map("plan_id")
+  toothNumber     String?                  @map("tooth_number")
+  procedure       String
+  price           Float
+  gstRate         Float                    @default(0) @map("gst_rate")
+  status          TreatmentProcedureStatus @default(PLANNED)
+  isBilled        Boolean                  @default(false) @map("is_billed")
+  createdAt       DateTime                 @default(now()) @map("created_at")
+  updatedAt       DateTime                 @updatedAt @map("updated_at")
+
+  plan            TreatmentPlan            @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([planId, status])
+  @@map("treatment_plan_procedures")
+}
+
+model PaymentRecord {
+  id              String                   @id @default(uuid())
+  tenantId        String                   @map("tenant_id")
+  planId          String                   @map("plan_id")
+  amount          Float
+  paymentMethod   String                   @default("CASH") @map("payment_method")
+  referenceNumber String?                  @map("reference_number")
+  notes           String?
+  createdAt       DateTime                 @default(now()) @map("created_at")
+
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan            TreatmentPlan            @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, planId])
+  @@map("payment_records")
 }

@@ -86,7 +86,7 @@ export class DentalService {
      * ========================================================================= */
     static async listPlans(rawTenantId, patientId) {
         const tenantId = await resolveTenantId(rawTenantId)
-        return prisma.treatmentPlan.findMany({
+        return prisma.dentalTreatmentPlan.findMany({
             where: { tenantId, ...(patientId ? { patientId } : {}) },
             include: {
                 items: { orderBy: [{ phase: 'asc' }, { sortOrder: 'asc' }, { createdAt: 'asc' }] },
@@ -99,7 +99,7 @@ export class DentalService {
     static async createPlan(rawTenantId, { patientId, name, items = [] }, actorId) {
         const tenantId = await resolveTenantId(rawTenantId)
         await assertPatient(patientId, tenantId)
-        return prisma.treatmentPlan.create({
+        return prisma.dentalTreatmentPlan.create({
             data: {
                 tenantId,
                 patientId,
@@ -114,7 +114,7 @@ export class DentalService {
     }
 
     static async getPlanOrThrow(tenantId, planId) {
-        const plan = await prisma.treatmentPlan.findFirst({ where: { id: planId, tenantId } })
+        const plan = await prisma.dentalTreatmentPlan.findFirst({ where: { id: planId, tenantId } })
         if (!plan) throw new NotFoundError('Treatment plan not found')
         return plan
     }
@@ -122,7 +122,7 @@ export class DentalService {
     static async updatePlan(rawTenantId, planId, data) {
         const tenantId = await resolveTenantId(rawTenantId)
         await this.getPlanOrThrow(tenantId, planId)
-        return prisma.treatmentPlan.update({
+        return prisma.dentalTreatmentPlan.update({
             where: { id: planId },
             data,
             include: { items: true },
@@ -132,31 +132,31 @@ export class DentalService {
     static async deletePlan(rawTenantId, planId) {
         const tenantId = await resolveTenantId(rawTenantId)
         await this.getPlanOrThrow(tenantId, planId)
-        await prisma.treatmentPlan.delete({ where: { id: planId } })
+        await prisma.dentalTreatmentPlan.delete({ where: { id: planId } })
         return { deleted: true }
     }
 
     static async addPlanItem(rawTenantId, planId, item) {
         const tenantId = await resolveTenantId(rawTenantId)
         await this.getPlanOrThrow(tenantId, planId)
-        const count = await prisma.treatmentPlanItem.count({ where: { planId } })
-        return prisma.treatmentPlanItem.create({ data: { ...item, planId, sortOrder: count } })
+        const count = await prisma.dentalTreatmentPlanItem.count({ where: { planId } })
+        return prisma.dentalTreatmentPlanItem.create({ data: { ...item, planId, sortOrder: count } })
     }
 
     static async updatePlanItem(rawTenantId, planId, itemId, data) {
         const tenantId = await resolveTenantId(rawTenantId)
         await this.getPlanOrThrow(tenantId, planId)
-        const existing = await prisma.treatmentPlanItem.findFirst({ where: { id: itemId, planId } })
+        const existing = await prisma.dentalTreatmentPlanItem.findFirst({ where: { id: itemId, planId } })
         if (!existing) throw new NotFoundError('Treatment plan item not found')
-        return prisma.treatmentPlanItem.update({ where: { id: itemId }, data })
+        return prisma.dentalTreatmentPlanItem.update({ where: { id: itemId }, data })
     }
 
     static async deletePlanItem(rawTenantId, planId, itemId) {
         const tenantId = await resolveTenantId(rawTenantId)
         await this.getPlanOrThrow(tenantId, planId)
-        const existing = await prisma.treatmentPlanItem.findFirst({ where: { id: itemId, planId } })
+        const existing = await prisma.dentalTreatmentPlanItem.findFirst({ where: { id: itemId, planId } })
         if (!existing) throw new NotFoundError('Treatment plan item not found')
-        await prisma.treatmentPlanItem.delete({ where: { id: itemId } })
+        await prisma.dentalTreatmentPlanItem.delete({ where: { id: itemId } })
         return { deleted: true }
     }
 
@@ -167,17 +167,17 @@ export class DentalService {
     static async addToActivePlan(rawTenantId, { patientId, item }, actorId) {
         const tenantId = await resolveTenantId(rawTenantId)
         await assertPatient(patientId, tenantId)
-        let plan = await prisma.treatmentPlan.findFirst({
+        let plan = await prisma.dentalTreatmentPlan.findFirst({
             where: { tenantId, patientId, status: { in: ['DRAFT', 'ACTIVE'] } },
             orderBy: { createdAt: 'desc' },
         })
         if (!plan) {
-            plan = await prisma.treatmentPlan.create({
+            plan = await prisma.dentalTreatmentPlan.create({
                 data: { tenantId, patientId, name: 'Treatment Plan', createdBy: actorId || null },
             })
         }
-        const count = await prisma.treatmentPlanItem.count({ where: { planId: plan.id } })
-        const created = await prisma.treatmentPlanItem.create({
+        const count = await prisma.dentalTreatmentPlanItem.count({ where: { planId: plan.id } })
+        const created = await prisma.dentalTreatmentPlanItem.create({
             data: { ...item, planId: plan.id, sortOrder: count },
         })
         return { plan, item: created }
@@ -189,7 +189,7 @@ export class DentalService {
      */
     static async invoicePlan(rawTenantId, planId, actorId) {
         const tenantId = await resolveTenantId(rawTenantId)
-        const plan = await prisma.treatmentPlan.findFirst({
+        const plan = await prisma.dentalTreatmentPlan.findFirst({
             where: { id: planId, tenantId },
             include: { items: true },
         })
@@ -213,7 +213,7 @@ export class DentalService {
         )
         const invoiceId = invoice?.id || invoice?.data?.id || invoice?.invoice?.id
         if (invoiceId) {
-            await prisma.treatmentPlan.update({ where: { id: planId }, data: { invoiceId } })
+            await prisma.dentalTreatmentPlan.update({ where: { id: planId }, data: { invoiceId } })
         }
         return { invoice, invoiceId }
     }
