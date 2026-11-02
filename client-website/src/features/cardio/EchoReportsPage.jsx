@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { CheckCircle2, FileText, Heart, Plus, Search, Trash2, X } from 'lucide-react'
+import { CheckCircle2, FileText, Heart, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -72,6 +72,7 @@ export const EchoReportsPage = () => {
   const [search, setSearch] = useState('')
   const [selectedId, setSelectedId] = useState(null)
   const [isCreateOpen, setIsCreateOpen] = useState(false)
+  const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState(emptyForm())
   const [formError, setFormError] = useState('')
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -87,6 +88,13 @@ export const EchoReportsPage = () => {
       setSelectedId(res?.data?.id || null)
     },
   })
+  const updateMutation = useCardioMutation(RESOURCE, ({ id, body }) => cardioHttp.patch(`${RESOURCE}/${id}`, body), {
+    success: 'Echo report updated.',
+    onSuccess: () => {
+      setIsCreateOpen(false)
+      setEditingId(null)
+    },
+  })
   const finalizeMutation = useCardioMutation(RESOURCE, (id) => cardioHttp.post(`${RESOURCE}/${id}/finalize`), {
     success: 'Echo report finalized.',
   })
@@ -99,7 +107,30 @@ export const EchoReportsPage = () => {
   })
 
   const openCreate = () => {
+    setEditingId(null)
     setForm(emptyForm(user?.fullName || user?.name))
+    setFormError('')
+    setIsCreateOpen(true)
+  }
+  const openEdit = (r) => {
+    setEditingId(r.id)
+    setForm({
+      patientId: r.patientId || '',
+      studyDate: r.studyDate ? String(r.studyDate).slice(0, 10) : today(),
+      modality: r.modality || MODALITIES[0],
+      indication: r.indication || '',
+      sonographer: r.sonographer || '',
+      cardiologist: r.cardiologist || '',
+      efPercent: r.efPercent ?? '',
+      lvedd: r.lvedd ?? '',
+      lvesd: r.lvesd ?? '',
+      ivsd: r.ivsd ?? '',
+      pwd: r.pwd ?? '',
+      laVolumeIndex: r.laVolumeIndex ?? '',
+      valves: Array.isArray(r.valves) ? r.valves : [],
+      wallMotion: r.wallMotion || '',
+      conclusionsText: Array.isArray(r.conclusions) ? r.conclusions.join('\n') : '',
+    })
     setFormError('')
     setIsCreateOpen(true)
   }
@@ -109,13 +140,12 @@ export const EchoReportsPage = () => {
 
   const submit = (e) => {
     e.preventDefault()
-    if (!form.patientId) return setFormError('Please select a patient.')
+    if (!editingId && !form.patientId) return setFormError('Please select a patient.')
     const ef = num(form.efPercent)
     if (!ef) return setFormError('Enter the LVEF percentage.')
     if (!form.studyDate) return setFormError('Enter the study date.')
     setFormError('')
-    createMutation.mutate({
-      patientId: form.patientId,
+    const body = {
       studyDate: new Date(`${form.studyDate}T12:00:00`).toISOString(),
       modality: form.modality,
       indication: form.indication.trim() || undefined,
@@ -133,7 +163,9 @@ export const EchoReportsPage = () => {
         .split('\n')
         .map((l) => l.trim())
         .filter(Boolean),
-    })
+    }
+    if (editingId) return updateMutation.mutate({ id: editingId, body })
+    createMutation.mutate({ patientId: form.patientId, ...body })
   }
 
   return (
@@ -192,8 +224,8 @@ export const EchoReportsPage = () => {
               key={report.id}
               onClick={() => setSelectedId(report.id)}
               className={`p-4 rounded-xl border cursor-pointer transition-all ${active?.id === report.id
-                  ? 'border-primary bg-primary/5 shadow-soft'
-                  : 'border-border bg-surface hover:border-border-hover'
+                ? 'border-primary bg-primary/5 shadow-soft'
+                : 'border-border bg-surface hover:border-border-hover'
                 }`}
             >
               <div className="flex items-center justify-between">
@@ -227,6 +259,16 @@ export const EchoReportsPage = () => {
                     {active.patientMrn} • {active.modality} • {fmtDate(active.studyDate)}
                   </p>
                   <div className="flex items-center gap-2 mt-2">
+                    {canEdit && active.status !== 'FINALIZED' && (
+                      <Button
+                        size="xs"
+                        variant="outline"
+                        leftIcon={<Pencil className="w-3.5 h-3.5" />}
+                        onClick={() => openEdit(active)}
+                      >
+                        Edit
+                      </Button>
+                    )}
                     {canEdit && active.status !== 'FINALIZED' && (
                       <Button
                         size="xs"
@@ -340,12 +382,14 @@ export const EchoReportsPage = () => {
       <Modal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        title="Create Echo Report"
+        title={editingId ? 'Edit Echo Report' : 'Create Echo Report'}
         description="Saved as a draft. Finalize it once the conclusions are reviewed."
         maxWidth="max-w-2xl"
       >
         <form onSubmit={submit} className="space-y-4">
-          <PatientPicker value={form.patientId} onChange={(v) => setForm((f) => ({ ...f, patientId: v }))} />
+          {!editingId && (
+            <PatientPicker value={form.patientId} onChange={(v) => setForm((f) => ({ ...f, patientId: v }))} />
+          )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <Input label="Study date" type="date" required value={form.studyDate} onChange={setField('studyDate')} />
@@ -423,8 +467,8 @@ export const EchoReportsPage = () => {
             <Button variant="secondary" size="sm" onClick={() => setIsCreateOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" size="sm" isLoading={createMutation.isPending}>
-              Save Draft
+            <Button type="submit" size="sm" isLoading={createMutation.isPending || updateMutation.isPending}>
+              {editingId ? 'Save Changes' : 'Save Draft'}
             </Button>
           </div>
         </form>
