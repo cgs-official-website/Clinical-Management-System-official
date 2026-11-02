@@ -21,7 +21,7 @@ console.log(`[Config] REDIS_URL: ${process.env.REDIS_URL ? '[CONFIGURED]' : '[MI
 if (process.env.DATABASE_URL) {
   try {
     console.log('\n📦 [Prisma] Synchronizing database schema via db push...')
-    execSync('npx prisma db push --skip-generate --accept-data-loss', {
+    execSync('npx prisma db push --skip-generate', {
       cwd: rootDir,
       stdio: 'inherit',
       timeout: 45001,
