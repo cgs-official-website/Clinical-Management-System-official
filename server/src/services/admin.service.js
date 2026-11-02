@@ -1593,94 +1593,69 @@ export class AdminService {
    * Analytics and throughput reports for clinical administrators
    */
   static async getReports(tenantId, { department, dateFilter } = {}) {
-    const whereTenant = tenantId ? { tenantId: tenantId } : {}
+    const resolvedTenantId = await this.resolveTenantUuid(tenantId)
+    const whereTenant = resolvedTenantId ? { tenantId: resolvedTenantId } : {}
 
-    const [dbDepartments, dbAppointments, dbPatients, dbInvoices] = await Promise.all([
-      prisma.department.findMany({
-        where: whereTenant,
-        include: {
-          staff: { include: { user: true } },
-          appointments: true
-        }
-      }).catch(() => []),
+    const [dbDepartments, dbAppointments, patientsCount, dbInvoices, paidItems] = await Promise.all([
+      prisma.department.findMany({ where: whereTenant, select: { id: true, name: true } }),
       prisma.appointment.findMany({
         where: whereTenant,
-        include: { department: true }
-      }).catch(() => []),
-      prisma.patient.findMany({
-        where: whereTenant,
-        select: { id: true, createdAt: true }
-      }).catch(() => []),
-      prisma.invoice.findMany({
-        where: whereTenant,
-        select: { id: true, amount: true, status: true, createdAt: true }
-      }).catch(() => [])
+        select: { departmentId: true, patientId: true, status: true },
+      }),
+      prisma.patient.count({ where: whereTenant }),
+      prisma.invoice.count({ where: whereTenant }),
+      prisma.invoiceItem.findMany({
+        where: { invoice: { ...whereTenant, status: 'PAID' } },
+        select: { fee: true, qty: true, sourceType: true },
+      }),
     ])
 
-    // Build department workload dynamically
-    let departmentWorkload = []
-    if (dbDepartments.length > 0) {
-      departmentWorkload = dbDepartments.map(dept => {
-        const apts = dbAppointments.filter(a => a.departmentId === dept.id || a.department?.name === dept.name)
-        const staffCount = dept.staff?.length || 0
-        const patientCount = apts.length > 0 ? apts.length : (staffCount > 0 ? dbPatients.length : 0)
-        return {
-          department: dept.name,
-          patients: Math.max(patientCount, 1),
-          procedures: Math.max(apts.length, Math.floor(patientCount * 0.4)),
-          satisfaction: 98
-        }
+    // Real per-department workload: distinct patients seen and completed encounters
+    let departmentWorkload = dbDepartments.map((dept) => {
+      const apts = dbAppointments.filter((a) => a.departmentId === dept.id)
+      return {
+        department: dept.name,
+        patients: new Set(apts.map((a) => a.patientId)).size,
+        procedures: apts.filter((a) => a.status === 'COMPLETED').length,
+      }
+    })
+    const unassigned = dbAppointments.filter((a) => !a.departmentId)
+    if (unassigned.length > 0) {
+      departmentWorkload.push({
+        department: 'Unassigned',
+        patients: new Set(unassigned.map((a) => a.patientId)).size,
+        procedures: unassigned.filter((a) => a.status === 'COMPLETED').length,
       })
-    } else {
-      // If no dedicated departments, group by clinical staff departments or general
-      const totalP = dbPatients.length
-      const totalA = dbAppointments.length
-      departmentWorkload = [
-        {
-          department: 'General Outpatient & Clinical Care',
-          patients: Math.max(totalP, totalA, 1),
-          procedures: totalA,
-          satisfaction: 99
-        },
-        {
-          department: 'Cardiology & Diagnostic Medicine',
-          patients: Math.max(Math.floor(totalP / 2), 1),
-          procedures: Math.max(Math.floor(totalA / 2), 1),
-          satisfaction: 97
-        }
-      ]
     }
 
     if (department && department !== 'All') {
       departmentWorkload = departmentWorkload.filter(
         (w) => w.department.toLowerCase().includes(department.toLowerCase())
       )
-      if (departmentWorkload.length === 0) {
-        departmentWorkload = [{ department, patients: Math.max(dbPatients.length, 1), procedures: 1, satisfaction: 98 }]
-      }
     }
 
-    // Dynamic revenue distribution by service
-    const totalPaidRevenue = dbInvoices
-      .filter(i => i.status === 'PAID')
-      .reduce((sum, i) => sum + (i.amount || 0), 0)
-
-    const revenueByService = totalPaidRevenue > 0 ? [
-      { name: 'Physician Consultations', value: Math.round(totalPaidRevenue * 0.5) },
-      { name: 'Diagnostics & Procedures', value: Math.round(totalPaidRevenue * 0.3) },
-      { name: 'Pharmacy & Prescriptions', value: Math.round(totalPaidRevenue * 0.2) }
-    ] : [
-      { name: 'Consultations & Care', value: 60 },
-      { name: 'Diagnostics & Labs', value: 25 },
-      { name: 'Pharmacy & Supplies', value: 15 }
-    ]
+    // Real revenue by service type from paid invoice line items
+    const SERVICE_LABELS = {
+      CONSULTATION: 'Consultations', DIAGNOSTIC: 'Diagnostics', PROCEDURE: 'Procedures',
+      SESSION: 'Sessions', PACKAGE: 'Packages', MEDICINE: 'Pharmacy', DENTAL: 'Dental',
+      CARDIO: 'Cardiology', PHYSIO: 'Physiotherapy', LAB: 'Laboratory', OTHER: 'Other',
+    }
+    const totals = {}
+    for (const item of paidItems) {
+      const label = SERVICE_LABELS[item.sourceType] || 'Other'
+      totals[label] = (totals[label] || 0) + (item.fee || 0) * (item.qty || 1)
+    }
+    const revenueByService = Object.entries(totals)
+      .map(([name, value]) => ({ name, value: Math.round(value) }))
+      .filter((r) => r.value > 0)
+      .sort((a, b) => b.value - a.value)
 
     return {
       departmentWorkload,
       revenueByService,
-      totalHospitalPatients: dbPatients.length,
+      totalHospitalPatients: patientsCount,
       totalHospitalAppointments: dbAppointments.length,
-      totalInvoices: dbInvoices.length
+      totalInvoices: dbInvoices,
     }
   }
 

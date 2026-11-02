@@ -1630,35 +1630,59 @@ export class ClinicalService {
       const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
-    const where = targetTenantId ? { tenantId: targetTenantId } : {}
+    const tenantWhere = targetTenantId ? { tenantId: targetTenantId } : {}
 
-    const [encountersCount, prescriptionsCount, appointmentsCount, patientsCount, invoicesCount] = await Promise.all([
-      prisma.appointment.count({ where: { ...where, status: 'COMPLETED' } }).catch(() => 0),
-      prisma.prescription.count({ where }).catch(() => 0),
-      prisma.appointment.count({ where }).catch(() => 0),
-      prisma.patient.count({ where }).catch(() => 0),
-      prisma.invoice.count({ where }).catch(() => 0),
+    // Role scoping: doctors only see their own encounters; admins/others see the whole clinic.
+    const isDoctor = String(role || '').toUpperCase() === 'DOCTOR'
+    let apptWhere = { ...tenantWhere }
+    let rxWhere = targetTenantId ? { patient: { tenantId: targetTenantId } } : {}
+    if (isDoctor && staffId) {
+      const profile = await prisma.staffProfile.findUnique({ where: { userId: staffId }, select: { id: true } }).catch(() => null)
+      const doctorUser = await prisma.user.findUnique({ where: { id: staffId }, select: { fullName: true } }).catch(() => null)
+      apptWhere = { ...apptWhere, staffId: profile?.id ?? '__none__' }
+      rxWhere = { ...rxWhere, prescribedBy: { in: [staffId, doctorUser?.fullName].filter(Boolean) } }
+    }
+
+    // Current calendar week (Mon 00:00 -> next Mon 00:00)
+    const now = new Date()
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7))
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekEnd.getDate() + 7)
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const todayEnd = new Date(todayStart)
+    todayEnd.setDate(todayEnd.getDate() + 1)
+
+    const [completedThisWeek, completedAll, prescriptionsCount, todayAppointments, patientsCount, invoicesCount, durationAgg] = await Promise.all([
+      prisma.appointment.findMany({
+        where: { ...apptWhere, status: 'COMPLETED', scheduledAt: { gte: weekStart, lt: weekEnd } },
+        select: { scheduledAt: true },
+      }),
+      prisma.appointment.count({ where: { ...apptWhere, status: 'COMPLETED' } }),
+      prisma.prescription.count({ where: rxWhere }),
+      prisma.appointment.count({ where: { ...apptWhere, scheduledAt: { gte: todayStart, lt: todayEnd } } }),
+      prisma.patient.count({ where: tenantWhere }),
+      prisma.invoice.count({ where: tenantWhere }),
+      prisma.appointment.aggregate({ where: { ...apptWhere, status: 'COMPLETED' }, _avg: { durationMinutes: true } }),
     ])
+
+    const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    const weeklyLoad = dayLabels.map((day) => ({ day, count: 0 }))
+    for (const a of completedThisWeek) {
+      weeklyLoad[(new Date(a.scheduledAt).getDay() + 6) % 7].count += 1
+    }
 
     return {
       personalMetrics: {
-        encountersCompleted: encountersCount > 0 ? encountersCount : 142,
-        prescriptionsWritten: prescriptionsCount > 0 ? prescriptionsCount : 89,
-        averageConsultTimeMins: 22,
-        patientReviewScore: 4.9,
-        todayAppointments: appointmentsCount > 0 ? appointmentsCount : 8,
-        activePatients: patientsCount > 0 ? patientsCount : 45,
-        totalInvoices: invoicesCount > 0 ? invoicesCount : 18
+        encountersCompleted: completedAll,
+        prescriptionsWritten: prescriptionsCount,
+        averageConsultTimeMins: durationAgg._avg.durationMinutes != null ? Math.round(durationAgg._avg.durationMinutes) : null,
+        patientReviewScore: null, // no review/feedback data is captured yet
+        todayAppointments,
+        activePatients: patientsCount,
+        totalInvoices: invoicesCount,
       },
-      weeklyLoad: [
-        { day: 'Mon', count: 12 },
-        { day: 'Tue', count: 15 },
-        { day: 'Wed', count: 11 },
-        { day: 'Thu', count: 16 },
-        { day: 'Fri', count: 18 },
-        { day: 'Sat', count: 9 },
-        { day: 'Sun', count: 4 }
-      ]
+      weeklyLoad,
     }
   }
 
