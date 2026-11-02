@@ -38,40 +38,34 @@ export const CARDIOLOGY_MODULES = [
     displayOrder: 6,
   },
   {
-    key: 'implant_registry',
-    name: 'Implant Registry',
-    description: 'Cardiac implant log: pacemakers, coronary drug-eluting stents, ICDs, CRT-Ds, serials and lead telemetry',
-    displayOrder: 7,
-  },
-  {
     key: 'prescriptions',
     name: 'Prescriptions',
     description: 'Cardiovascular pharmacotherapy: antiplatelets, beta-blockers, ACE inhibitors, anticoagulants and statins',
-    displayOrder: 8,
+    displayOrder: 7,
   },
   {
     key: 'billing',
     name: 'Billing/Invoices',
     description: 'Cardiology consultation fees, cath lab procedures, echo diagnostics, and insurance pre-authorizations',
-    displayOrder: 9,
+    displayOrder: 8,
   },
   {
     key: 'inventory',
     name: 'Inventory',
     description: 'Cath lab consumables, balloons, coronary stents, introducer sheaths, ECG electrodes, and emergency carts',
-    displayOrder: 10,
+    displayOrder: 9,
   },
   {
     key: 'reports',
     name: 'Reports',
     description: 'Cardiac outcomes, cath lab turnaround metrics, complications registry, and clinic revenue analytics',
-    displayOrder: 11,
+    displayOrder: 10,
   },
   {
     key: 'staff',
     name: 'Staff',
     description: 'Interventional cardiologists, cardiac electrophysiologists, cardiac nurses, cath lab techs and admin',
-    displayOrder: 12,
+    displayOrder: 11,
   },
 ]
 
@@ -132,7 +126,7 @@ export async function seedCardiologyCategory() {
   }
 
   // 3. Upsert Modules & their permissions
-  // Note: Reuse existing shared rows (patients, appointments, implant_registry, prescriptions, billing, inventory, reports, staff)
+  // Note: Reuse existing shared rows (patients, appointments, prescriptions, billing, inventory, reports, staff)
   const moduleMap = new Map()
   for (const modData of CARDIOLOGY_MODULES) {
     let mod = await prisma.systemModule.findUnique({ where: { key: modData.key } })
@@ -232,7 +226,7 @@ export async function seedCardiologyCategory() {
     }
   }
 
-  // - "Cardiologist" role → patients, appointments, ecg_records, echo_reports, cath_lab_scheduling, cardiac_risk_assessment, implant_registry, prescriptions, reports (view+create+edit)
+  // - "Cardiologist" role → patients, appointments, ecg_records, echo_reports, cath_lab_scheduling, cardiac_risk_assessment, prescriptions, reports (view+create+edit)
   const cardiologistModules = [
     'patients',
     'appointments',
@@ -240,7 +234,6 @@ export async function seedCardiologyCategory() {
     'echo_reports',
     'cath_lab_scheduling',
     'cardiac_risk_assessment',
-    'implant_registry',
     'prescriptions',
     'reports',
   ]
@@ -268,8 +261,8 @@ export async function seedCardiologyCategory() {
     }
   }
 
-  // - "Cath Lab Technician" role → cath_lab_scheduling, echo_reports, ecg_records, implant_registry (view+create)
-  const cathTechModules = ['cath_lab_scheduling', 'echo_reports', 'ecg_records', 'implant_registry']
+  // - "Cath Lab Technician" role → cath_lab_scheduling, echo_reports, ecg_records (view+create)
+  const cathTechModules = ['cath_lab_scheduling', 'echo_reports', 'ecg_records']
   for (const modKey of cathTechModules) {
     for (const actKey of ['view', 'create']) {
       templateRows.push({

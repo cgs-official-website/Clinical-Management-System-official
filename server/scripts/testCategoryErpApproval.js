@@ -75,7 +75,6 @@ async function runTest() {
     'treatment_plans',
     'xray_records',
     'orthodontics',
-    'implant_registry',
     'prescriptions',
     'billing',
     'inventory',
@@ -92,7 +91,7 @@ async function runTest() {
       throw new Error(`Expected module key '${key}' was not found in enabled TenantModules!`)
     }
   }
-  console.log('[PASS] All 13 Dental Care modules are enabled in TenantModule!')
+  console.log(`[PASS] All ${expectedKeys.length} Dental Care modules are enabled in TenantModule!`)
 
   // 5. Verify Clinical Administrator role & permissions
   const adminRole = await prisma.role.findFirst({

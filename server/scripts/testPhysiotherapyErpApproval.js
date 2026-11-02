@@ -133,7 +133,7 @@ async function runTest() {
   }
 
   // Confirm NO Dental Care modules are enabled
-  const dentalModules = ['dental_chart', 'treatment_plans', 'xray_records', 'orthodontics', 'implant_registry', 'lab_orders']
+  const dentalModules = ['dental_chart', 'treatment_plans', 'xray_records', 'orthodontics', 'lab_orders']
   for (const dKey of dentalModules) {
     if (enabledKeys.includes(dKey)) {
       throw new Error(`Dental module '${dKey}' was unexpectedly found in Physiotherapy TenantModule!`)

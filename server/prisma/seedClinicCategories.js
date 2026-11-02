@@ -7,14 +7,14 @@ export const SEED_CATEGORIES = [
     isActive: true,
     templates: [
       // Clinic Administrator
-      ...['patients', 'appointments', 'ecg_records', 'echo_reports', 'cath_lab_scheduling', 'cardiac_risk_assessment', 'implant_registry', 'prescriptions', 'billing', 'inventory', 'reports', 'staff'].flatMap(module => [
+      ...['patients', 'appointments', 'ecg_records', 'echo_reports', 'cath_lab_scheduling', 'cardiac_risk_assessment', 'prescriptions', 'billing', 'inventory', 'reports', 'staff'].flatMap(module => [
         { roleName: 'Clinic Administrator', module, action: 'view' },
         { roleName: 'Clinic Administrator', module, action: 'create' },
         { roleName: 'Clinic Administrator', module, action: 'edit' },
         { roleName: 'Clinic Administrator', module, action: 'delete' },
       ]),
       // Cardiologist
-      ...['patients', 'appointments', 'ecg_records', 'echo_reports', 'cath_lab_scheduling', 'cardiac_risk_assessment', 'implant_registry', 'prescriptions', 'reports'].flatMap(module => [
+      ...['patients', 'appointments', 'ecg_records', 'echo_reports', 'cath_lab_scheduling', 'cardiac_risk_assessment', 'prescriptions', 'reports'].flatMap(module => [
         { roleName: 'Cardiologist', module, action: 'view' },
         { roleName: 'Cardiologist', module, action: 'create' },
         { roleName: 'Cardiologist', module, action: 'edit' },
@@ -25,7 +25,7 @@ export const SEED_CATEGORIES = [
         { roleName: 'Cardiac Nurse', module, action: 'edit' },
       ]),
       // Cath Lab Technician
-      ...['cath_lab_scheduling', 'echo_reports', 'ecg_records', 'implant_registry'].flatMap(module => [
+      ...['cath_lab_scheduling', 'echo_reports', 'ecg_records'].flatMap(module => [
         { roleName: 'Cath Lab Technician', module, action: 'view' },
         { roleName: 'Cath Lab Technician', module, action: 'create' },
       ]),

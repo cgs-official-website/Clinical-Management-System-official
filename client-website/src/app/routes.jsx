@@ -52,7 +52,6 @@ const PatientFlowPage = lazy(() => import('../features/staff/PatientFlowPage'))
 const DentalChartPage = lazy(() => import('../features/dental/DentalChartPage'))
 const TreatmentPlansPage = lazy(() => import('../features/dental/TreatmentPlansPage'))
 const XrayRecordsPage = lazy(() => import('../features/dental/XrayRecordsPage'))
-const ImplantRegistryPage = lazy(() => import('../features/dental/ImplantRegistryPage'))
 const LabOrdersPage = lazy(() => import('../features/dental/LabOrdersPage'))
 
 // Physiotherapy category pages
@@ -611,16 +610,6 @@ export const router = createBrowserRouter([
           <RequireModuleView route="/app/cardio/risk-assessment">
             <Suspense fallback={<PageLoader />}>
               <CardiacRiskAssessmentPage />
-            </Suspense>
-          </RequireModuleView>
-        ),
-      },
-      {
-        path: 'cardio/implants',
-        element: (
-          <RequireModuleView route="/app/cardio/implants">
-            <Suspense fallback={<PageLoader />}>
-              <ImplantRegistryPage />
             </Suspense>
           </RequireModuleView>
         ),

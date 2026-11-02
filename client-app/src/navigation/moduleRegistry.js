@@ -33,7 +33,6 @@ export const MODULE_REGISTRY = {
     '/app/dental/treatment-plans': { component: DentalScreen, params: { tab: 'PLANS' } },
     '/app/dental/xrays': { component: DentalScreen, params: { tab: 'XRAY' } },
     '/app/dental/orthodontics': { component: DentalScreen, params: { tab: 'ORTHO' } },
-    '/app/dental/implants': { component: DentalScreen, params: { tab: 'IMPLANT' } },
     '/app/dental/lab-orders': { component: DentalScreen, params: { tab: 'LAB' } },
 };
 

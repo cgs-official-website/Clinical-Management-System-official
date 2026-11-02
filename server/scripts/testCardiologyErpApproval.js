@@ -39,7 +39,7 @@ async function runCardiologyApprovalTest() {
   }
   console.log(`[PASS] Found active "Cardiology" category (ID: ${category.id})`)
 
-  // 2. Verify exactly the 12 modules are linked in exact order 1 to 12
+  // 2. Verify exactly the 11 modules are linked in exact order 1 to 11
   const expectedModules = [
     { key: 'patients', order: 1 },
     { key: 'appointments', order: 2 },
@@ -47,17 +47,16 @@ async function runCardiologyApprovalTest() {
     { key: 'echo_reports', order: 4 },
     { key: 'cath_lab_scheduling', order: 5 },
     { key: 'cardiac_risk_assessment', order: 6 },
-    { key: 'implant_registry', order: 7 },
-    { key: 'prescriptions', order: 8 },
-    { key: 'billing', order: 9 },
-    { key: 'inventory', order: 10 },
-    { key: 'reports', order: 11 },
-    { key: 'staff', order: 12 },
+    { key: 'prescriptions', order: 7 },
+    { key: 'billing', order: 8 },
+    { key: 'inventory', order: 9 },
+    { key: 'reports', order: 10 },
+    { key: 'staff', order: 11 },
   ]
 
-  console.log(`[VERIFY] Checking 12 linked modules for Cardiology:`)
-  if (category.categoryModules.length !== 12) {
-    throw new Error(`FAIL: Expected 12 modules linked, but found ${category.categoryModules.length}`)
+  console.log(`[VERIFY] Checking 11 linked modules for Cardiology:`)
+  if (category.categoryModules.length !== 11) {
+    throw new Error(`FAIL: Expected 11 modules linked, but found ${category.categoryModules.length}`)
   }
 
   for (let i = 0; i < expectedModules.length; i++) {
@@ -196,17 +195,14 @@ async function runCardiologyApprovalTest() {
   const isEcgEnabled = await RbacService.isModuleEnabledForTenant(tenant.id, 'ecg_records')
   const isDentalChartEnabled = await RbacService.isModuleEnabledForTenant(tenant.id, 'dental_chart')
   const isPhysioTrackerEnabled = await RbacService.isModuleEnabledForTenant(tenant.id, 'exercise_program_tracker')
-  const isImplantRegistryEnabled = await RbacService.isModuleEnabledForTenant(tenant.id, 'implant_registry')
 
   console.log(`  - ecg_records enabled: ${isEcgEnabled} (expected: true)`)
   console.log(`  - dental_chart enabled: ${isDentalChartEnabled} (expected: false)`)
   console.log(`  - exercise_program_tracker enabled: ${isPhysioTrackerEnabled} (expected: false)`)
-  console.log(`  - implant_registry enabled: ${isImplantRegistryEnabled} (expected: true)`)
 
   if (!isEcgEnabled) throw new Error('FAIL: ecg_records should be enabled for Cardiology!')
   if (isDentalChartEnabled) throw new Error('FAIL: dental_chart should NOT be enabled for Cardiology!')
   if (isPhysioTrackerEnabled) throw new Error('FAIL: exercise_program_tracker should NOT be enabled for Cardiology!')
-  if (!isImplantRegistryEnabled) throw new Error('FAIL: implant_registry should be enabled for Cardiology!')
 
   console.log('[PASS] Cross-category isolation strictly enforced!\n')
 

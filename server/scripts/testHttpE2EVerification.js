@@ -157,7 +157,6 @@ async function runHttpE2E() {
     'Treatment Plans',
     'X-Ray Records',
     'Orthodontics Tracker',
-    'Implant Registry',
     'Lab Work Orders',
   ]
 

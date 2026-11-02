@@ -18,7 +18,6 @@ export const MODULE_METADATA = {
   dental_chart: { name: 'Dental Chart (Tooth Diagram)', icon: 'Tooth', route: '/app/dental/chart', defaultOrder: 3 },
   treatment_plans: { name: 'Treatment Plans', icon: 'ClipboardList', route: '/app/dental/treatment-plans', defaultOrder: 4 },
   xray_records: { name: 'X-Ray Records', icon: 'FileImage', route: '/app/dental/xrays', defaultOrder: 5 },
-  implant_registry: { name: 'Implant Registry', icon: 'Layers', route: '/app/dental/implants', defaultOrder: 7 },
   prescriptions: { name: 'Prescriptions', icon: 'Pill', route: '/app/staff/prescriptions', defaultOrder: 8 },
   billing: { name: 'Billing/Invoices', icon: 'CreditCard', route: '/app/staff/billing', defaultOrder: 9 },
   inventory: { name: 'Inventory', icon: 'Boxes', route: '/app/staff/inventory', defaultOrder: 10 },
@@ -212,9 +211,6 @@ export class RbacModuleService {
             const m = tm.module
             const meta = MODULE_METADATA[m.key] || {}
             let route = meta.route || `/app/staff/${m.key}`
-            if (m.key === 'implant_registry' && categoryName?.toLowerCase().includes('cardio')) {
-              route = '/app/cardio/implants'
-            }
             const order = categoryModuleOrderMap.get(m.id) ?? meta.defaultOrder ?? 50
             return {
               id: m.id,
@@ -378,9 +374,6 @@ export class RbacModuleService {
           const name = meta.name || m.name
           const icon = meta.icon || 'Boxes'
           let route = meta.route || `/app/staff/${m.key}`
-          if (m.key === 'implant_registry' && categoryName?.toLowerCase().includes('cardio')) {
-            route = '/app/cardio/implants'
-          }
           const order = categoryModuleOrderMap.get(m.id) ?? meta.defaultOrder ?? 50
 
           if (isAdminRole) {
