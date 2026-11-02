@@ -1,6 +1,10 @@
 import { prisma } from '../config/prisma.js'
 import { logger } from '../utils/logger.js'
 
+// The Super Admin bell is only for clinic-registration approvals. Other rows that share the
+// `notifications` table (e.g. per-clinic alerts such as "Low Stock Alert") must never show up there.
+const SUPERADMIN_BELL_FILTER = { title: { startsWith: 'New Clinic Registration' } }
+
 export class NotificationService {
   /**
    * Create a new notification in PostgreSQL
@@ -40,6 +44,7 @@ export class NotificationService {
   static async getSuperadminNotifications({ limit = 50 } = {}) {
     try {
       const notifications = await prisma.notification.findMany({
+        where: SUPERADMIN_BELL_FILTER,
         orderBy: { createdAt: 'desc' },
         take: limit,
       })
@@ -82,7 +87,7 @@ export class NotificationService {
   static async markAllAsRead() {
     try {
       const updated = await prisma.notification.updateMany({
-        where: { isRead: false },
+        where: { ...SUPERADMIN_BELL_FILTER, isRead: false },
         data: {
           isRead: true,
           readAt: new Date(),
