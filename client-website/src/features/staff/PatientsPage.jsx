@@ -1,4 +1,4 @@
-import React, { useState, lazy, Suspense } from 'react'
+import React, { useState, useEffect, lazy, Suspense } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, User, FileText, Upload, AlertTriangle, Heart, Phone, Mail, Calendar, Activity, Hash, Pill, Edit2, Trash2 } from 'lucide-react'
 import { api } from '../../lib/api'
@@ -18,6 +18,23 @@ const PatientDetailsTriageModal = lazy(() =>
   import('./components/PatientDetailsTriageModal').then((m) => ({ default: m.PatientDetailsTriageModal }))
 )
 
+// "1996-08-01T00:00:00.000Z" -> "01 Aug 1996"
+const formatDob = (dob) => {
+  const d = dob ? new Date(dob) : null
+  if (!d || isNaN(d.getTime())) return '--'
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' })
+}
+
+// Add units when the user only typed numbers
+const withUnit = (value, unit) => {
+  const v = String(value || '').trim()
+  return /^\d+(\.\d+)?$/.test(v) ? `${v} ${unit}` : v
+}
+const withBpUnit = (value) => {
+  const v = String(value || '').trim()
+  return /^\d{2,3}\s*\/\s*\d{2,3}$/.test(v) ? `${v.replace(/\s+/g, '')} mmHg` : v
+}
+
 export const PatientsPage = () => {
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
@@ -28,6 +45,8 @@ export const PatientsPage = () => {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [isTriageOpen, setIsTriageOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('profile')
+  const [isEditingVitals, setIsEditingVitals] = useState(false)
+  const [vitalsForm, setVitalsForm] = useState({ weight: '', bp: '', sugarLevel: '' })
   const [formData, setFormData] = useState({
     fullName: '',
     dob: '1990-01-01',
@@ -79,6 +98,63 @@ export const PatientsPage = () => {
     },
   })
 
+  // Close the vitals editor whenever another chart is opened
+  useEffect(() => {
+    setIsEditingVitals(false)
+  }, [selectedPatient?.id])
+
+  const vitalsMutation = useMutation({
+    mutationFn: async ({ id, vitals }) => {
+      const res = await api.patch(`/api/staff/patients/${id}`, { vitals })
+      return res.data
+    },
+    onSuccess: (res, variables) => {
+      const saved = res?.data || res
+      queryClient.invalidateQueries({ queryKey: ['staff', 'patients'] })
+      setSelectedPatient((prev) =>
+        prev
+          ? {
+            ...prev,
+            medicalHistory: saved?.medicalHistory || {
+              ...(prev.medicalHistory || {}),
+              latestVitals: {
+                ...(prev.medicalHistory?.latestVitals || {}),
+                ...variables.vitals,
+                recordedAt: new Date().toISOString(),
+              },
+            },
+          }
+          : prev
+      )
+      setIsEditingVitals(false)
+      notify.success('Vitals saved to the patient chart.')
+    },
+    onError: (err) => notify.error(err.response?.data?.message || 'Failed to save vitals.'),
+  })
+
+  const startEditVitals = () => {
+    const v = selectedPatient?.medicalHistory?.latestVitals || {}
+    setVitalsForm({ weight: v.weight || '', bp: v.bp || '', sugarLevel: v.sugarLevel || '' })
+    setIsEditingVitals(true)
+  }
+
+  const saveVitals = () => {
+    const vitals = {
+      weight: withUnit(vitalsForm.weight, 'kg'),
+      bp: withBpUnit(vitalsForm.bp),
+      sugarLevel: withUnit(vitalsForm.sugarLevel, 'mg/dL'),
+    }
+    if (!vitals.weight && !vitals.bp && !vitals.sugarLevel) {
+      notify.error('Enter at least one value (weight, BP or sugar).')
+      return
+    }
+    if (vitals.bp && !/^\d{2,3}\/\d{2,3}/.test(vitals.bp)) {
+      notify.error('Blood pressure should look like 120/80.')
+      return
+    }
+    vitalsMutation.mutate({ id: selectedPatient.id, vitals })
+  }
+
   const deleteMutation = useMutation({
     mutationFn: async (patientId) => {
       await api.delete(`/api/staff/patients/${patientId}`)
@@ -120,7 +196,11 @@ export const PatientsPage = () => {
       label: 'Demographics',
       render: (_, row) => (
         <span className="text-xs text-text-secondary">
-          {row.age} yrs • {row.gender} • {row.bloodGroup}
+          {[
+            !/^(1899|1900)/.test(String(row.dob || '')) && row.age !== undefined && row.age !== null ? `${row.age} yrs` : null,
+            row.gender && row.gender !== 'Not specified' ? row.gender : null,
+            row.bloodGroup || null,
+          ].filter(Boolean).join(' • ') || '--'}
         </span>
       ),
     },
@@ -261,11 +341,10 @@ export const PatientsPage = () => {
                 <button
                   key={tab}
                   onClick={() => setActiveTab(tab)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-colors ${
-                    activeTab === tab
+                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-colors ${activeTab === tab
                       ? 'bg-primary text-white shadow-sm'
                       : 'text-text-secondary hover:text-text-primary hover:bg-surface'
-                  }`}
+                    }`}
                 >
                   {tab === 'profile' ? 'Clinical Profile' : tab === 'history' ? 'Chronic History' : 'Diagnostic Files'}
                 </button>
@@ -277,11 +356,13 @@ export const PatientsPage = () => {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-4 rounded-xl bg-surface/60 border border-border">
                   <div>
                     <span className="text-text-secondary block mb-0.5">Date of Birth</span>
-                    <span className="font-bold text-text-primary">{selectedPatient.dob} ({selectedPatient.age} yrs)</span>
+                    <span className="font-bold text-text-primary">
+                      {/^(1899|1900)/.test(String(selectedPatient.dob || '')) ? '--' : `${formatDob(selectedPatient.dob)} (${selectedPatient.age} yrs)`}
+                    </span>
                   </div>
                   <div>
                     <span className="text-text-secondary block mb-0.5">Blood Group</span>
-                    <span className="font-bold text-danger">{selectedPatient.bloodGroup}</span>
+                    <span className="font-bold text-danger">{selectedPatient.bloodGroup || '--'}</span>
                   </div>
                   <div>
                     <span className="text-text-secondary block mb-0.5">Assigned Attending</span>
@@ -301,53 +382,106 @@ export const PatientsPage = () => {
                   </div>
                 </div>
 
-                {/* Latest Vitals & Triage Report */}
-                {selectedPatient.medicalHistory?.latestVitals && (
-                  <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-primary flex items-center gap-1.5 text-xs">
-                        <Activity className="w-4 h-4" />
-                        Reception Intake Vitals (Token #{selectedPatient.medicalHistory.latestVitals.tokenNumber})
-                      </span>
-                      <span className="text-[10px] text-text-muted font-mono">
-                        {selectedPatient.medicalHistory.latestVitals.recordedAt
-                          ? new Date(selectedPatient.medicalHistory.latestVitals.recordedAt).toLocaleDateString()
-                          : 'Recent Check-in'}
-                      </span>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2.5 text-center">
-                      <div className="p-2 rounded-lg bg-surface border border-border">
-                        <span className="text-[10px] text-text-muted block">Weight</span>
-                        <span className="font-bold text-text-primary text-xs">
-                          {selectedPatient.medicalHistory.latestVitals.weight || '--'}
+                {/* Vitals: shown when recorded (reception or chart), otherwise can be added here */}
+                {(() => {
+                  const vitals = selectedPatient.medicalHistory?.latestVitals
+                  const hasVitals = !!(vitals && (vitals.weight || vitals.bp || vitals.sugarLevel))
+                  return (
+                    <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-bold text-primary flex items-center gap-1.5 text-xs">
+                          <Activity className="w-4 h-4" />
+                          {vitals?.tokenNumber ? `Reception Intake Vitals (Token #${vitals.tokenNumber})` : 'Vitals'}
                         </span>
-                      </div>
-                      <div className="p-2 rounded-lg bg-surface border border-border">
-                        <span className="text-[10px] text-text-muted block">Blood Pressure</span>
-                        <span className="font-bold text-danger text-xs">
-                          {selectedPatient.medicalHistory.latestVitals.bp || '--'}
-                        </span>
-                      </div>
-                      <div className="p-2 rounded-lg bg-surface border border-border">
-                        <span className="text-[10px] text-text-muted block">Sugar Level</span>
-                        <span className="font-bold text-amber-500 text-xs">
-                          {selectedPatient.medicalHistory.latestVitals.sugarLevel || '--'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {selectedPatient.medicalHistory.latestVitals.currentMedications && (
-                      <div className="pt-2 border-t border-primary/15 text-[11px] text-text-secondary flex items-start gap-1.5">
-                        <Pill className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
-                        <div>
-                          <strong className="text-text-primary">Current Medications / Tablets: </strong>
-                          <span>{selectedPatient.medicalHistory.latestVitals.currentMedications}</span>
+                        <div className="flex items-center gap-2">
+                          {hasVitals && !isEditingVitals && (
+                            <span className="text-[10px] text-text-muted font-mono">
+                              {vitals.recordedAt ? new Date(vitals.recordedAt).toLocaleDateString() : 'Recent Check-in'}
+                            </span>
+                          )}
+                          {hasVitals && !isEditingVitals && (
+                            <PermissionAction action="edit">
+                              <Button variant="secondary" size="xs" leftIcon={<Edit2 className="w-3 h-3" />} onClick={startEditVitals}>
+                                Update
+                              </Button>
+                            </PermissionAction>
+                          )}
                         </div>
                       </div>
-                    )}
-                  </div>
-                )}
+
+                      {isEditingVitals ? (
+                        <div className="space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <Input
+                              label="Weight"
+                              placeholder="e.g. 60 kg"
+                              value={vitalsForm.weight}
+                              onChange={(e) => setVitalsForm({ ...vitalsForm, weight: e.target.value })}
+                            />
+                            <Input
+                              label="Blood Pressure"
+                              placeholder="e.g. 120/80"
+                              value={vitalsForm.bp}
+                              onChange={(e) => setVitalsForm({ ...vitalsForm, bp: e.target.value })}
+                            />
+                            <Input
+                              label="Sugar Level"
+                              placeholder="e.g. 105 mg/dL"
+                              value={vitalsForm.sugarLevel}
+                              onChange={(e) => setVitalsForm({ ...vitalsForm, sugarLevel: e.target.value })}
+                            />
+                          </div>
+                          <div className="flex items-center justify-end gap-2">
+                            <Button variant="secondary" size="xs" onClick={() => setIsEditingVitals(false)}>
+                              Cancel
+                            </Button>
+                            <Button variant="primary" size="xs" onClick={saveVitals} isLoading={vitalsMutation.isPending}>
+                              {hasVitals ? 'Save Changes' : 'Save Vitals'}
+                            </Button>
+                          </div>
+                        </div>
+                      ) : hasVitals ? (
+                        <>
+                          <div className="grid grid-cols-3 gap-2.5 text-center">
+                            <div className="p-2 rounded-lg bg-surface border border-border">
+                              <span className="text-[10px] text-text-muted block">Weight</span>
+                              <span className="font-bold text-text-primary text-xs">{vitals.weight || '--'}</span>
+                            </div>
+                            <div className="p-2 rounded-lg bg-surface border border-border">
+                              <span className="text-[10px] text-text-muted block">Blood Pressure</span>
+                              <span className="font-bold text-danger text-xs">{vitals.bp || '--'}</span>
+                            </div>
+                            <div className="p-2 rounded-lg bg-surface border border-border">
+                              <span className="text-[10px] text-text-muted block">Sugar Level</span>
+                              <span className="font-bold text-amber-500 text-xs">{vitals.sugarLevel || '--'}</span>
+                            </div>
+                          </div>
+
+                          {vitals.currentMedications && (
+                            <div className="pt-2 border-t border-primary/15 text-[11px] text-text-secondary flex items-start gap-1.5">
+                              <Pill className="w-3.5 h-3.5 text-primary shrink-0 mt-0.5" />
+                              <div>
+                                <strong className="text-text-primary">Current Medications / Tablets: </strong>
+                                <span>{vitals.currentMedications}</span>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-[11px] text-text-secondary">
+                            No vitals recorded yet. Add weight, blood pressure and sugar level for this patient.
+                          </p>
+                          <PermissionAction action="edit">
+                            <Button variant="primary" size="xs" leftIcon={<Plus className="w-3 h-3" />} onClick={startEditVitals}>
+                              Add Vitals
+                            </Button>
+                          </PermissionAction>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 <div className="p-4 rounded-xl bg-danger/5 border border-danger/20">
                   <div className="flex items-center gap-2 font-bold text-danger mb-2">

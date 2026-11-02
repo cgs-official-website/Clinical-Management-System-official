@@ -1,6 +1,6 @@
 import React, { useState, lazy, Suspense } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Calendar as CalendarIcon, Clock, Plus, Video, MapPin, User, ChevronLeft, ChevronRight, Activity, Stethoscope, Hash, Pill } from 'lucide-react'
+import { Calendar as CalendarIcon, Clock, Plus, Video, MapPin, User, ChevronLeft, ChevronRight, Activity, Stethoscope, Hash, Pill, FileText, CheckCircle2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { Button } from '../../components/ui/Button'
@@ -10,6 +10,8 @@ import { Input } from '../../components/ui/Input'
 import { Select } from '../../components/ui/Select'
 import { notify } from '../../components/ui/Toast'
 import { Skeleton } from '../../components/ui/Skeleton'
+import { EmptyState } from '../../components/ui/EmptyState'
+import { Pagination } from '../../components/ui/Pagination'
 import { useAuthStore } from '../../store/useAuthStore'
 import { PermissionAction } from '../../components/common/PermissionAction'
 import { useRolePermissions } from '../../hooks/useRolePermissions'
@@ -38,6 +40,46 @@ const normalizeStatus = (s) =>
 const statusLabel = (s) =>
   STATUS_OPTIONS.find((o) => o.value === normalizeStatus(s))?.label || s
 
+const PAGE_SIZE = 8
+
+const startOfDay = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x }
+
+// Date range [start, end) for the selected view, around the anchor date. Week starts on Monday.
+const getRange = (mode, anchor) => {
+  const a = startOfDay(anchor)
+  if (mode === 'Week') {
+    const start = new Date(a)
+    start.setDate(a.getDate() - ((a.getDay() + 6) % 7))
+    const end = new Date(start)
+    end.setDate(start.getDate() + 7)
+    return [start, end]
+  }
+  if (mode === 'Month') {
+    return [new Date(a.getFullYear(), a.getMonth(), 1), new Date(a.getFullYear(), a.getMonth() + 1, 1)]
+  }
+  const end = new Date(a)
+  end.setDate(a.getDate() + 1)
+  return [a, end]
+}
+
+const pad2 = (n) => String(n).padStart(2, '0')
+// Value for <input type="month"> (YYYY-MM) or <input type="date"> (YYYY-MM-DD) in local time
+const toInputValue = (mode, d) =>
+  mode === 'Month'
+    ? `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`
+    : `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+
+const rangeLabel = (mode, anchor) => {
+  const [start, end] = getRange(mode, anchor)
+  if (mode === 'Month') return start.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  if (mode === 'Week') {
+    const last = new Date(end); last.setDate(end.getDate() - 1)
+    const f = (d) => d.toLocaleDateString('en-US', { month: 'short', day: '2-digit' })
+    return `${f(start)} – ${f(last)}, ${last.getFullYear()}`
+  }
+  return start.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: '2-digit', year: 'numeric' })
+}
+
 export const AppointmentsPage = () => {
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
@@ -47,13 +89,21 @@ export const AppointmentsPage = () => {
   // Holds the appointment that was just marked Completed (drives the "Write prescription?" dialog)
   const [rxPrompt, setRxPrompt] = useState(null)
   const [viewMode, setViewMode] = useState('Day')
+  const [anchorDate, setAnchorDate] = useState(() => new Date())
+  const [completedOnly, setCompletedOnly] = useState(false)
+  const [page, setPage] = useState(1)
   const [isBookOpen, setIsBookOpen] = useState(false)
   const [isTriageOpen, setIsTriageOpen] = useState(false)
   const [selectedDoctorApt, setSelectedDoctorApt] = useState(null)
+  // Holds the prescription being viewed (read-only) for a completed appointment
+  const [viewRx, setViewRx] = useState(null)
 
   const [formData, setFormData] = useState({
     patientName: '',
     patientPhone: '',
+    patientAge: '',
+    patientGender: '',
+    patientBloodGroup: '',
     doctorName: user?.name || user?.fullName || 'Attending Clinician',
     department: 'Cardiology',
     dateTime: new Date().toISOString().slice(0, 16),
@@ -66,11 +116,23 @@ export const AppointmentsPage = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['staff', 'appointments'],
     queryFn: async () => {
-      const res = await api.get('/api/staff/appointments')
+      const res = await api.get('/api/staff/appointments', { params: { limit: 500 } })
       return res.data
     },
     staleTime: 60 * 1000,
     placeholderData: (prev) => prev,
+  })
+
+  // All prescriptions: used to know which appointments already have a doctor-written Rx
+  const { data: rxData } = useQuery({
+    queryKey: ['staff', 'prescriptions'],
+    queryFn: async () => {
+      const res = await api.get('/api/staff/prescriptions', { params: { limit: 200 } })
+      return res.data
+    },
+    staleTime: 60 * 1000,
+    placeholderData: (prev) => prev,
+    retry: false,
   })
 
   const { data: triageData } = useQuery({
@@ -155,6 +217,23 @@ export const AppointmentsPage = () => {
   }, [doctorsData])
 
   const triageList = Array.isArray(triageData) ? triageData : []
+  const prescriptionList = Array.isArray(rxData) ? rxData : rxData?.prescriptions || rxData?.data || []
+
+  // Find the prescription that belongs to an appointment.
+  // 1) exact link via appointmentId  2) fallback: same patient, written the same day (older rows had no link)
+  const findRxForApt = (apt) => {
+    const exact = prescriptionList.find((rx) => rx.appointmentId && rx.appointmentId === apt.id)
+    if (exact) return exact
+    const aptDay = apt.dateTime ? new Date(apt.dateTime).toDateString() : null
+    return prescriptionList.find((rx) => {
+      if (rx.appointmentId) return false
+      const samePatient =
+        (rx.patientId && rx.patientId === apt.patientId) ||
+        (rx.patientName && rx.patientName.toLowerCase() === apt.patientName?.toLowerCase())
+      const sameDay = !rx.createdAt || !aptDay || new Date(rx.createdAt).toDateString() === aptDay
+      return samePatient && sameDay
+    })
+  }
 
   // Ensure unique patient list for triage modal, preventing duplicate patient entries
   const triagePatientsList = React.useMemo(() => {
@@ -195,6 +274,7 @@ export const AppointmentsPage = () => {
       const res = await api.put(`/api/staff/appointments/${id}`, { status })
       return res.data
     },
+    onError: () => notify.error('Failed to update appointment status.'),
     onSuccess: (updated, variables) => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'appointments'] })
       notify.info(`Appointment status updated to ${statusLabel(updated.status)}.`)
@@ -205,13 +285,42 @@ export const AppointmentsPage = () => {
           appointmentId: variables.apt.id,
           patientId: variables.apt.patientId || '',
           patientName: variables.apt.patientName || updated.patientName || '',
+          patientMrn: variables.apt.patientMrn || updated.patientMrn || '',
           tokenNumber: variables.tokenNum || '',
         })
       }
     },
   })
 
-  const appointments = Array.isArray(data) ? data : data?.appointments || data?.data || []
+  const allAppointments = Array.isArray(data) ? data : data?.appointments || data?.data || []
+
+  // Day / Week / Month range + optional "Completed" filter
+  const [rangeStart, rangeEnd] = getRange(viewMode, anchorDate)
+  const inRange = allAppointments.filter((a) => {
+    if (!a.dateTime) return false
+    const t = new Date(a.dateTime)
+    return t >= rangeStart && t < rangeEnd
+  })
+  const completedCount = inRange.filter((a) => normalizeStatus(a.status) === 'COMPLETED').length
+  const appointments = (completedOnly
+    ? inRange.filter((a) => normalizeStatus(a.status) === 'COMPLETED')
+    : inRange
+  ).sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime))
+
+  // 8 appointments per page; go back to page 1 whenever the filter changes
+  React.useEffect(() => { setPage(1) }, [viewMode, anchorDate, completedOnly])
+  const totalPages = Math.max(1, Math.ceil(appointments.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pagedAppointments = appointments.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
+  const shiftAnchor = (dir) => {
+    setAnchorDate((prev) => {
+      const d = new Date(prev)
+      if (viewMode === 'Month') d.setMonth(d.getMonth() + dir)
+      else d.setDate(d.getDate() + dir * (viewMode === 'Week' ? 7 : 1))
+      return d
+    })
+  }
 
   if (isLoading && !data) {
     return (
@@ -243,14 +352,31 @@ export const AppointmentsPage = () => {
                 key={mode}
                 onClick={() => setViewMode(mode)}
                 className={`flex-1 sm:flex-none px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${viewMode === mode
-                    ? 'bg-primary text-white shadow-sm'
-                    : 'text-text-secondary hover:text-text-primary'
+                  ? 'bg-primary text-white shadow-sm'
+                  : 'text-text-secondary hover:text-text-primary'
                   }`}
               >
                 {mode}
               </button>
             ))}
           </div>
+
+          {/* Common "Completed" filter */}
+          <button
+            type="button"
+            onClick={() => setCompletedOnly((v) => !v)}
+            aria-pressed={completedOnly}
+            className={`px-3 py-2 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors ${completedOnly
+              ? 'bg-primary text-white border-primary shadow-sm'
+              : 'bg-surface border-border text-text-secondary hover:text-text-primary'
+              }`}
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            Completed
+            <span className={`px-1.5 rounded-md text-[10px] ${completedOnly ? 'bg-white/20' : 'bg-primary/10 text-primary'}`}>
+              {completedCount}
+            </span>
+          </button>
 
           <Button
             variant="secondary"
@@ -270,6 +396,9 @@ export const AppointmentsPage = () => {
                 setFormData({
                   patientName: '',
                   patientPhone: '',
+                  patientAge: '',
+                  patientGender: '',
+                  patientBloodGroup: '',
                   doctorName: user?.name || user?.fullName || 'Attending Clinician',
                   department: user?.clinicCategoryName || user?.department || 'General Practice',
                   dateTime: new Date().toISOString().slice(0, 16),
@@ -293,18 +422,48 @@ export const AppointmentsPage = () => {
       <div className="space-y-4">
         <div className="p-3.5 sm:p-4 rounded-2xl border border-border bg-surface/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2.5 sm:gap-3">
+            <button type="button" onClick={() => shiftAnchor(-1)} className="p-1 rounded-lg hover:bg-primary/10 text-text-secondary" title="Previous">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
             <CalendarIcon className="w-4 h-4 sm:w-5 sm:h-5 text-primary shrink-0" />
             <span className="font-heading font-bold text-xs sm:text-sm text-text-primary">
-              Wednesday, September 09, 2026
+              {rangeLabel(viewMode, anchorDate)}
             </span>
+            <button type="button" onClick={() => shiftAnchor(1)} className="p-1 rounded-lg hover:bg-primary/10 text-text-secondary" title="Next">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+            <button type="button" onClick={() => setAnchorDate(new Date())} className="px-2 py-0.5 rounded-md text-[11px] font-semibold text-primary hover:bg-primary/10">
+              Today
+            </button>
+            {/* Pick any month (Month view) or any date (Day / Week view) */}
+            <input
+              type={viewMode === 'Month' ? 'month' : 'date'}
+              aria-label={viewMode === 'Month' ? 'Choose month' : 'Choose date'}
+              value={toInputValue(viewMode, anchorDate)}
+              onChange={(e) => {
+                const v = e.target.value
+                if (!v) return
+                const [y, m, d] = v.split('-').map(Number)
+                setAnchorDate(new Date(y, m - 1, d || 1))
+              }}
+              className="px-2 py-1 rounded-lg border border-border bg-surface text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
           </div>
           <Badge variant="primary" size="sm" className="self-start sm:self-auto">
-            {appointments.length} Consultations Booked
+            {appointments.length} {completedOnly ? 'Completed' : 'Consultations Booked'}
           </Badge>
         </div>
 
+        {appointments.length === 0 && (
+          <EmptyState
+            icon={CalendarIcon}
+            title={completedOnly ? 'No completed appointments found' : 'No appointments found'}
+            description={`Nothing ${completedOnly ? 'completed ' : ''}found for ${rangeLabel(viewMode, anchorDate)}.`}
+          />
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {appointments.map((apt) => {
+          {pagedAppointments.map((apt) => {
             const matchingTriage = triageList.find(
               (t) =>
                 t.patientId === apt.patientId ||
@@ -314,6 +473,9 @@ export const AppointmentsPage = () => {
             const tokenNum =
               matchingTriage?.tokenNumber ||
               (apt.reason && apt.reason.match(/\[Token:\s*([^\]]+)\]/)?.[1])
+
+            const isCompleted = normalizeStatus(apt.status) === 'COMPLETED'
+            const aptRx = isCompleted ? findRxForApt(apt) : null
 
             return (
               <div
@@ -325,6 +487,11 @@ export const AppointmentsPage = () => {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-1.5 text-xs font-bold text-primary">
                       <Clock className="w-4 h-4" />
+                      {viewMode !== 'Day' && (
+                        <span className="text-text-secondary font-semibold">
+                          {new Date(apt.dateTime).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })} •
+                        </span>
+                      )}
                       <span>
                         {new Date(apt.dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
@@ -426,15 +593,20 @@ export const AppointmentsPage = () => {
                     variant="ghost"
                     size="xs"
                     onClick={() =>
-                      setSelectedDoctorApt(
-                        matchingTriage || {
-                          tokenNumber: tokenNum || 'TK-101',
+                      setSelectedDoctorApt({
+                        ...(matchingTriage || {
+                          tokenNumber: tokenNum || '',
                           patientName: apt.patientName,
                           doctorName: apt.doctorName,
                           patientPhone: apt.patientPhone,
-                          status: apt.status
-                        }
-                      )
+                          status: apt.status,
+                        }),
+                        // link the prescription to THIS appointment / patient
+                        appointmentId: apt.id,
+                        patientId: apt.patientId,
+                        tokenNumber: matchingTriage?.tokenNumber || tokenNum || '',
+                        existingRx: findRxForApt(apt) || null,
+                      })
                     }
                     leftIcon={<Stethoscope className="w-3.5 h-3.5 text-primary" />}
                     title="Review Vitals Report & Issue Prescription"
@@ -442,10 +614,63 @@ export const AppointmentsPage = () => {
                     Vitals & Rx
                   </Button>
                 </div>
+
+                {/* Completed appointment -> fill prescription OR view the doctor's prescription */}
+                {isCompleted && (
+                  <div className="mt-3">
+                    {aptRx ? (
+                      <Button
+                        variant="secondary"
+                        size="xs"
+                        className="w-full"
+                        leftIcon={<FileText className="w-3.5 h-3.5 text-primary" />}
+                        onClick={() => setViewRx({ ...aptRx, patientName: aptRx.patientName || apt.patientName })}
+                      >
+                        View Prescription
+                      </Button>
+                    ) : canWriteRx ? (
+                      <Button
+                        variant="primary"
+                        size="xs"
+                        className="w-full"
+                        leftIcon={<Pill className="w-3.5 h-3.5" />}
+                        onClick={() =>
+                          navigate('/app/staff/prescriptions', {
+                            state: {
+                              newRx: {
+                                appointmentId: apt.id,
+                                patientId: apt.patientId || '',
+                                patientName: apt.patientName || '',
+                                patientMrn: apt.patientMrn || '',
+                                tokenNumber: tokenNum || '',
+                              },
+                            },
+                          })
+                        }
+                      >
+                        Write Prescription
+                      </Button>
+                    ) : (
+                      <p className="text-[11px] text-text-muted text-center">No prescription written yet</p>
+                    )}
+                  </div>
+                )}
               </div>
             )
           })}
         </div>
+
+        {appointments.length > PAGE_SIZE && (
+          <Pagination
+            page={safePage}
+            totalPages={totalPages}
+            total={appointments.length}
+            limit={PAGE_SIZE}
+            onPageChange={setPage}
+            entryLabel="appointments"
+            className="rounded-2xl border"
+          />
+        )}
       </div>
 
       {/* Book Appointment Modal */}
@@ -459,6 +684,10 @@ export const AppointmentsPage = () => {
         <form
           onSubmit={(e) => {
             e.preventDefault()
+            if (!formData.patientAge || !formData.patientGender) {
+              notify.error('Please enter the patient age and gender.')
+              return
+            }
             bookMutation.mutate(formData)
           }}
           className="flex flex-col space-y-4"
@@ -497,6 +726,42 @@ export const AppointmentsPage = () => {
                   e.preventDefault()
                 }
               }}
+            />
+          </div>
+
+          {/* Real patient details (saved to the Patients module) */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Input
+              label="Age (years)"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              max={120}
+              required
+              placeholder="e.g. 34"
+              value={formData.patientAge}
+              onChange={(e) => setFormData({ ...formData, patientAge: e.target.value })}
+            />
+            <Select
+              label="Gender"
+              required
+              value={formData.patientGender}
+              onChange={(e) => setFormData({ ...formData, patientGender: e.target.value })}
+              options={[
+                { value: '', label: 'Select gender' },
+                { value: 'Female', label: 'Female' },
+                { value: 'Male', label: 'Male' },
+                { value: 'Other', label: 'Other' },
+              ]}
+            />
+            <Select
+              label="Blood Group"
+              value={formData.patientBloodGroup}
+              onChange={(e) => setFormData({ ...formData, patientBloodGroup: e.target.value })}
+              options={[
+                { value: '', label: 'Not known' },
+                ...['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((g) => ({ value: g, label: g })),
+              ]}
             />
           </div>
 
@@ -641,6 +906,66 @@ export const AppointmentsPage = () => {
             Write Prescription
           </Button>
         </div>
+      </Modal>
+
+      {/* View doctor's prescription (read-only) */}
+      <Modal
+        isOpen={!!viewRx}
+        onClose={() => setViewRx(null)}
+        title={`Prescription: ${viewRx?.patientName || ''}`}
+        description="Prescription issued by the doctor for this completed appointment."
+        maxWidth="max-w-xl"
+      >
+        {viewRx && (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-text-secondary">
+              <span>
+                Prescribed by <strong className="text-text-primary">{viewRx.doctorName || viewRx.prescribedBy}</strong>
+              </span>
+              <Badge
+                variant={viewRx.status === 'Fulfilled' || viewRx.status === 'Dispensed' ? 'success' : 'warning'}
+                size="sm"
+                dot
+              >
+                {viewRx.status === 'Fulfilled' || viewRx.status === 'Dispensed' ? 'Dispensed' : 'Pending Dispense'}
+              </Badge>
+            </div>
+
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Diagnosis</span>
+              <p className="text-sm font-semibold text-text-primary mt-0.5">{viewRx.diagnosis || '--'}</p>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-text-secondary">Medications</span>
+              {(Array.isArray(viewRx.medications) ? viewRx.medications : viewRx.items || []).map((m, i) => (
+                <div key={i} className="p-3 rounded-xl border border-border bg-bg/50 text-xs">
+                  <span className="font-bold text-primary">{m.drug} {m.dosage}</span>
+                  <span className="text-text-secondary"> • {m.frequency}</span>
+                  {m.duration && <span className="text-text-secondary"> • {m.duration}</span>}
+                </div>
+              ))}
+            </div>
+
+            {viewRx.notes && (
+              <div className="p-3 rounded-xl border border-border/60 bg-surface/40 text-xs text-text-secondary">
+                <span className="font-semibold text-text-primary">Doctor instructions: </span>
+                {String(viewRx.notes).replace(/\[Token:[^\]]*\]\s*/, '')}
+              </div>
+            )}
+
+            <div className="pt-3 border-t border-border flex items-center justify-end gap-2.5">
+              <Button variant="secondary" size="sm" onClick={() => setViewRx(null)}>Close</Button>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={() => { setViewRx(null); navigate('/app/staff/prescriptions') }}
+              >
+                Open in Prescriptions
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {selectedDoctorApt && (

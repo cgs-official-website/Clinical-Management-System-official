@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react'
-import { useSearchParams, useNavigate } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   Users,
@@ -40,7 +40,6 @@ const EnvironmentSetupModal = lazy(() =>
 
 export const AdminDashboard = () => {
   const [searchParams, setSearchParams] = useSearchParams()
-  const navigate = useNavigate()
   const { user } = useAuthStore()
   const { permittedModules } = useRolePermissions()
   const [isSetupOpen, setIsSetupOpen] = useState(() => {
@@ -72,9 +71,9 @@ export const AdminDashboard = () => {
     user?.tenant?.clinicCategoryName ||
     user?.tenant?.clinicCategory?.name ||
     (permittedModules.some((m) => m.route?.includes('/dental/')) ? 'Dental Care' :
-     permittedModules.some((m) => m.route?.includes('/cardio/')) ? 'Cardiology' :
-     permittedModules.some((m) => m.route?.includes('/physio/')) ? 'Physiotherapy' :
-     'General Care')
+      permittedModules.some((m) => m.route?.includes('/cardio/')) ? 'Cardiology' :
+        permittedModules.some((m) => m.route?.includes('/physio/')) ? 'Physiotherapy' :
+          'General Care')
 
   if (isLoading) {
     return (
@@ -312,42 +311,6 @@ export const AdminDashboard = () => {
           </div>
         </div>
       </div>
-
-      {/* Active Category Modules Section (Only shows modules enabled for this clinic category) */}
-      {permittedModules && permittedModules.length > 0 && (
-        <div className="p-6 rounded-2xl border border-border bg-surface shadow-soft space-y-4">
-          <div className="flex items-center justify-between border-b border-border pb-3">
-            <div>
-              <h3 className="font-heading font-bold text-base text-text-primary">
-                Active Category Modules ({permittedModules.length})
-              </h3>
-              <p className="text-xs text-text-secondary">
-                Departmental clinical workflows and operational modules enabled for your clinic
-              </p>
-            </div>
-            <Badge variant="primary" size="sm">
-              Category Powered
-            </Badge>
-          </div>
-
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-            {permittedModules.map((mod) => (
-              <button
-                key={mod.id || mod.route}
-                onClick={() => navigate(mod.route)}
-                className="p-3.5 rounded-xl border border-border bg-surface-hover/20 hover:bg-primary/5 hover:border-primary/40 transition-all text-left flex items-center justify-between group"
-              >
-                <div className="truncate">
-                  <h4 className="font-heading font-bold text-xs text-text-primary group-hover:text-primary transition-colors truncate">
-                    {mod.name}
-                  </h4>
-                  <span className="text-[10px] text-text-secondary">Quick Launch →</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Environment Setup Wizard Modal (Lazily Loaded) */}
       {isSetupOpen && (

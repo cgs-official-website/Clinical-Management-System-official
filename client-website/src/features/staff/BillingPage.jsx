@@ -3,6 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { CreditCard, DollarSign, Plus, CheckCircle, Clock, Printer, Ban } from 'lucide-react'
 import { api } from '../../lib/api'
 import { DataTable } from '../../components/ui/DataTable'
+import { Pagination } from '../../components/ui/Pagination'
+
+const PAGE_SIZE = 8
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
@@ -16,6 +19,7 @@ export const BillingPage = () => {
   const queryClient = useQueryClient()
   const [isInvoiceOpen, setIsInvoiceOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [page, setPage] = useState(1)
   const [payTarget, setPayTarget] = useState(null) // invoice row being marked as paid
   const [payMethod, setPayMethod] = useState('Cash')
   const [voidTarget, setVoidTarget] = useState(null) // invoice row being voided
@@ -33,7 +37,7 @@ export const BillingPage = () => {
   const { data, isLoading } = useQuery({
     queryKey: ['staff', 'billing'],
     queryFn: async () => {
-      const res = await api.get('/api/staff/billing?limit=100')
+      const res = await api.get('/api/staff/billing?limit=500')
       return res.data
     },
     staleTime: 60 * 1000,
@@ -92,6 +96,9 @@ export const BillingPage = () => {
       (inv.paymentStatus || inv.status || '').toLowerCase().includes(term)
     )
   })
+  const totalPages = Math.max(1, Math.ceil(invoices.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pagedInvoices = invoices.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   const columns = [
     {
@@ -231,12 +238,24 @@ export const BillingPage = () => {
 
       <DataTable
         columns={columns}
-        data={invoices}
+        data={pagedInvoices}
         isLoading={isLoading}
         searchPlaceholder="Search invoices..."
         searchValue={searchTerm}
-        onSearchChange={setSearchTerm}
+        onSearchChange={(v) => { setSearchTerm(v); setPage(1) }}
       />
+
+      {invoices.length > PAGE_SIZE && (
+        <Pagination
+          page={safePage}
+          totalPages={totalPages}
+          total={invoices.length}
+          limit={PAGE_SIZE}
+          onPageChange={setPage}
+          entryLabel="invoices"
+          className="rounded-2xl border"
+        />
+      )}
 
       {/* Generate Invoice Modal */}
       <Modal

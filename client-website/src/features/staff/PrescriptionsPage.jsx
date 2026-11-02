@@ -13,6 +13,9 @@ import { notify } from '../../components/ui/Toast'
 import { useAuthStore } from '../../store/useAuthStore'
 import { PermissionAction } from '../../components/common/PermissionAction'
 import { PharmacyFulfillModal } from './components/PharmacyFulfillModal'
+import { Pagination } from '../../components/ui/Pagination'
+
+const PAGE_SIZE = 8
 
 export const PrescriptionsPage = () => {
   const queryClient = useQueryClient()
@@ -23,8 +26,9 @@ export const PrescriptionsPage = () => {
   // Set when the user arrives from a Completed appointment
   const [linkedRx, setLinkedRx] = useState(null)
   const [selectedFulfillRx, setSelectedFulfillRx] = useState(null)
+  const [page, setPage] = useState(1)
   const [formData, setFormData] = useState({
-    tokenNumber: '',
+    patientMrn: '',
     patientName: '',
     doctorName: user?.name || user?.fullName || 'Attending Physician',
     diagnosis: '',
@@ -43,7 +47,7 @@ export const PrescriptionsPage = () => {
     setFormData((prev) => ({
       ...prev,
       patientName: incoming.patientName || '',
-      tokenNumber: incoming.tokenNumber || '',
+      patientMrn: incoming.patientMrn || '',
     }))
     setLinkedRx(incoming)
     setIsCreateOpen(true)
@@ -52,14 +56,17 @@ export const PrescriptionsPage = () => {
   }, [location.state, location.pathname, navigate])
 
   const closeCreate = () => {
+    const cameFromAppointment = !!linkedRx
     setIsCreateOpen(false)
     setLinkedRx(null)
+    // Opened from a Completed appointment (X / Cancel / after signing) -> go back to Appointments
+    if (cameFromAppointment) navigate('/app/staff/appointments')
   }
 
   const { data, isLoading } = useQuery({
     queryKey: ['staff', 'prescriptions'],
     queryFn: async () => {
-      const res = await api.get('/api/staff/prescriptions')
+      const res = await api.get('/api/staff/prescriptions', { params: { limit: 500 } })
       return res.data
     },
     staleTime: 60 * 1000,
@@ -70,7 +77,7 @@ export const PrescriptionsPage = () => {
   const createMutation = useMutation({
     mutationFn: async (payload) => {
       const res = await api.post('/api/staff/prescriptions', {
-        tokenNumber: payload.tokenNumber || undefined,
+        patientMrn: payload.patientMrn || undefined,
         appointmentId: linkedRx?.appointmentId || undefined,
         patientId: linkedRx?.patientId || undefined,
         patientName: payload.patientName,
@@ -96,7 +103,7 @@ export const PrescriptionsPage = () => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'appointments'] })
       setFormData((prev) => ({
         ...prev,
-        tokenNumber: '', patientName: '', diagnosis: '', drug: '', dosage: '',
+        patientMrn: '', patientName: '', diagnosis: '', drug: '', dosage: '',
         frequency: '', duration: '', refills: 0, notes: '',
       }))
       closeCreate()
@@ -106,22 +113,20 @@ export const PrescriptionsPage = () => {
   })
 
   const prescriptions = Array.isArray(data) ? data : data?.prescriptions || data?.data || []
+  const totalPages = Math.max(1, Math.ceil(prescriptions.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const pagedPrescriptions = prescriptions.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
 
   const columns = [
     {
-      key: 'tokenNumber',
-      label: 'Token #',
-      className: 'whitespace-nowrap min-w-[110px] w-[110px]',
+      key: 'patientMrn',
+      label: 'MRN',
+      className: 'whitespace-nowrap min-w-[120px] w-[120px]',
       render: (val, row) => {
-        const token =
-          val ||
-          row.tokenNumber ||
-          (row.notes && row.notes.includes('[Token:')
-            ? row.notes.match(/\[Token:\s*([^\]]+)\]/)?.[1]
-            : null)
-        return token ? (
+        const mrn = val || row.patientMrn || row.patient?.mrn
+        return mrn ? (
           <span className="inline-flex items-center justify-center whitespace-nowrap px-3 py-1 rounded-lg bg-primary/10 border border-primary/20 text-primary font-mono font-extrabold text-xs leading-none tracking-wide">
-            {String(token).trim()}
+            {String(mrn).trim()}
           </span>
         ) : (
           <span className="inline-flex items-center justify-center min-w-[3.5rem] text-[11px] text-text-muted font-mono">--</span>
@@ -159,10 +164,24 @@ export const PrescriptionsPage = () => {
       ),
     },
     {
-      key: 'date',
+      key: 'createdAt',
       label: 'Date Issued',
       sortable: true,
-      render: (val) => <span className="text-xs text-text-secondary">{val || 'Today'}</span>,
+      render: (val, row) => {
+        const raw = val || row.date
+        const d = raw ? new Date(raw) : null
+        if (!d || isNaN(d.getTime())) return <span className="text-xs text-text-muted">--</span>
+        return (
+          <div className="whitespace-nowrap">
+            <div className="text-xs font-semibold text-text-primary">
+              {d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+            </div>
+            <div className="text-[11px] text-text-secondary">
+              {d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </div>
+          </div>
+        )
+      },
     },
     {
       key: 'status',
@@ -223,10 +242,22 @@ export const PrescriptionsPage = () => {
 
       <DataTable
         columns={columns}
-        data={prescriptions}
+        data={pagedPrescriptions}
         isLoading={isLoading}
         searchPlaceholder="Filter prescriptions..."
       />
+
+      {prescriptions.length > PAGE_SIZE && (
+        <Pagination
+          page={safePage}
+          totalPages={totalPages}
+          total={prescriptions.length}
+          limit={PAGE_SIZE}
+          onPageChange={setPage}
+          entryLabel="prescriptions"
+          className="rounded-2xl border"
+        />
+      )}
 
       {/* New Rx Modal */}
       <Modal
@@ -246,7 +277,7 @@ export const PrescriptionsPage = () => {
           {linkedRx && (
             <div className="px-3 py-2 rounded-xl bg-primary/10 border border-primary/20 text-xs text-primary font-semibold">
               Linked to the completed appointment of {linkedRx.patientName}
-              {linkedRx.tokenNumber ? ` (Token ${linkedRx.tokenNumber})` : ''}
+              {linkedRx.patientMrn ? ` (${linkedRx.patientMrn})` : ''}
             </div>
           )}
 
@@ -262,10 +293,11 @@ export const PrescriptionsPage = () => {
               />
             </div>
             <Input
-              label="Token Number (Optional)"
-              placeholder="e.g. TK-101"
-              value={formData.tokenNumber}
-              onChange={(e) => setFormData({ ...formData, tokenNumber: e.target.value })}
+              label="MRN (Patient ID)"
+              placeholder="e.g. MRN-12345"
+              value={formData.patientMrn}
+              readOnly={!!linkedRx?.patientMrn}
+              onChange={(e) => setFormData({ ...formData, patientMrn: e.target.value })}
             />
           </div>
 

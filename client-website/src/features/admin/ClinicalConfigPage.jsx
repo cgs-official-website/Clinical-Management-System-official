@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Sliders, Clock, Plus, X, Save, Building } from 'lucide-react'
+import { Sliders, Clock, Plus, Save, Building } from 'lucide-react'
 import { api } from '../../lib/api'
 import { Button } from '../../components/ui/Button'
 import { Input } from '../../components/ui/Input'
@@ -58,8 +58,6 @@ const normalizeOperatingHours = (hours) => {
 export const ClinicalConfigPage = () => {
   const queryClient = useQueryClient()
   const [config, setConfig] = useState(DEFAULT_CONFIG)
-  const [newDepartment, setNewDepartment] = useState('')
-  const [newSpecialty, setNewSpecialty] = useState('')
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin', 'clinical-config'],
@@ -99,38 +97,6 @@ export const ClinicalConfigPage = () => {
     onError: () => notify.error('Failed to save clinical configuration.'),
   })
 
-  const addDepartment = () => {
-    if (!newDepartment.trim()) return
-    setConfig((prev) => ({
-      ...prev,
-      departments: [...(prev.departments || []), newDepartment.trim()],
-    }))
-    setNewDepartment('')
-  }
-
-  const removeDepartment = (dept) => {
-    setConfig((prev) => ({
-      ...prev,
-      departments: (prev.departments || []).filter((d) => d !== dept),
-    }))
-  }
-
-  const addSpecialty = () => {
-    if (!newSpecialty.trim()) return
-    setConfig((prev) => ({
-      ...prev,
-      specialties: [...(prev.specialties || []), newSpecialty.trim()],
-    }))
-    setNewSpecialty('')
-  }
-
-  const removeSpecialty = (spec) => {
-    setConfig((prev) => ({
-      ...prev,
-      specialties: (prev.specialties || []).filter((s) => s !== spec),
-    }))
-  }
-
   const updateOperatingHour = (index, field, value) => {
     setConfig((prev) => {
       const currentHours = Array.isArray(prev.operatingHours) ? prev.operatingHours : DEFAULT_CONFIG.operatingHours
@@ -159,7 +125,7 @@ export const ClinicalConfigPage = () => {
             Clinic Operational Configuration
           </h1>
           <p className="text-xs text-text-secondary mt-0.5">
-            Departments, recognized medical specialties, booking slot rules, and facility hours
+            Booking slot rules and facility hours
           </p>
         </div>
 
@@ -249,77 +215,6 @@ export const ClinicalConfigPage = () => {
               </label>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* Departments & Specialties */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-        {/* Departments */}
-        <div className="p-6 rounded-2xl border border-border bg-surface shadow-soft space-y-4">
-          <h3 className="font-heading font-bold text-sm text-text-primary">
-            Active Clinical Departments
-          </h3>
-          <div className="flex gap-2">
-            <Input
-              placeholder="e.g. Oncology"
-              value={newDepartment}
-              onChange={(e) => setNewDepartment(e.target.value)}
-            />
-            <Button variant="secondary" size="sm" onClick={addDepartment}>
-              Add
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-2 pt-2">
-            {(Array.isArray(config.departments) ? config.departments : []).map((dept) => (
-              <span
-                key={dept}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-surface border border-border text-xs font-semibold text-text-primary"
-              >
-                <span>{dept}</span>
-                <button
-                  type="button"
-                  onClick={() => removeDepartment(dept)}
-                  className="text-text-secondary hover:text-danger"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Doctor Specialties */}
-        <div className="p-6 rounded-2xl border border-border bg-surface shadow-soft space-y-4">
-          <h3 className="font-heading font-bold text-sm text-text-primary">
-            Doctor & Clinician Specialties
-          </h3>
-          <div className="flex gap-2">
-            <Input
-              placeholder="e.g. Neurologist"
-              value={newSpecialty}
-              onChange={(e) => setNewSpecialty(e.target.value)}
-            />
-            <Button variant="secondary" size="sm" onClick={addSpecialty}>
-              Add
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-2 pt-2">
-            {(Array.isArray(config.specialties) ? config.specialties : []).map((spec) => (
-              <span
-                key={spec}
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-surface border border-border text-xs font-semibold text-text-primary"
-              >
-                <span>{spec}</span>
-                <button
-                  type="button"
-                  onClick={() => removeSpecialty(spec)}
-                  className="text-text-secondary hover:text-danger"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </span>
-            ))}
-          </div>
         </div>
       </div>
     </div>

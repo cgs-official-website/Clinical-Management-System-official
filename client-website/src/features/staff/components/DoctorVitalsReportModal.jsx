@@ -53,9 +53,10 @@ export const DoctorVitalsReportModal = ({
   const rxMutation = useMutation({
     mutationFn: async () => {
       if (!patientData) return
-      const tokenNumber = patientData.tokenNumber || 'TK-101'
+      const tokenNumber = patientData.tokenNumber || undefined
       const doctorName = patientData.doctorName || user?.fullName || user?.name || 'Attending Physician'
       const payload = {
+        appointmentId: patientData.appointmentId || undefined,
         patientId: patientData.patientId || patientData.id,
         patientName: patientData.patientName || patientData.fullName,
         doctorName,
@@ -71,6 +72,7 @@ export const DoctorVitalsReportModal = ({
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'prescriptions'] })
       queryClient.invalidateQueries({ queryKey: ['staff', 'triage'] })
+      queryClient.invalidateQueries({ queryKey: ['staff', 'appointments'] })
       const token = patientData?.tokenNumber || 'Token'
       notify.success(`Prescription for Token ${token} issued! Automatically routed to Pharmacy panel.`)
       if (onPrescriptionSuccess) onPrescriptionSuccess(res)
@@ -85,10 +87,11 @@ export const DoctorVitalsReportModal = ({
   if (!patientData) return null
 
   // Extract vitals safely
-  const tokenNumber = patientData.tokenNumber || 'TK-101'
-  const weight = patientData.weight || '70 kg'
-  const bp = patientData.bp || '120/80 mmHg'
-  const sugarLevel = patientData.sugarLevel || '105 mg/dL'
+  const tokenNumber = patientData.tokenNumber || '--'
+  const weight = patientData.weight || '--'
+  const bp = patientData.bp || '--'
+  const sugarLevel = patientData.sugarLevel || '--'
+  const existingRx = patientData.existingRx || null
   const currentMedications = patientData.currentMedications || 'None reported'
   const doctorName = patientData.doctorName || user?.fullName || user?.name || 'Attending Physician'
 
@@ -247,7 +250,24 @@ export const DoctorVitalsReportModal = ({
         </div>
 
         {/* PRESCRIPTION DRAWER / ISSUANCE */}
-        {!isWritingRx ? (
+        {existingRx ? (
+          <div className="p-4 rounded-2xl border border-emerald-500/30 bg-emerald-500/5 space-y-2">
+            <div className="flex items-center gap-2 text-xs font-bold text-text-primary uppercase tracking-wider">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span>Prescription already issued by {existingRx.doctorName || existingRx.prescribedBy}</span>
+            </div>
+            <p className="text-xs text-text-secondary">
+              <strong className="text-text-primary">Diagnosis:</strong> {existingRx.diagnosis || '--'}
+            </p>
+            {(Array.isArray(existingRx.medications) ? existingRx.medications : existingRx.items || []).map((m, i) => (
+              <div key={i} className="text-xs">
+                <span className="font-bold text-primary">{m.drug} {m.dosage}</span>{' '}
+                <span className="text-text-secondary">({m.frequency}{m.duration ? `, ${m.duration}` : ''})</span>
+              </div>
+            ))}
+            {existingRx.notes && <p className="text-[11px] text-text-muted">{existingRx.notes}</p>}
+          </div>
+        ) : !isWritingRx ? (
           <div className="p-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center shadow-sm">

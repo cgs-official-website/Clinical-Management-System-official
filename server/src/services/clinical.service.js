@@ -6,6 +6,39 @@ import { AuditService } from './audit.service.js'
 const patientsCache = new Map()
 const inventoryCache = new Map()
 
+// Placeholder DOB for patients whose age was never entered (the DB column is required).
+// The UI treats this year as "unknown" and shows "--" instead of a fake age.
+const UNKNOWN_DOB = new Date('1900-01-01')
+
+/**
+ * Builds { dob, gender, bloodGroup } for an auto-created patient from what the user actually typed.
+ * Accepts dob / patientDob (date) or age / patientAge (years). Nothing is invented:
+ * missing gender -> 'Not specified', missing blood group -> null, missing age -> UNKNOWN_DOB.
+ */
+const patientDemographics = (data = {}) => {
+  let dob = null
+  const rawDob = data.dob || data.patientDob || data.dateOfBirth
+  if (rawDob) {
+    const d = new Date(rawDob)
+    if (!isNaN(d.getTime())) dob = d
+  }
+  const rawAge = data.age ?? data.patientAge
+  if (!dob && rawAge !== undefined && rawAge !== null && rawAge !== '') {
+    const years = parseInt(rawAge, 10)
+    if (Number.isFinite(years) && years >= 0 && years <= 120) {
+      const now = new Date()
+      dob = new Date(now.getFullYear() - years, now.getMonth(), now.getDate())
+    }
+  }
+  const gender = String(data.gender || data.patientGender || '').trim()
+  const bloodGroup = String(data.bloodGroup || data.patientBloodGroup || '').trim()
+  return {
+    dob: dob || UNKNOWN_DOB,
+    gender: gender || 'Not specified',
+    bloodGroup: bloodGroup || null
+  }
+}
+
 export class ClinicalService {
   static invalidatePatientsCache() {
     patientsCache.clear()
@@ -227,6 +260,31 @@ export class ClinicalService {
     }
     if (data.medicalHistory !== undefined) updateData.medicalHistory = data.medicalHistory
 
+    // Vitals entered from the patient chart (weight / BP / sugar) -> merged into medicalHistory.latestVitals
+    if (data.vitals && typeof data.vitals === 'object') {
+      const baseHistory =
+        updateData.medicalHistory && typeof updateData.medicalHistory === 'object'
+          ? updateData.medicalHistory
+          : typeof existing.medicalHistory === 'object' && existing.medicalHistory !== null
+            ? existing.medicalHistory
+            : {}
+      const clean = (v) => (v === undefined || v === null ? '' : String(v).trim())
+      const previous = baseHistory.latestVitals && typeof baseHistory.latestVitals === 'object' ? baseHistory.latestVitals : {}
+      const latestVitals = {
+        ...previous,
+        weight: clean(data.vitals.weight),
+        bp: clean(data.vitals.bp),
+        sugarLevel: clean(data.vitals.sugarLevel),
+        recordedAt: new Date().toISOString(),
+        source: 'PATIENT_CHART'
+      }
+      const vitalsHistory = [
+        { weight: latestVitals.weight, bp: latestVitals.bp, sugarLevel: latestVitals.sugarLevel, recordedAt: latestVitals.recordedAt },
+        ...(Array.isArray(baseHistory.vitalsHistory) ? baseHistory.vitalsHistory : [])
+      ].slice(0, 20)
+      updateData.medicalHistory = { ...baseHistory, latestVitals, vitalsHistory }
+    }
+
     const updated = await prisma.patient.update({
       where: { id },
       data: updateData
@@ -376,9 +434,7 @@ export class ClinicalService {
             fullName: pName,
             phone: data.patientPhone || '+91 98000 00000',
             mrn: `MRN-${Math.floor(10000 + Math.random() * 90000)}`,
-            dob: new Date('1990-01-01'),
-            gender: 'Female',
-            bloodGroup: 'O+',
+            ...patientDemographics(data),
             createdBy: actorId || null
           }
         }).catch(() => null)
@@ -400,9 +456,7 @@ export class ClinicalService {
           fullName: data.patientName || data.name || 'Walk-in Patient',
           phone: data.patientPhone || '+91 98000 00000',
           mrn: `MRN-${Math.floor(10000 + Math.random() * 90000)}`,
-          dob: new Date('1990-01-01'),
-          gender: 'Female',
-          bloodGroup: 'O+',
+          ...patientDemographics(data),
           createdBy: actorId || null
         }
       })
@@ -722,9 +776,7 @@ export class ClinicalService {
             fullName: pName,
             phone: data.phone || data.patientPhone || '+91 98000 00000',
             mrn: `MRN-${Math.floor(10000 + Math.random() * 90000)}`,
-            dob: data.dob ? new Date(data.dob) : new Date('1990-01-01'),
-            gender: data.gender || 'Female',
-            bloodGroup: data.bloodGroup || 'O+',
+            ...patientDemographics(data),
             createdBy: actorId || null
           }
         })
@@ -966,6 +1018,13 @@ export class ClinicalService {
     }
 
     let patientId = data.patientId
+    // Prescription form identifies the patient by MRN
+    if (!patientId && data.patientMrn) {
+      const byMrn = await prisma.patient.findFirst({
+        where: { tenantId: targetTenantId, mrn: String(data.patientMrn).trim() }
+      }).catch(() => null)
+      if (byMrn) patientId = byMrn.id
+    }
     if (!patientId && (data.patientName || data.name)) {
       const pName = data.patientName || data.name
       let existingPatient = await prisma.patient.findFirst({
@@ -982,9 +1041,7 @@ export class ClinicalService {
             fullName: pName,
             phone: data.patientPhone || '+91 98000 00000',
             mrn: `MRN-${Math.floor(10000 + Math.random() * 90000)}`,
-            dob: new Date('1990-01-01'),
-            gender: 'Female',
-            bloodGroup: 'O+',
+            ...patientDemographics(data),
             createdBy: actorId || null
           }
         }).catch(() => null)
@@ -1000,7 +1057,8 @@ export class ClinicalService {
     }
 
     let doctorName = data.doctorName || data.doctorId
-    if (actorId) {
+    // Only fall back to the logged-in user when the form did not say which doctor wrote the Rx
+    if (actorId && !data.doctorName) {
       const actor = await prisma.user.findUnique({ where: { id: actorId }, select: { fullName: true } }).catch(() => null)
       if (actor) doctorName = actor.fullName
     }
@@ -1261,9 +1319,7 @@ export class ClinicalService {
             fullName: pName,
             phone: data.patientPhone || '+91 98000 00000',
             mrn: `MRN-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`,
-            dob: new Date('1990-01-01'),
-            gender: 'Female',
-            bloodGroup: 'O+',
+            ...patientDemographics(data),
             createdBy: actorId || null
           }
         }).catch(() => null)
@@ -1285,9 +1341,7 @@ export class ClinicalService {
           fullName: data.patientName || data.name || 'Walk-in Patient',
           phone: data.patientPhone || '+91 98000 00000',
           mrn: `MRN-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`,
-          dob: new Date('1990-01-01'),
-          gender: 'Female',
-          bloodGroup: 'O+',
+          ...patientDemographics(data),
           createdBy: actorId || null
         }
       })
