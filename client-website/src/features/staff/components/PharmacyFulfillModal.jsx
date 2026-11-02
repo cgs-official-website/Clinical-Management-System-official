@@ -206,9 +206,10 @@ export const PharmacyFulfillModal = ({ isOpen, onClose, prescription, onFulfillS
     setPaymentMethod('Cash')
     setLines(
       medications.map((m) => ({
+        inventoryItemId: m.inventoryItemId || undefined,
         drug: m.drug || 'Medicine',
         dosage: m.dosage || '',
-        qty: 1,
+        qty: Number(m.qty) > 0 ? Number(m.qty) : 1,
         unitPrice: '',
         autoPriced: false,
       }))
@@ -223,10 +224,12 @@ export const PharmacyFulfillModal = ({ isOpen, onClose, prescription, onFulfillS
       prev.map((ln) => {
         if (ln.unitPrice !== '' || ln.autoPriced) return ln
         const name = String(ln.drug).toLowerCase().trim()
-        const match = inventoryList.find((it) => {
-          const inv = String(it.name || '').toLowerCase().trim()
-          return inv && name && (inv.includes(name) || name.includes(inv))
-        })
+        const match =
+          (ln.inventoryItemId && inventoryList.find((it) => it.id === ln.inventoryItemId)) ||
+          inventoryList.find((it) => {
+            const inv = String(it.name || '').toLowerCase().trim()
+            return inv && name && (inv.includes(name) || name.includes(inv))
+          })
         const price = Number(match?.unitPrice ?? match?.sellingPrice)
         if (match && price > 0) return { ...ln, unitPrice: String(price), autoPriced: true }
         return ln
@@ -255,31 +258,35 @@ export const PharmacyFulfillModal = ({ isOpen, onClose, prescription, onFulfillS
         fee: lineTotal(ln),
       }))
 
-      // 1. Create the PAID invoice (shows up in Billing & Invoices)
-      const invRes = await api.post('/api/staff/billing', {
-        patientId: prescription.patientId || undefined,
-        patientName: prescription.patientName || undefined,
-        appointmentId: prescription.appointmentId || undefined,
-        tokenNumber: tokenNumber || undefined,
-        items,
-        status: 'PAID',
-        paymentMethod,
-        taxRate: 0,
+      // 1. Fulfil first. The server checks stock and reduces it in one transaction,
+      //    so if there is not enough stock nothing is charged and nothing changes.
+      await api.patch(`/api/staff/prescriptions/${prescription.id}/fulfill`, {
+        dispensedBy,
+        dispenseNotes,
+        items: lines.map((ln) => ({
+          inventoryItemId: ln.inventoryItemId || undefined,
+          drug: ln.drug,
+          qty: Number(ln.qty),
+        })),
       })
-      const inv = invRes.data?.data && !invRes.data?.invoiceNumber ? invRes.data.data : invRes.data
 
-      // 2. Mark prescription as fulfilled / dispensed
+      // 2. Create the PAID invoice (shows up in Billing & Invoices)
       try {
-        await api.patch(`/api/staff/prescriptions/${prescription.id}/fulfill`, {
-          dispensedBy,
-          dispenseNotes,
+        const invRes = await api.post('/api/staff/billing', {
+          patientId: prescription.patientId || undefined,
+          patientName: prescription.patientName || undefined,
+          appointmentId: prescription.appointmentId || undefined,
+          tokenNumber: tokenNumber || undefined,
+          items,
+          status: 'PAID',
+          paymentMethod,
+          taxRate: 0,
         })
+        return invRes.data?.data && !invRes.data?.invoiceNumber ? invRes.data.data : invRes.data
       } catch (err) {
-        err.invoiceNumber = inv?.invoiceNumber
+        err.fulfilled = true
         throw err
       }
-
-      return inv
     },
     onSuccess: (inv) => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'prescriptions'] })
@@ -307,9 +314,10 @@ export const PharmacyFulfillModal = ({ isOpen, onClose, prescription, onFulfillS
     },
     onError: (err) => {
       const msg = err.response?.data?.message || err.response?.data?.error?.message || err.message
-      if (err.invoiceNumber) {
-        notify.error(`Invoice ${err.invoiceNumber} was created but fulfilling failed: ${msg}`)
-        queryClient.invalidateQueries({ queryKey: ['staff', 'billing'] })
+      if (err.fulfilled) {
+        notify.error(`Medicines were dispensed and stock was reduced, but creating the invoice failed: ${msg}. Create the invoice from Billing.`)
+        queryClient.invalidateQueries({ queryKey: ['staff', 'prescriptions'] })
+        queryClient.invalidateQueries({ queryKey: ['staff', 'inventory'] })
       } else {
         notify.error(msg || 'Failed to complete payment.')
       }

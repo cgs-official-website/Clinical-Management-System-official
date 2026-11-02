@@ -158,6 +158,7 @@ router.post('/triage', requireAnyPermission('patients.create', 'patients.edit', 
  * ========================================================================= */
 router.get('/prescriptions', requireAnyPermission('prescriptions.view', 'inventory.view', 'patients.view', 'appointments.view'), ClinicalController.getPrescriptions)
 router.post('/prescriptions', requirePermission('prescriptions.create'), validateRequest({ body: createPrescriptionSchema }), ClinicalController.createPrescription)
+router.get('/prescriptions/medicines', requireAnyPermission('prescriptions.create', 'prescriptions.view', 'inventory.view'), ClinicalController.getPrescribableMedicines)
 router.patch('/prescriptions/:id', requireAnyPermission('prescriptions.edit', 'prescriptions.create'), ClinicalController.updatePrescription)
 router.patch('/prescriptions/:id/fulfill', requireAnyPermission('inventory.edit', 'inventory.create', 'prescriptions.edit', 'prescriptions.view'), ClinicalController.fulfillPrescription)
 

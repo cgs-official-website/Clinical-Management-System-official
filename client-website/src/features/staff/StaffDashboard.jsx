@@ -57,9 +57,9 @@ export const StaffDashboard = () => {
     user?.tenant?.clinicCategoryName ||
     user?.tenant?.clinicCategory?.name ||
     (permittedModules.some((m) => m.route?.includes('/dental/')) ? 'Dental Care' :
-     permittedModules.some((m) => m.route?.includes('/cardio/')) ? 'Cardiology' :
-     permittedModules.some((m) => m.route?.includes('/physio/')) ? 'Physiotherapy' :
-     'General Care')
+      permittedModules.some((m) => m.route?.includes('/cardio/')) ? 'Cardiology' :
+        permittedModules.some((m) => m.route?.includes('/physio/')) ? 'Physiotherapy' :
+          'General Care')
 
   const [showCalendarGrid, setShowCalendarGrid] = useState(false)
   const [calendarViewMode, setCalendarViewMode] = useState('Day') // 'Day' | 'Week' | 'Month'
@@ -268,7 +268,7 @@ export const StaffDashboard = () => {
               Assigned Patients
             </div>
             <div className="font-heading font-extrabold text-2xl sm:text-3xl text-text-primary truncate">
-              {metrics.encountersCompleted || 142}
+              {metrics.activePatients ?? 0}
             </div>
             <div className="text-[11px] text-success font-semibold mt-2 truncate">
               Active medical charts
@@ -283,7 +283,7 @@ export const StaffDashboard = () => {
               Prescriptions Signed
             </div>
             <div className="font-heading font-extrabold text-2xl sm:text-3xl text-text-primary truncate">
-              {metrics.prescriptionsWritten || 89}
+              {metrics.prescriptionsWritten ?? 0}
             </div>
             <div className="text-[11px] text-text-secondary mt-2 truncate">
               Verified clinical orders
@@ -298,10 +298,10 @@ export const StaffDashboard = () => {
               Avg Consult Time
             </div>
             <div className="font-heading font-extrabold text-2xl sm:text-3xl text-text-primary truncate">
-              {metrics.averageConsultTimeMins || 22} min
+              {metrics.averageConsultTimeMins != null ? `${metrics.averageConsultTimeMins} min` : '-'}
             </div>
             <div className="text-[11px] text-text-secondary mt-2 truncate">
-              Optimal schedule pacing
+              Avg booked slot, completed visits
             </div>
           </div>
         )}
@@ -342,10 +342,10 @@ export const StaffDashboard = () => {
             Patient Experience
           </div>
           <div className="font-heading font-extrabold text-2xl sm:text-3xl text-emerald-500 truncate">
-            {metrics.patientReviewScore || 4.9} / 5.0
+            {metrics.patientReviewScore != null ? `${metrics.patientReviewScore} / 5.0` : 'N/A'}
           </div>
           <div className="text-[11px] text-text-secondary mt-2 truncate">
-            Verified feedback
+            No feedback collected yet
           </div>
         </div>
       </div>
@@ -426,11 +426,10 @@ export const StaffDashboard = () => {
                         <button
                           key={mode}
                           onClick={() => setCalendarViewMode(mode)}
-                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                            calendarViewMode === mode
+                          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${calendarViewMode === mode
                               ? 'bg-primary text-white shadow-sm'
                               : 'text-text-secondary hover:text-text-primary'
-                          }`}
+                            }`}
                         >
                           {mode}
                         </button>
@@ -495,8 +494,8 @@ export const StaffDashboard = () => {
                                     (matchedApts[0] || fallbackApt).status === 'In-Progress'
                                       ? 'info'
                                       : (matchedApts[0] || fallbackApt).status === 'Completed'
-                                      ? 'success'
-                                      : 'primary'
+                                        ? 'success'
+                                        : 'primary'
                                   }
                                   size="sm"
                                   dot
@@ -524,9 +523,8 @@ export const StaffDashboard = () => {
                       {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, dIdx) => (
                         <div
                           key={day}
-                          className={`p-3 rounded-xl border ${
-                            dIdx === 2 ? 'border-primary/40 bg-primary/5' : 'border-border bg-surface/60'
-                          } flex flex-col gap-2 min-h-[140px]`}
+                          className={`p-3 rounded-xl border ${dIdx === 2 ? 'border-primary/40 bg-primary/5' : 'border-border bg-surface/60'
+                            } flex flex-col gap-2 min-h-[140px]`}
                         >
                           <div className="flex items-center justify-between text-xs font-bold text-text-secondary">
                             <span>{day}</span>
@@ -567,13 +565,12 @@ export const StaffDashboard = () => {
                           return (
                             <div
                               key={i}
-                              className={`p-2 rounded-xl transition-colors cursor-pointer ${
-                                isToday
+                              className={`p-2 rounded-xl transition-colors cursor-pointer ${isToday
                                   ? 'bg-primary text-white font-bold shadow-sm'
                                   : hasApt
-                                  ? 'bg-surface hover:bg-border/40 font-medium text-text-primary'
-                                  : 'text-text-secondary hover:bg-border/20'
-                              }`}
+                                    ? 'bg-surface hover:bg-border/40 font-medium text-text-primary'
+                                    : 'text-text-secondary hover:bg-border/20'
+                                }`}
                             >
                               <div>{dayNum}</div>
                               {hasApt && !isToday && (

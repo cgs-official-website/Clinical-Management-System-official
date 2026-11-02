@@ -8,6 +8,7 @@ import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Modal } from '../../components/ui/Modal'
 import { Input } from '../../components/ui/Input'
+import { Select } from '../../components/ui/Select'
 import { Textarea } from '../../components/ui/Textarea'
 import { notify } from '../../components/ui/Toast'
 import { useAuthStore } from '../../store/useAuthStore'
@@ -32,13 +33,28 @@ export const PrescriptionsPage = () => {
     patientName: '',
     doctorName: user?.name || user?.fullName || 'Attending Physician',
     diagnosis: '',
+    inventoryItemId: '',
     drug: '',
+    qty: 1,
     dosage: '',
     frequency: '',
     duration: '',
     refills: 0,
     notes: '',
   })
+
+  // Medicines come from live inventory: only in-stock, non-expired items can be prescribed
+  const { data: medicines = [], isLoading: medicinesLoading } = useQuery({
+    queryKey: ['staff', 'prescribable-medicines'],
+    queryFn: async () => {
+      const res = await api.get('/api/staff/prescriptions/medicines')
+      return res.data?.data || []
+    },
+    enabled: isCreateOpen,
+    staleTime: 0,
+    retry: false,
+  })
+  const selectedMedicine = medicines.find((m) => m.id === formData.inventoryItemId)
 
   // Arrived from Appointments (status = Completed) -> open modal with pre-filled data
   useEffect(() => {
@@ -85,7 +101,9 @@ export const PrescriptionsPage = () => {
         diagnosis: payload.diagnosis,
         medications: [
           {
+            inventoryItemId: payload.inventoryItemId,
             drug: payload.drug,
+            qty: Number(payload.qty),
             dosage: payload.dosage,
             frequency: payload.frequency,
             duration: payload.duration,
@@ -101,15 +119,19 @@ export const PrescriptionsPage = () => {
       queryClient.invalidateQueries({ queryKey: ['staff', 'prescriptions'] })
       queryClient.invalidateQueries({ queryKey: ['staff', 'triage'] })
       queryClient.invalidateQueries({ queryKey: ['staff', 'appointments'] })
+      queryClient.invalidateQueries({ queryKey: ['staff', 'prescribable-medicines'] })
       setFormData((prev) => ({
         ...prev,
-        patientMrn: '', patientName: '', diagnosis: '', drug: '', dosage: '',
+        patientMrn: '', patientName: '', diagnosis: '', inventoryItemId: '', drug: '', qty: 1, dosage: '',
         frequency: '', duration: '', refills: 0, notes: '',
       }))
       closeCreate()
       notify.success('Prescription signed and automatically routed to Pharmacy panel!')
     },
-    onError: () => notify.error('Failed to issue prescription.'),
+    onError: (err) =>
+      notify.error(
+        err.response?.data?.error?.message || err.response?.data?.message || 'Failed to issue prescription.'
+      ),
   })
 
   const prescriptions = Array.isArray(data) ? data : data?.prescriptions || data?.data || []
@@ -270,6 +292,12 @@ export const PrescriptionsPage = () => {
         <form
           onSubmit={(e) => {
             e.preventDefault()
+            if (!selectedMedicine) return notify.error('Select a medicine from the inventory list.')
+            const qty = Number(formData.qty)
+            if (!Number.isInteger(qty) || qty < 1) return notify.error('Enter a valid quantity (1 or more).')
+            if (qty > selectedMedicine.stockQuantity) {
+              return notify.error(`Only ${selectedMedicine.stockQuantity} ${selectedMedicine.unit} of ${selectedMedicine.name} in stock.`)
+            }
             createMutation.mutate(formData)
           }}
           className="space-y-3"
@@ -309,15 +337,52 @@ export const PrescriptionsPage = () => {
             onChange={(e) => setFormData({ ...formData, diagnosis: e.target.value })}
           />
 
-          {/* Row 3: drug, dosage, frequency */}
+          {/* Row 3: medicine (from inventory) + quantity */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="sm:col-span-2">
+              <Select
+                label="Medicine (from inventory)"
+                required
+                value={formData.inventoryItemId}
+                onChange={(e) => {
+                  const item = medicines.find((m) => m.id === e.target.value)
+                  setFormData({
+                    ...formData,
+                    inventoryItemId: e.target.value,
+                    drug: item?.name || '',
+                    qty: 1,
+                    dosage: formData.dosage || item?.strength || '',
+                  })
+                }}
+                helperText={
+                  !medicinesLoading && medicines.length === 0
+                    ? 'No medicines in stock. Add stock in the Inventory module first.'
+                    : selectedMedicine?.status === 'Low Stock'
+                      ? 'Low stock: only a few units left.'
+                      : undefined
+                }
+              >
+                <option value="">{medicinesLoading ? 'Loading medicines...' : 'Select a medicine'}</option>
+                {medicines.map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.name} (Stock: {m.stockQuantity} {m.unit}){m.status === 'Low Stock' ? ' - Low stock' : ''}
+                  </option>
+                ))}
+              </Select>
+            </div>
             <Input
-              label="Drug Name"
+              label={`Quantity${selectedMedicine ? ` (max ${selectedMedicine.stockQuantity})` : ''}`}
+              type="number"
               required
-              placeholder="e.g. Amlodipine"
-              value={formData.drug}
-              onChange={(e) => setFormData({ ...formData, drug: e.target.value })}
+              min="1"
+              max={selectedMedicine?.stockQuantity || undefined}
+              value={formData.qty}
+              onChange={(e) => setFormData({ ...formData, qty: e.target.value })}
             />
+          </div>
+
+          {/* Row 3b: dosage, frequency, duration */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input
               label="Dosage"
               required
@@ -332,10 +397,6 @@ export const PrescriptionsPage = () => {
               value={formData.frequency}
               onChange={(e) => setFormData({ ...formData, frequency: e.target.value })}
             />
-          </div>
-
-          {/* Row 4: duration + instructions */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Input
               label="Duration & Refills"
               required
@@ -343,16 +404,16 @@ export const PrescriptionsPage = () => {
               value={formData.duration}
               onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
             />
-            <div className="sm:col-span-2">
-              <Textarea
-                label="Physician Clinical Instructions"
-                rows={2}
-                className="resize-none"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-              />
-            </div>
           </div>
+
+          {/* Row 4: instructions */}
+          <Textarea
+            label="Physician Clinical Instructions"
+            rows={2}
+            className="resize-none"
+            value={formData.notes}
+            onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+          />
 
           {/* Sticky action bar - always visible, no scrolling needed */}
           <div className="sticky bottom-0 -mx-4 -mb-4 sm:-mx-6 sm:-mb-6 px-4 sm:px-6 py-3.5 mt-2 bg-surface border-t border-border flex items-center justify-end gap-2.5">

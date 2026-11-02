@@ -6,6 +6,113 @@ import { AuditService } from './audit.service.js'
 const patientsCache = new Map()
 const inventoryCache = new Map()
 
+// ---- Pharmacy stock helpers ------------------------------------------------
+// Anything at or below this many units counts as "Low Stock" unless the item has its own threshold.
+const DEFAULT_LOW_STOCK_THRESHOLD = 20
+
+const stockStatus = (qty, threshold) => {
+  if (qty <= 0) return 'Out of Stock'
+  if (qty <= threshold) return 'Low Stock'
+  return 'Optimal'
+}
+
+/**
+ * Validates the medicines a doctor prescribes against live inventory.
+ * Lines with an inventoryItemId must exist in this clinic and the quantity must not exceed stock.
+ * Lines without one (older free-text prescriptions) are kept as they are.
+ * Stock is NOT reduced here; it is reduced when the pharmacy dispenses.
+ */
+async function resolvePrescribedMedications(meds, tenantId) {
+  const list = Array.isArray(meds) ? meds : []
+  const out = []
+  for (const m of list) {
+    if (!m || !m.inventoryItemId) {
+      out.push(m)
+      continue
+    }
+    const qty = parseInt(m.qty, 10)
+    if (!Number.isFinite(qty) || qty < 1) {
+      throw new ValidationError(`Enter a valid quantity for ${m.drug || 'the medicine'}`)
+    }
+    const item = await prisma.inventoryItem.findFirst({
+      where: { id: m.inventoryItemId, ...(tenantId ? { tenantId } : {}) }
+    })
+    if (!item) throw new ValidationError(`${m.drug || 'This medicine'} is not in this clinic's inventory`)
+    if (qty > item.stockQuantity) {
+      throw new ValidationError(`Only ${item.stockQuantity} ${item.unit} of ${item.name} in stock (requested ${qty})`)
+    }
+    out.push({ ...m, drug: item.name, qty, inventoryItemId: item.id })
+  }
+  return out
+}
+
+/**
+ * Reduces stock for dispensed medicines inside the caller's transaction (tx).
+ * Never lets stock go below zero: the decrement only applies when enough units remain,
+ * otherwise the whole transaction is rolled back with a clear message.
+ */
+async function dispenseStock(tx, { tenantId, lines, handledBy, prescriptionId }) {
+  const results = []
+  for (const line of lines) {
+    const qty = parseInt(line.qty, 10)
+    if (!Number.isFinite(qty) || qty < 1) {
+      throw new ValidationError(`Invalid quantity for ${line.drug || 'medicine'}`)
+    }
+    const scope = tenantId ? { tenantId } : {}
+    let item = null
+    if (line.inventoryItemId) {
+      item = await tx.inventoryItem.findFirst({ where: { id: line.inventoryItemId, ...scope } })
+    }
+    if (!item && line.drug) {
+      item = await tx.inventoryItem.findFirst({
+        where: { name: { equals: String(line.drug).trim(), mode: 'insensitive' }, ...scope }
+      })
+    }
+    if (!item) {
+      // Not tracked in inventory (e.g. an old free-text prescription): nothing to deduct
+      results.push({ drug: line.drug, tracked: false })
+      continue
+    }
+
+    const { count } = await tx.inventoryItem.updateMany({
+      where: { id: item.id, stockQuantity: { gte: qty } },
+      data: { stockQuantity: { decrement: qty } }
+    })
+    const fresh = await tx.inventoryItem.findUnique({ where: { id: item.id } })
+    if (count === 0) {
+      throw new ValidationError(
+        `Not enough stock for ${item.name}: ${fresh?.stockQuantity ?? 0} ${item.unit} available, ${qty} requested`
+      )
+    }
+
+    const status = stockStatus(fresh.stockQuantity, fresh.minReorderThreshold)
+    if (fresh.status !== status) {
+      await tx.inventoryItem.update({ where: { id: item.id }, data: { status } })
+    }
+    await tx.stockMovement.create({
+      data: {
+        tenantId: item.tenantId,
+        inventoryItemId: item.id,
+        type: 'Dispensed',
+        quantityOut: qty,
+        balance: fresh.stockQuantity,
+        batchNumber: item.batchNumber,
+        handledBy: handledBy || null,
+        notes: `Dispensed for prescription ${prescriptionId}`
+      }
+    })
+    results.push({
+      drug: item.name,
+      tracked: true,
+      inventoryItemId: item.id,
+      dispensed: qty,
+      remaining: fresh.stockQuantity,
+      status
+    })
+  }
+  return results
+}
+
 // Placeholder DOB for patients whose age was never entered (the DB column is required).
 // The UI treats this year as "unknown" and shows "--" instead of a fake age.
 const UNKNOWN_DOB = new Date('1900-01-01')
@@ -338,7 +445,7 @@ export class ClinicalService {
   /* =========================================================================
    * APPOINTMENTS
    * ========================================================================= */
-  static async getAppointments({ tenantId, page = 1, limit = 10, doctorId = '', status = '', date = '' }) {
+  static async getAppointments({ tenantId, page = 1, limit = 10, doctorId = '', status = '', date = '', from = '', to = '' }) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
       const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
@@ -353,6 +460,14 @@ export class ClinicalService {
       const end = new Date(date)
       end.setHours(23, 59, 59, 999)
       where.scheduledAt = { gte: start, lte: end }
+    } else if (from || to) {
+      // Calendar range (Day / Week / Month views). from is inclusive, to is exclusive.
+      const range = {}
+      const f = from ? new Date(from) : null
+      const t = to ? new Date(to) : null
+      if (f && !Number.isNaN(f.getTime())) range.gte = f
+      if (t && !Number.isNaN(t.getTime())) range.lt = t
+      if (Object.keys(range).length) where.scheduledAt = range
     }
 
     const skip = (Math.max(1, page) - 1) * limit
@@ -1069,13 +1184,15 @@ export class ClinicalService {
       notes = `[Token: ${data.tokenNumber}] ${notes}`.trim()
     }
 
+    const medications = await resolvePrescribedMedications(data.items || data.medications || [], targetTenantId)
+
     const prescription = await prisma.prescription.create({
       data: {
         patientId,
         appointmentId: data.appointmentId || null,
         prescribedBy: doctorName || 'Attending Physician',
         diagnosis: data.diagnosis,
-        medications: data.items || data.medications || [],
+        medications,
         notes: notes || null,
         status: data.status || 'Pending Dispense'
       },
@@ -1121,6 +1238,48 @@ export class ClinicalService {
     }
   }
 
+  /**
+   * Medicines a doctor can pick when prescribing: only items that are in stock and not expired.
+   * Kept separate from /inventory so prescribers do not need the inventory permission.
+   */
+  static async getPrescribableMedicines({ tenantId, search = '' }) {
+    let targetTenantId = tenantId
+    if (tenantId && tenantId.startsWith('clinic-')) {
+      const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
+      if (firstTenant) targetTenantId = firstTenant.id
+    }
+    const where = {
+      ...(targetTenantId ? { tenantId: targetTenantId } : {}),
+      stockQuantity: { gt: 0 },
+      AND: [{ OR: [{ expiryDate: null }, { expiryDate: { gt: new Date() } }] }]
+    }
+    if (search) {
+      where.AND.push({
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { brandName: { contains: search, mode: 'insensitive' } }
+        ]
+      })
+    }
+    const items = await prisma.inventoryItem.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      take: 500,
+      select: {
+        id: true,
+        name: true,
+        brandName: true,
+        strength: true,
+        dosageForm: true,
+        unit: true,
+        category: true,
+        stockQuantity: true,
+        minReorderThreshold: true
+      }
+    })
+    return items.map((it) => ({ ...it, status: stockStatus(it.stockQuantity, it.minReorderThreshold) }))
+  }
+
   static async fulfillPrescription(id, data, tenantId, actorId) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
@@ -1133,6 +1292,9 @@ export class ClinicalService {
       include: { patient: true }
     })
     if (!existing) throw new NotFoundError('Prescription record not found')
+    if (existing.status === 'Fulfilled' || existing.status === 'Dispensed') {
+      throw new ValidationError('This prescription has already been fulfilled')
+    }
 
     let pharmacistName = data.dispensedBy
     if (actorId && !pharmacistName) {
@@ -1143,16 +1305,36 @@ export class ClinicalService {
     const dispenseNotes = data.notes || data.dispenseNotes || 'Dispensed & verified at outpatient pharmacy desk.'
     const appendNote = `\n[Fulfilled by ${pharmacistName || 'Pharmacy'} on ${new Date().toLocaleDateString()}]: ${dispenseNotes}`
 
-    const updated = await prisma.prescription.update({
-      where: { id },
-      data: {
-        status: 'Fulfilled',
-        notes: existing.notes ? `${existing.notes} ${appendNote}` : appendNote
-      },
-      include: {
-        patient: { select: { id: true, fullName: true, mrn: true } }
-      }
+    // What is being handed over: the pharmacist's lines, or the prescribed medicines when none are sent
+    const dispenseLines =
+      Array.isArray(data.items) && data.items.length > 0
+        ? data.items
+        : (Array.isArray(existing.medications) ? existing.medications : []).map((m) => ({
+          inventoryItemId: m?.inventoryItemId,
+          drug: m?.drug,
+          qty: m?.qty || 1
+        }))
+
+    let stockUpdates = []
+    const updated = await prisma.$transaction(async (tx) => {
+      stockUpdates = await dispenseStock(tx, {
+        tenantId: targetTenantId,
+        lines: dispenseLines,
+        handledBy: pharmacistName,
+        prescriptionId: id
+      })
+      return tx.prescription.update({
+        where: { id },
+        data: {
+          status: 'Fulfilled',
+          notes: existing.notes ? `${existing.notes} ${appendNote}` : appendNote
+        },
+        include: {
+          patient: { select: { id: true, fullName: true, mrn: true } }
+        }
+      })
     })
+    inventoryCache.clear()
 
     // Update patient triage flow status to PHARMACY_FULFILLED
     if (existing.patientId) {
@@ -1187,7 +1369,8 @@ export class ClinicalService {
       patientName: updated.patient?.fullName || 'Patient',
       doctorName: updated.prescribedBy,
       fulfilledAt: new Date().toISOString(),
-      fulfilledBy: pharmacistName || 'Pharmacy Staff'
+      fulfilledBy: pharmacistName || 'Pharmacy Staff',
+      stockUpdates
     }
   }
 
@@ -1516,6 +1699,7 @@ export class ClinicalService {
       minThreshold: it.minReorderThreshold,
       unitPrice: it.sellingPrice || it.unitCost,
       isLowStock: it.stockQuantity <= it.minReorderThreshold,
+      status: stockStatus(it.stockQuantity, it.minReorderThreshold),
       currency: 'INR',
       currencySymbol: '₹'
     }))
@@ -1558,12 +1742,15 @@ export class ClinicalService {
         category: data.category || 'General Supplies',
         stockQuantity: parseInt(data.quantity, 10) || parseInt(data.stockQuantity, 10) || 0,
         unit: data.unitOfMeasure || data.unit || 'Units',
-        minReorderThreshold: parseInt(data.minThreshold, 10) || parseInt(data.minReorderThreshold, 10) || 10,
+        minReorderThreshold: parseInt(data.minThreshold, 10) || parseInt(data.minReorderThreshold, 10) || DEFAULT_LOW_STOCK_THRESHOLD,
         unitCost: parseFloat(data.unitCost) || price,
         sellingPrice: price,
         batchNumber: data.batchNumber || null,
         expiryDate: data.expiryDate ? new Date(data.expiryDate) : null,
-        status: 'Optimal'
+        status: stockStatus(
+          parseInt(data.quantity, 10) || parseInt(data.stockQuantity, 10) || 0,
+          parseInt(data.minThreshold, 10) || parseInt(data.minReorderThreshold, 10) || DEFAULT_LOW_STOCK_THRESHOLD
+        )
       }
     })
 
@@ -1608,10 +1795,16 @@ export class ClinicalService {
     delete updateData.currency
     delete updateData.currencySymbol
 
+    updateData.status = stockStatus(
+      updateData.stockQuantity ?? existing.stockQuantity,
+      updateData.minReorderThreshold ?? existing.minReorderThreshold
+    )
+
     const updated = await prisma.inventoryItem.update({
       where: { id },
       data: updateData
     })
+    inventoryCache.clear()
 
     return {
       ...updated,
@@ -1624,13 +1817,17 @@ export class ClinicalService {
   /* =========================================================================
    * REPORTS & PERSONAL METRICS
    * ========================================================================= */
-  static async getStaffReports(tenantId, staffId = null, role = null) {
+  static async getStaffReports(tenantId, staffId = null, role = null, { from, to, tzOffset } = {}) {
     let targetTenantId = tenantId
     if (tenantId && tenantId.startsWith('clinic-')) {
       const firstTenant = await prisma.tenant.findFirst({ select: { id: true } })
       if (firstTenant) targetTenantId = firstTenant.id
     }
     const tenantWhere = targetTenantId ? { tenantId: targetTenantId } : {}
+    const safe = (label) => (err) => {
+      console.error(`[reports] ${label} failed:`, err?.message || err)
+      return 0
+    }
 
     // Role scoping: doctors only see their own encounters; admins/others see the whole clinic.
     const isDoctor = String(role || '').toUpperCase() === 'DOCTOR'
@@ -1643,44 +1840,122 @@ export class ClinicalService {
       rxWhere = { ...rxWhere, prescribedBy: { in: [staffId, doctorUser?.fullName].filter(Boolean) } }
     }
 
-    // Current calendar week (Mon 00:00 -> next Mon 00:00)
+    // Browser timezone offset in minutes (JS getTimezoneOffset): local = UTC - offset
+    const parsedTz = parseInt(tzOffset, 10)
+    const tz = Number.isFinite(parsedTz) ? parsedTz : 0
+    const DAY = 24 * 60 * 60 * 1000
+    const localKey = (d) => new Date(d.getTime() - tz * 60000).toISOString().slice(0, 10)
+
+    // Period: caller supplied [from, to) or the current local week (Mon-Sun)
+    let start
+    let end
+    const f = from ? new Date(from) : null
+    const t = to ? new Date(to) : null
+    if (f && t && !Number.isNaN(f.getTime()) && !Number.isNaN(t.getTime()) && t > f) {
+      start = f
+      end = t
+      if (end - start > 62 * DAY) start = new Date(end.getTime() - 62 * DAY)
+    } else {
+      const localNow = new Date(Date.now() - tz * 60000)
+      const dow = (localNow.getUTCDay() + 6) % 7
+      const localMidnight = Date.UTC(localNow.getUTCFullYear(), localNow.getUTCMonth(), localNow.getUTCDate())
+      start = new Date(localMidnight - dow * DAY + tz * 60000)
+      end = new Date(start.getTime() + 7 * DAY)
+    }
+    const inRange = { gte: start, lt: end }
+
+    // Today boundaries for todayAppointments
     const now = new Date()
-    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-    weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7))
-    const weekEnd = new Date(weekStart)
-    weekEnd.setDate(weekEnd.getDate() + 7)
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const todayEnd = new Date(todayStart)
     todayEnd.setDate(todayEnd.getDate() + 1)
 
-    const [completedThisWeek, completedAll, prescriptionsCount, todayAppointments, patientsCount, invoicesCount, durationAgg] = await Promise.all([
-      prisma.appointment.findMany({
-        where: { ...apptWhere, status: 'COMPLETED', scheduledAt: { gte: weekStart, lt: weekEnd } },
-        select: { scheduledAt: true },
-      }),
-      prisma.appointment.count({ where: { ...apptWhere, status: 'COMPLETED' } }),
-      prisma.prescription.count({ where: rxWhere }),
-      prisma.appointment.count({ where: { ...apptWhere, scheduledAt: { gte: todayStart, lt: todayEnd } } }),
-      prisma.patient.count({ where: tenantWhere }),
-      prisma.invoice.count({ where: tenantWhere }),
-      prisma.appointment.aggregate({ where: { ...apptWhere, status: 'COMPLETED' }, _avg: { durationMinutes: true } }),
+    const [
+      rangeAppointments,
+      completedAllTime,
+      prescriptionsAllTime,
+      prescriptionsInRange,
+      todayAppointments,
+      patientsCount,
+      invoicesAllTime,
+      invoicesInRange,
+      avgDuration,
+    ] = await Promise.all([
+      prisma.appointment
+        .findMany({
+          where: { ...apptWhere, scheduledAt: inRange },
+          select: { scheduledAt: true, status: true },
+          take: 5000,
+        })
+        .catch((e) => {
+          safe('appointments')(e)
+          return []
+        }),
+      prisma.appointment.count({ where: { ...apptWhere, status: 'COMPLETED' } }).catch(safe('completed count')),
+      prisma.prescription.count({ where: rxWhere }).catch(safe('prescriptions')),
+      prisma.prescription.count({ where: { ...rxWhere, createdAt: inRange } }).catch(safe('prescriptions in range')),
+      prisma.appointment.count({ where: { ...apptWhere, scheduledAt: { gte: todayStart, lt: todayEnd } } }).catch(safe('today appointments')),
+      prisma.patient.count({ where: tenantWhere }).catch(safe('patients')),
+      prisma.invoice.count({ where: tenantWhere }).catch(safe('invoices')),
+      prisma.invoice.count({ where: { ...tenantWhere, createdAt: inRange } }).catch(safe('invoices in range')),
+      prisma.appointment
+        .aggregate({ where: { ...apptWhere, status: 'COMPLETED' }, _avg: { durationMinutes: true } })
+        .catch(() => null),
     ])
 
-    const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    const weeklyLoad = dayLabels.map((day) => ({ day, count: 0 }))
-    for (const a of completedThisWeek) {
-      weeklyLoad[(new Date(a.scheduledAt).getDay() + 6) % 7].count += 1
+    // One bucket per local calendar day in the period
+    const buckets = new Map()
+    for (let ms = start.getTime(); ms < end.getTime(); ms += DAY) {
+      const key = localKey(new Date(ms))
+      if (!buckets.has(key)) buckets.set(key, { date: key, booked: 0, completed: 0, missed: 0 })
+    }
+    const statusBreakdown = {}
+    for (const apt of rangeAppointments) {
+      statusBreakdown[apt.status] = (statusBreakdown[apt.status] || 0) + 1
+      const bucket = buckets.get(localKey(new Date(apt.scheduledAt)))
+      if (!bucket) continue
+      bucket.booked += 1
+      if (apt.status === 'COMPLETED') bucket.completed += 1
+      if (apt.status === 'CANCELLED' || apt.status === 'NO_SHOW') bucket.missed += 1
     }
 
+    const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+    const shortRange = buckets.size <= 7
+    const weeklyLoad = Array.from(buckets.values()).map((b) => {
+      const d = new Date(`${b.date}T00:00:00Z`)
+      return {
+        day: shortRange ? WEEKDAYS[d.getUTCDay()] : String(d.getUTCDate()),
+        date: b.date,
+        count: b.completed, // kept for older clients: completed consultations
+        completed: b.completed,
+        booked: b.booked,
+        missed: b.missed,
+      }
+    })
+
+    const avg = avgDuration?._avg?.durationMinutes
+
     return {
+      // All-time figures (used by the staff dashboard tiles)
       personalMetrics: {
-        encountersCompleted: completedAll,
-        prescriptionsWritten: prescriptionsCount,
-        averageConsultTimeMins: durationAgg._avg.durationMinutes != null ? Math.round(durationAgg._avg.durationMinutes) : null,
-        patientReviewScore: null, // no review/feedback data is captured yet
+        encountersCompleted: completedAllTime,
+        prescriptionsWritten: prescriptionsAllTime,
+        averageConsultTimeMins: avg != null ? Math.round(avg) : null, // average booked slot length of completed visits
+        patientReviewScore: null, // no patient feedback is collected yet
         todayAppointments,
         activePatients: patientsCount,
-        totalInvoices: invoicesCount,
+        totalInvoices: invoicesAllTime,
+      },
+      // Figures for the selected period (used by the Reports page)
+      period: {
+        from: start.toISOString(),
+        to: end.toISOString(),
+        appointments: rangeAppointments.length,
+        completed: statusBreakdown.COMPLETED || 0,
+        missed: (statusBreakdown.CANCELLED || 0) + (statusBreakdown.NO_SHOW || 0),
+        prescriptions: prescriptionsInRange,
+        invoices: invoicesInRange,
+        statusBreakdown,
       },
       weeklyLoad,
     }

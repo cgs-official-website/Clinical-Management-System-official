@@ -469,7 +469,7 @@ export class PharmacyService {
 
       // Reorder Level
       const rawReorder = this.extractFieldValue(rowObj, ['Reorder Level', 'Min Threshold', 'Min Reorder Threshold'])
-      let minReorderThreshold = 50
+      let minReorderThreshold = 20
       if (rawReorder !== null && rawReorder !== undefined && rawReorder !== '') {
         const parsedReorder = parseInt(rawReorder, 10)
         if (isNaN(parsedReorder) || parsedReorder < 0) {
@@ -663,7 +663,7 @@ export class PharmacyService {
             sellingPrice: data.sellingPrice || 0,
             gstRate: data.gstRate ?? 12,
             stockQuantity: data.stockQuantity || 0,
-            minReorderThreshold: data.minReorderThreshold || 50,
+            minReorderThreshold: data.minReorderThreshold || 20,
             supplierName: data.supplierName || null,
             storageCondition: data.storageCondition || null,
             prescriptionRequired: data.prescriptionRequired ?? false,
@@ -672,7 +672,7 @@ export class PharmacyService {
             importBatchId,
             importedBy: actorId || 'Admin',
             importedAt: now,
-            status: (data.stockQuantity || 0) > (data.minReorderThreshold || 50) ? 'Optimal' : 'Low Stock'
+            status: (data.stockQuantity || 0) > (data.minReorderThreshold || 20) ? 'Optimal' : 'Low Stock'
           }
         })
 

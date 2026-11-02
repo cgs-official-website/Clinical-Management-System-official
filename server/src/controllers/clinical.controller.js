@@ -104,8 +104,8 @@ export class ClinicalController {
   static async getAppointments(req, res, next) {
     try {
       const page = parseInt(req.query.page, 10) || 1
-      const limit = parseInt(req.query.limit, 10) || 10
-      const { doctorId, status, date } = req.query
+      const limit = Math.min(parseInt(req.query.limit, 10) || 10, 500)
+      const { doctorId, status, date, from, to } = req.query
 
       const result = await ClinicalService.getAppointments({
         tenantId: req.user.tenantId,
@@ -113,7 +113,9 @@ export class ClinicalController {
         limit,
         doctorId,
         status,
-        date
+        date,
+        from,
+        to
       })
 
       const statuses = Object.values(AppointmentStatus).map((status) => ({
@@ -203,6 +205,18 @@ export class ClinicalController {
         data: prescription,
         ...prescription
       })
+    } catch (error) {
+      next(error)
+    }
+  }
+
+  static async getPrescribableMedicines(req, res, next) {
+    try {
+      const data = await ClinicalService.getPrescribableMedicines({
+        tenantId: req.user.tenantId,
+        search: req.query.search
+      })
+      return res.status(200).json({ success: true, data })
     } catch (error) {
       next(error)
     }
@@ -388,7 +402,11 @@ export class ClinicalController {
    * ========================================================================= */
   static async getStaffReports(req, res, next) {
     try {
-      const reports = await ClinicalService.getStaffReports(req.user?.tenantId, req.user?.id, req.user?.role)
+      const reports = await ClinicalService.getStaffReports(req.user?.tenantId, req.user?.id, req.user?.role, {
+        from: req.query.from,
+        to: req.query.to,
+        tzOffset: req.query.tzOffset,
+      })
       return res.status(200).json({
         success: true,
         data: reports,
