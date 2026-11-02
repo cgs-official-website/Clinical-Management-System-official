@@ -18,8 +18,8 @@ const COMMON = [
 ]
 
 const CATEGORY_MODULES = {
-    'Dental Care': ['dental_chart', 'treatment_plans', 'xray_records', 'orthodontics', 'implant_registry', 'lab_orders'],
-    'Cardiology': ['ecg_records', 'echo_reports', 'cath_lab_scheduling', 'cardiac_risk_assessment'],
+    'Dental Care': ['dental_chart', 'treatment_plans', 'xray_records', 'lab_orders'],
+    'Cardiology': ['ecg_records', 'echo_reports', 'cath_lab_scheduling', 'cardiac_risk_assessment', 'implant_registry'],
     'Physiotherapy': ['treatment_session_plans', 'exercise_program_tracker', 'progress_recovery_notes'],
 }
 

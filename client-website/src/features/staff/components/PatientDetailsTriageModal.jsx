@@ -59,6 +59,33 @@ export const PatientDetailsTriageModal = ({
     notes: ''
   })
 
+  // Field-level validation: errors appear (in red) only after the first submit attempt,
+  // then update live as the receptionist fixes each field.
+  const [submitted, setSubmitted] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) setSubmitted(false)
+  }, [isOpen])
+
+  const errors = useMemo(() => {
+    if (!submitted) return {}
+    const e = {}
+    if (patientMode === 'select') {
+      if (!selectedPatientId) e.patient = 'Select a registered patient (or switch to Walk-In / New)'
+    } else {
+      if (!formData.patientName.trim()) e.patientName = 'Patient name is required'
+      if (!/^\d{10}$/.test(formData.phone)) e.phone = 'Enter a valid 10-digit phone number'
+    }
+    const w = parseFloat(formData.weight)
+    if (!formData.weight || isNaN(w) || w <= 0) e.weight = 'Weight is required'
+    if (!formData.bpSystolic) e.bpSystolic = 'Systolic is required'
+    if (!formData.bpDiastolic) e.bpDiastolic = 'Diastolic is required'
+    if (!formData.doctorName) e.doctor = 'Select the attending doctor'
+    return e
+  }, [submitted, patientMode, selectedPatientId, formData])
+
+  const errCls = (key) => (errors[key] ? '!border-danger !ring-1 !ring-danger/30' : '')
+
   // Fetch real doctors assigned to this clinic
   const { data: doctorsData = [], isLoading: isLoadingDoctors } = useQuery({
     queryKey: ['staff', 'doctors'],
@@ -213,8 +240,45 @@ export const PatientDetailsTriageModal = ({
     }
   })
 
+  const FIELD_IDS = {
+    patient: 'triage-patient',
+    patientName: 'triage-patient-name',
+    phone: 'triage-phone',
+    weight: 'triage-weight',
+    bpSystolic: 'triage-bp-sys',
+    bpDiastolic: 'triage-bp-dia',
+    doctor: 'triage-doctor',
+  }
+
   const handleSubmit = (e) => {
     e.preventDefault()
+
+    // Validate synchronously (errors state is derived and may not be updated yet)
+    const missing = []
+    if (patientMode === 'select') {
+      if (!selectedPatientId) missing.push('patient')
+    } else {
+      if (!formData.patientName.trim()) missing.push('patientName')
+      if (!/^\d{10}$/.test(formData.phone)) missing.push('phone')
+    }
+    const w = parseFloat(formData.weight)
+    if (!formData.weight || isNaN(w) || w <= 0) missing.push('weight')
+    if (!formData.bpSystolic) missing.push('bpSystolic')
+    if (!formData.bpDiastolic) missing.push('bpDiastolic')
+    if (!formData.doctorName) missing.push('doctor')
+
+    setSubmitted(true)
+    if (missing.length) {
+      notify.error('Please fill the fields highlighted in red.')
+      setTimeout(() => {
+        const el = document.getElementById(FIELD_IDS[missing[0]])
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          el.focus({ preventScroll: true })
+        }
+      }, 50)
+      return
+    }
 
     const bp =
       formData.bpSystolic && formData.bpDiastolic
@@ -264,7 +328,7 @@ export const PatientDetailsTriageModal = ({
       description="Record baseline vitals, current medications, and issue an outpatient consultation token for the Doctor."
       maxWidth="max-w-2xl"
     >
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
         {/* Token Badge Banner */}
         <div className="p-3.5 rounded-2xl bg-gradient-to-r from-primary/15 via-primary/5 to-surface border border-primary/25 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -302,17 +366,16 @@ export const PatientDetailsTriageModal = ({
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-text-primary uppercase tracking-wider flex items-center gap-1.5">
               <User className="w-3.5 h-3.5 text-primary" />
-              <span>1. Patient Identification</span>
+              <span className={errors.patient || errors.patientName || errors.phone ? 'text-danger' : ''}>1. Patient Identification{(errors.patient || errors.patientName || errors.phone) ? ' — incomplete' : ''}</span>
             </label>
             <div className="p-0.5 rounded-lg bg-border/40 flex items-center text-xs font-semibold">
               <button
                 type="button"
                 onClick={() => setPatientMode('select')}
-                className={`px-2.5 py-1 rounded-md transition-all ${
-                  patientMode === 'select'
+                className={`px-2.5 py-1 rounded-md transition-all ${patientMode === 'select'
                     ? 'bg-surface text-primary shadow-xs font-bold'
                     : 'text-text-secondary hover:text-text-primary'
-                }`}
+                  }`}
               >
                 Existing Patient
               </button>
@@ -322,11 +385,10 @@ export const PatientDetailsTriageModal = ({
                   setPatientMode('new')
                   setSelectedPatientId('')
                 }}
-                className={`px-2.5 py-1 rounded-md transition-all ${
-                  patientMode === 'new'
+                className={`px-2.5 py-1 rounded-md transition-all ${patientMode === 'new'
                     ? 'bg-surface text-primary shadow-xs font-bold'
                     : 'text-text-secondary hover:text-text-primary'
-                }`}
+                  }`}
               >
                 Walk-In / New
               </button>
@@ -336,8 +398,11 @@ export const PatientDetailsTriageModal = ({
           {patientMode === 'select' ? (
             <div>
               <Select
+                id="triage-patient"
                 label="Select Registered Patient"
                 required
+                error={errors.patient}
+                className={errCls('patient')}
                 value={selectedPatientId}
                 onChange={(e) => handlePatientSelect(e.target.value)}
                 options={[
@@ -357,13 +422,19 @@ export const PatientDetailsTriageModal = ({
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 rounded-xl border border-border bg-surface/50">
               <Input
+                id="triage-patient-name"
                 label="Full Legal Name"
                 required
+                error={errors.patientName}
+                className={errCls('patientName')}
                 placeholder="e.g. Liam Reyes"
                 value={formData.patientName}
                 onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
               />
               <Input
+                id="triage-phone"
+                error={errors.phone}
+                className={errCls('phone')}
                 label="Contact Phone"
                 type="tel"
                 inputMode="numeric"
@@ -414,12 +485,12 @@ export const PatientDetailsTriageModal = ({
         <div className="space-y-3 pt-2 border-t border-border">
           <label className="text-xs font-bold text-text-primary uppercase tracking-wider flex items-center gap-1.5">
             <Activity className="w-3.5 h-3.5 text-primary" />
-            <span>2. Baseline Vitals & Physiological Report</span>
+            <span className={errors.weight || errors.bpSystolic || errors.bpDiastolic ? 'text-danger' : ''}>2. Baseline Vitals & Physiological Report{(errors.weight || errors.bpSystolic || errors.bpDiastolic) ? ' — incomplete' : ''}</span>
           </label>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Weight */}
-            <div className="p-3 rounded-xl border border-border bg-surface flex flex-col justify-between">
+            <div className={`p-3 rounded-xl border bg-surface flex flex-col justify-between ${errors.weight ? 'border-danger bg-danger/5' : 'border-border'}`}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-semibold text-text-secondary flex items-center gap-1">
                   <Activity className="w-3.5 h-3.5 text-primary" />
@@ -428,18 +499,20 @@ export const PatientDetailsTriageModal = ({
                 <span className="text-[10px] text-text-muted font-mono">kg</span>
               </div>
               <Input
+                id="triage-weight"
                 type="number"
                 step="0.1"
                 placeholder="e.g. 68.5"
                 required
+                error={errors.weight}
                 value={formData.weight}
                 onChange={(e) => setFormData({ ...formData, weight: e.target.value })}
-                className="!py-1.5 text-sm font-bold"
+                className={`!py-1.5 text-sm font-bold ${errCls('weight')}`}
               />
             </div>
 
             {/* Blood Pressure */}
-            <div className="p-3 rounded-xl border border-border bg-surface flex flex-col justify-between">
+            <div className={`p-3 rounded-xl border bg-surface flex flex-col justify-between ${errors.bpSystolic || errors.bpDiastolic ? 'border-danger bg-danger/5' : 'border-border'}`}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-semibold text-text-secondary flex items-center gap-1">
                   <Heart className="w-3.5 h-3.5 text-danger" />
@@ -453,23 +526,28 @@ export const PatientDetailsTriageModal = ({
               </div>
               <div className="flex items-center gap-1.5">
                 <input
+                  id="triage-bp-sys"
                   type="number"
                   placeholder="120"
                   required
                   value={formData.bpSystolic}
                   onChange={(e) => setFormData({ ...formData, bpSystolic: e.target.value })}
-                  className="w-full px-2 py-1.5 rounded-lg border border-border bg-bg text-text-primary text-sm font-bold text-center focus:outline-none focus:border-primary"
+                  className={`w-full px-2 py-1.5 rounded-lg border bg-bg text-text-primary text-sm font-bold text-center focus:outline-none focus:border-primary ${errors.bpSystolic ? 'border-danger' : 'border-border'}`}
                 />
                 <span className="text-text-muted font-bold">/</span>
                 <input
+                  id="triage-bp-dia"
                   type="number"
                   placeholder="80"
                   required
                   value={formData.bpDiastolic}
                   onChange={(e) => setFormData({ ...formData, bpDiastolic: e.target.value })}
-                  className="w-full px-2 py-1.5 rounded-lg border border-border bg-bg text-text-primary text-sm font-bold text-center focus:outline-none focus:border-primary"
+                  className={`w-full px-2 py-1.5 rounded-lg border bg-bg text-text-primary text-sm font-bold text-center focus:outline-none focus:border-primary ${errors.bpDiastolic ? 'border-danger' : 'border-border'}`}
                 />
               </div>
+              {(errors.bpSystolic || errors.bpDiastolic) && (
+                <p className="mt-1 text-xs text-danger font-medium">Enter both systolic and diastolic BP</p>
+              )}
             </div>
 
             {/* Sugar Level */}
@@ -519,18 +597,22 @@ export const PatientDetailsTriageModal = ({
         {/* Assigned Physician & Reason */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border">
           <Select
+            id="triage-doctor"
             label="Assigned Attending Doctor"
+            required
+            error={errors.doctor}
+            className={errCls('doctor')}
             value={formData.doctorName}
             onChange={(e) => handleDoctorChange(e.target.value)}
             options={
               doctorOptions.length > 0
                 ? doctorOptions
                 : [
-                    {
-                      value: formData.doctorName || 'Dr dev prakash',
-                      label: formData.doctorName || 'Dr dev prakash (Cardiac Surgery)',
-                    },
-                  ]
+                  {
+                    value: formData.doctorName || 'Dr dev prakash',
+                    label: formData.doctorName || 'Dr dev prakash (Cardiac Surgery)',
+                  },
+                ]
             }
           />
           <Input

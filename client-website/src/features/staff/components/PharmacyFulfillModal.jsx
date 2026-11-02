@@ -80,8 +80,8 @@ const parseNotes = (notes = '') => {
 const StatusPill = ({ done }) => (
   <span
     className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border whitespace-nowrap ${done
-        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25'
-        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25'
+      ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25'
+      : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25'
       }`}
   >
     <span className={`w-1.5 h-1.5 rounded-full ${done ? 'bg-emerald-500' : 'bg-amber-500'}`} />
@@ -123,10 +123,10 @@ const Stepper = ({ current }) => {
             <div className="flex items-center gap-2">
               <div
                 className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold border transition-colors ${done
-                    ? 'bg-primary text-white border-primary'
-                    : active
-                      ? 'bg-primary/10 text-primary border-primary ring-4 ring-primary/10'
-                      : 'bg-surface text-text-secondary border-border'
+                  ? 'bg-primary text-white border-primary'
+                  : active
+                    ? 'bg-primary/10 text-primary border-primary ring-4 ring-primary/10'
+                    : 'bg-surface text-text-secondary border-border'
                   }`}
               >
                 {done ? <Check className="w-3.5 h-3.5" /> : i + 1}
@@ -260,6 +260,7 @@ export const PharmacyFulfillModal = ({ isOpen, onClose, prescription, onFulfillS
         patientId: prescription.patientId || undefined,
         patientName: prescription.patientName || undefined,
         appointmentId: prescription.appointmentId || undefined,
+        tokenNumber: tokenNumber || undefined,
         items,
         status: 'PAID',
         paymentMethod,
@@ -622,8 +623,8 @@ export const PharmacyFulfillModal = ({ isOpen, onClose, prescription, onFulfillS
                       type="button"
                       onClick={() => setPaymentMethod(pm.value)}
                       className={`flex flex-col items-center gap-1.5 py-3.5 rounded-xl border text-xs font-bold transition-all ${active
-                          ? 'border-primary bg-primary/10 text-primary ring-4 ring-primary/10'
-                          : 'border-border bg-surface text-text-secondary hover:border-primary/40 hover:text-text-primary'
+                        ? 'border-primary bg-primary/10 text-primary ring-4 ring-primary/10'
+                        : 'border-border bg-surface text-text-secondary hover:border-primary/40 hover:text-text-primary'
                         }`}
                     >
                       <Icon className="w-5 h-5" />
